@@ -58,6 +58,7 @@ public class BackupManager {
         List<String> incomeCats = CategoryManager.getIncomeCategories(context);
         data.expenseCategories = expenseCats;
         data.incomeCategories = incomeCats;
+        data.incomeCatalogUpdated = true;
 
         Map<String, List<String>> subMap = new HashMap<>();
         List<String> allCats = new ArrayList<>(expenseCats);
@@ -1212,82 +1213,88 @@ public class BackupManager {
         data.subCategoryMap = subCatMap; // 返回带新增子分类的列表
         return data;
     }
-    public static BackupData importFromZip(Context context, Uri uri) throws Exception {
-         try (InputStream inputStream = context.getContentResolver().openInputStream(uri);
-             ZipInputStream zis = new ZipInputStream(inputStream)) {
+    public static final class ZipRestoreResult {
+        public int billsAdded;
+        public int assetsAdded;
+        public int goalsAdded;
+        public int rulesAdded;
+        public int linksRepaired;
 
+        public String message() {
+            return String.format(Locale.CHINA, "备份恢复完成：%d 笔账单、%d 个资产、%d 个目标、%d 条周期规则新增，修复 %d 条关联",
+                    billsAdded, assetsAdded, goalsAdded, rulesAdded, linksRepaired);
+        }
+    }
+
+    /** Parse and restore on a worker thread. Existing records are merged rather than overwritten. */
+    public static ZipRestoreResult importFromZip(Context context, Uri uri) throws Exception {
+        BackupData data;
+        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
+            if (input == null) throw new java.io.IOException("无法打开备份文件");
+            data = readBackupZip(input);
+        }
+        AppDatabase db = AppDatabase.getDatabase(context);
+        BackupLedgerRestore ledger = new BackupLedgerRestore();
+        db.runInTransaction(() -> ledger.merge(db, data));
+
+        CategoryManager.restoreBackupCategories(context, data.expenseCategories, data.incomeCategories,
+                data.subCategoryMap, data.incomeCatalogUpdated);
+        if (data.autoAssetRules != null) {
+            List<AutoAssetManager.AssetRule> mapped = new ArrayList<>();
+            for (String stored : data.autoAssetRules) {
+                AutoAssetManager.AssetRule rule = AutoAssetManager.AssetRule.fromString(stored);
+                if (rule == null) continue;
+                int assetId = ledger.assetId(rule.assetId);
+                if (assetId > 0) mapped.add(new AutoAssetManager.AssetRule(rule.packageName, rule.keyword, assetId));
+            }
+            AutoAssetManager.mergeRestoredRules(context, mapped);
+        }
+        restoreAppPreferences(context, data.appPreferences);
+        if (data.assistantConfig != null) {
+            int assetId = ledger.assetId(data.assistantConfig.defaultAssetId);
+            data.assistantConfig.defaultAssetId = assetId > 0 ? assetId : -1;
+            restoreAssistantConfig(context, data.assistantConfig);
+        }
+        if (data.renewalList != null) new AssistantConfig(context).saveRenewalList(data.renewalList);
+        triggerAutoUploadIfEnabled(context);
+        return ledger.result;
+    }
+
+    private static BackupData readBackupZip(InputStream input) throws Exception {
+        try (ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                if (entry.getName().equals(JSON_FILE_NAME)) {
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        sb.append(line);
-                    }
-                    Gson gson = new Gson();
-                    BackupData data = gson.fromJson(sb.toString(), BackupData.class);
-
-                    if (data.autoAssetRules != null && !data.autoAssetRules.isEmpty()) {
-                         for (String ruleStr : data.autoAssetRules) {
-                            AutoAssetManager.AssetRule rule = AutoAssetManager.AssetRule.fromString(ruleStr);
-                            if (rule != null) {
-                                AutoAssetManager.addRule(context, rule);
-                            }
-                        }
-                    }
-
-                    if (data.assistantConfig != null) {
-                        restoreAssistantConfig(context, data.assistantConfig);
-                    }
-
-                    if (data.subCategoryMap != null) {
-                        for (Map.Entry<String, List<String>> entryMap : data.subCategoryMap.entrySet()) {
-                            CategoryManager.saveSubCategories(context, entryMap.getKey(), entryMap.getValue());
-                        }
-                    }
-
-                    // 【新增】恢复自动续费列表
-                    if (data.renewalList != null) {
-                        new AssistantConfig(context).saveRenewalList(data.renewalList);
-                    }
-
-                    // 【周期记账】恢复周期记账规则
-                    if (data.recurringRules != null && !data.recurringRules.isEmpty()) {
-                        AppDatabase db = AppDatabase.getDatabase(context);
-                        for (com.example.budgetapp.database.RecurringRule rule : data.recurringRules) {
-                            rule.id = 0; // 重置ID让数据库自动分配
-                            db.recurringRuleDao().insert(rule);
-                        }
-                    }
-
-                    // 【修复】按照原数据类型恢复，防止类型转换异常崩溃
-                    if (data.appPreferences != null) {
-                        SharedPreferences.Editor editor = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit();
-                        for (Map.Entry<String, BackupData.PrefItem> entryMap : data.appPreferences.entrySet()) {
-                            String key = entryMap.getKey();
-                            BackupData.PrefItem item = entryMap.getValue();
-                            if (item == null || item.value == null) continue;
-                            try {
-                                switch (item.type) {
-                                    case "Boolean": editor.putBoolean(key, Boolean.parseBoolean(item.value)); break;
-                                    case "Integer": editor.putInt(key, Integer.parseInt(item.value)); break;
-                                    case "Float": editor.putFloat(key, Float.parseFloat(item.value)); break;
-                                    case "Long": editor.putLong(key, Long.parseLong(item.value)); break;
-                                    default: editor.putString(key, item.value); break;
-                                }
-                            } catch (Exception e) {
-                                Log.e("BackupManager", "恢复配置异常", e);
-                            }
-                        }
-                        editor.apply();
-                    }
-
-                    return data;
-                }
+            while ((entry = zip.getNextEntry()) != null) {
+                if (!JSON_FILE_NAME.equals(entry.getName())) continue;
+                BackupData data = new Gson().fromJson(new InputStreamReader(zip, StandardCharsets.UTF_8), BackupData.class);
+                if (data != null) return data;
+                throw new java.io.IOException("备份文件中的数据为空");
             }
         }
-        throw new Exception("无法识别的备份文件：未找到数据文件 " + JSON_FILE_NAME);
+        throw new java.io.IOException("无法识别的备份文件：未找到数据文件 " + JSON_FILE_NAME);
+    }
+
+    private static void restoreAppPreferences(Context context, Map<String, BackupData.PrefItem> preferences) {
+        if (preferences == null) return;
+        SharedPreferences.Editor editor = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit();
+        for (Map.Entry<String, BackupData.PrefItem> entry : preferences.entrySet()) {
+            BackupData.PrefItem item = entry.getValue();
+            if (item == null || item.value == null) continue;
+            String key = entry.getKey();
+            try {
+                switch (item.type) {
+                    case "Boolean": editor.putBoolean(key, Boolean.parseBoolean(item.value)); break;
+                    case "Integer": editor.putInt(key, Integer.parseInt(item.value)); break;
+                    case "Float": editor.putFloat(key, Float.parseFloat(item.value)); break;
+                    case "Long": editor.putLong(key, Long.parseLong(item.value)); break;
+                    case "String": editor.putString(key, item.value); break;
+                    // Older exports stringify sets; the assistant fields retain the original sets.
+                    default: break;
+                }
+            } catch (RuntimeException e) {
+                Log.e("BackupManager", "恢复配置异常", e);
+            }
+        }
+        editor.apply();
     }
 
     // ============================================================================================
@@ -2163,12 +2170,7 @@ public class BackupManager {
         config.setHolidayOvertimeRate(cd.holidayRate);
         config.setMonthlyBaseSalary(cd.monthlyBaseSalary);
 
-        if (cd.expenseKeywords != null) {
-            for (String k : cd.expenseKeywords) config.addExpenseKeyword(k);
-        }
-        if (cd.incomeKeywords != null) {
-            for (String k : cd.incomeKeywords) config.addIncomeKeyword(k);
-        }
+        config.mergeRestoredKeywords(cd.expenseKeywords, cd.incomeKeywords);
     }
 
     private static String joinSet(Set<String> set) {
@@ -2241,6 +2243,7 @@ public class BackupManager {
         List<String> incomeCats = CategoryManager.getIncomeCategories(context);
         data.expenseCategories = expenseCats;
         data.incomeCategories = incomeCats;
+        data.incomeCatalogUpdated = true;
 
         Map<String, List<String>> subMap = new HashMap<>();
         List<String> allCats = new ArrayList<>(expenseCats);
@@ -2384,16 +2387,8 @@ public class BackupManager {
                     Gson gson = new Gson();
                     BackupData data = gson.fromJson(sb.toString(), BackupData.class);
 
-                    // --- 开始恢复应用配置 ---
-                    // 【新增】恢复一级支出分类
-                    if (data.expenseCategories != null && !data.expenseCategories.isEmpty()) {
-                        CategoryManager.saveExpenseCategories(context, data.expenseCategories);
-                    }
-
-                    // 【新增】恢复一级收入分类
-                    if (data.incomeCategories != null && !data.incomeCategories.isEmpty()) {
-                        CategoryManager.saveIncomeCategories(context, data.incomeCategories);
-                    }
+                    CategoryManager.restoreBackupCategories(context, data.expenseCategories, data.incomeCategories,
+                            data.subCategoryMap, data.incomeCatalogUpdated);
 
                     if (data.autoAssetRules != null && !data.autoAssetRules.isEmpty()) {
                         for (String ruleStr : data.autoAssetRules) {
@@ -2404,40 +2399,15 @@ public class BackupManager {
                         }
                     }
 
+                    restoreAppPreferences(context, data.appPreferences);
                     if (data.assistantConfig != null) {
                         restoreAssistantConfig(context, data.assistantConfig);
-                    }
-
-                    if (data.subCategoryMap != null) {
-                        for (Map.Entry<String, List<String>> entryMap : data.subCategoryMap.entrySet()) {
-                            CategoryManager.saveSubCategories(context, entryMap.getKey(), entryMap.getValue());
-                        }
                     }
 
                     if (data.renewalList != null) {
                         new AssistantConfig(context).saveRenewalList(data.renewalList);
                     }
 
-                    if (data.appPreferences != null) {
-                        SharedPreferences.Editor editor = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit();
-                        for (Map.Entry<String, BackupData.PrefItem> entryMap : data.appPreferences.entrySet()) {
-                            String key = entryMap.getKey();
-                            BackupData.PrefItem item = entryMap.getValue();
-                            if (item == null || item.value == null) continue;
-                            try {
-                                switch (item.type) {
-                                    case "Boolean": editor.putBoolean(key, Boolean.parseBoolean(item.value)); break;
-                                    case "Integer": editor.putInt(key, Integer.parseInt(item.value)); break;
-                                    case "Float": editor.putFloat(key, Float.parseFloat(item.value)); break;
-                                    case "Long": editor.putLong(key, Long.parseLong(item.value)); break;
-                                    default: editor.putString(key, item.value); break;
-                                }
-                            } catch (Exception e) {
-                                Log.e("BackupManager", "恢复配置异常", e);
-                            }
-                        }
-                        editor.apply();
-                    }
                     return data; // 返回解析后的数据供数据库操作
                 }
             }

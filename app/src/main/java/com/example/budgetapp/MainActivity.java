@@ -32,6 +32,7 @@ import androidx.navigation.NavController;
 import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.NavigationUI;
 
+import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.widget.TodaySummaryWidget;
@@ -83,44 +84,16 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String[]> importLauncher = registerForActivityResult(
             new ActivityResultContracts.OpenDocument(),
             uri -> {
-                if (uri != null) {
+                if (uri == null) return;
+                AppDatabase.databaseWriteExecutor.execute(() -> {
                     try {
-                        BackupData data = BackupManager.importFromZip(this, uri);
-                        
-                        int recordCount = 0;
-                        int assetCount = 0;
-
-                        if (data.records != null && !data.records.isEmpty()) {
-                            for (Transaction t : data.records) {
-                                Transaction newT = t; 
-                                newT.id = 0; 
-                                financeViewModel.addTransaction(newT);
-                            }
-                            recordCount = data.records.size();
-                        }
-
-                        if (data.assets != null && !data.assets.isEmpty()) {
-                            for (AssetAccount a : data.assets) {
-                                AssetAccount newA = a;
-                                newA.id = 0; 
-                                financeViewModel.addAsset(newA);
-                            }
-                            assetCount = data.assets.size();
-                        }
-
-                        if (recordCount > 0 || assetCount > 0) {
-                            Toast.makeText(this, 
-                                String.format("成功导入: %d条账单, %d个资产", recordCount, assetCount), 
-                                Toast.LENGTH_LONG).show();
-                        } else {
-                            Toast.makeText(this, "备份文件中未发现数据", Toast.LENGTH_SHORT).show();
-                        }
-
+                        BackupManager.ZipRestoreResult result = BackupManager.importFromZip(getApplicationContext(), uri);
+                        runOnUiThread(() -> Toast.makeText(this, result.message(), Toast.LENGTH_LONG).show());
                     } catch (Exception e) {
-                        e.printStackTrace();
-                        Toast.makeText(this, "导入失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        android.util.Log.e("TallyBackup", "Could not restore ZIP", e);
+                        runOnUiThread(() -> Toast.makeText(this, "导入失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
                     }
-                }
+                });
             }
     );
 

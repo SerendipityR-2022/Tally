@@ -23,6 +23,7 @@ import androidx.lifecycle.ViewModelProvider;
 import com.example.budgetapp.BackupData;
 import com.example.budgetapp.BackupManager;
 import com.example.budgetapp.R;
+import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.util.AssistantConfig;
@@ -306,49 +307,16 @@ public class SettingsActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String[]> importLauncher = registerForActivityResult(
             new ActivityResultContracts.OpenDocument(),
             uri -> {
-                if (uri != null) {
+                if (uri == null) return;
+                AppDatabase.databaseWriteExecutor.execute(() -> {
                     try {
-                        BackupData data = BackupManager.importFromZip(this, uri);
-                        int recordCount = 0;
-                        int assetCount = 0;
-
-                        List<AssetAccount> currentAssets = new ArrayList<>(allAssets);
-                        if (data.assets != null && !data.assets.isEmpty()) {
-                            for (AssetAccount a : data.assets) {
-                                if (!isDuplicateAsset(a, currentAssets)) {
-                                    a.id = 0;
-                                    financeViewModel.addAsset(a);
-                                    currentAssets.add(a);
-                                    assetCount++;
-                                }
-                            }
-                        }
-
-                        if (data.expenseCategories != null && !data.expenseCategories.isEmpty()) {
-                            CategoryManager.saveExpenseCategories(this, data.expenseCategories);
-                        }
-                        if (data.incomeCategories != null && !data.incomeCategories.isEmpty()) {
-                            CategoryManager.saveIncomeCategories(this, data.incomeCategories);
-                        }
-
-                        List<Transaction> currentTransactions = new ArrayList<>(allTransactions);
-                        if (data.records != null && !data.records.isEmpty()) {
-                            for (Transaction t : data.records) {
-                                if (!isDuplicateTransaction(t, currentTransactions)) {
-                                    t.id = 0;
-                                    financeViewModel.addTransaction(t);
-                                    currentTransactions.add(t);
-                                    recordCount++;
-                                }
-                            }
-                        }
-
-                        Toast.makeText(this, String.format("成功导入: %d条账单, %d个资产 (已过滤重复)", recordCount, assetCount), Toast.LENGTH_LONG).show();
+                        BackupManager.ZipRestoreResult result = BackupManager.importFromZip(getApplicationContext(), uri);
+                        runOnUiThread(() -> Toast.makeText(this, result.message(), Toast.LENGTH_LONG).show());
                     } catch (Exception e) {
-                        e.printStackTrace();
-                        Toast.makeText(this, "导入失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        android.util.Log.e("TallyBackup", "Could not restore ZIP", e);
+                        runOnUiThread(() -> Toast.makeText(this, "导入失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
                     }
-                }
+                });
             }
     );
 

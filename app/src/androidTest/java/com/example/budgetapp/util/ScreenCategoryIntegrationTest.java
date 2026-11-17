@@ -332,6 +332,27 @@ public class ScreenCategoryIntegrationTest {
         assertEquals(TIME, saved.date);
     }
 
+    @Test public void confirmingAiOnceSkipsTheModelForTheNextPayment() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        enableFakeAi(() -> {
+            calls.incrementAndGet();
+            return new AutoCategoryClassifier.Result("餐饮", "咖啡", AutoCategoryClassifier.Source.AI);
+        });
+        View first = show("11-15 12:34 瑞幸咖啡");
+        String ai = ((TextView) first.findViewById(R.id.tv_window_category_result)).getText().toString();
+        assertTrue(ai, ai.contains("AI") && ai.contains("咖啡"));
+        assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+        runMain(() -> first.findViewById(R.id.btn_window_save).performClick());
+        assertEquals("咖啡", awaitSaved().subCategory);
+        long deadline = System.currentTimeMillis() + 4000;
+        while (AutoCategoryManager.getLearned(context).isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20);
+        assertEquals(1, AutoCategoryManager.getLearned(context).size());
+        View next = show("11-16 08:00 瑞幸咖啡");
+        String learned = ((TextView) next.findViewById(R.id.tv_window_category_result)).getText().toString();
+        assertTrue(learned, learned.contains("已学习") && learned.contains("咖啡"));
+        assertEquals(1, calls.get());
+    }
+
     @Test public void editedLocalOrderWhileAiIsPendingCannotOverrideValidModel() throws Exception {
         enableFakeAi(() -> {
             AutoCategoryManager.setPriority(context, AutoCategoryPriority.parse("HINT,RULE,LEARNED,LOCAL"));

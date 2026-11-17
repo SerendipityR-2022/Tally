@@ -37,7 +37,12 @@ public enum CategoryIcon {
     WORK("work", "工作", R.drawable.ic_ledger_work, 0xFF287358, 0xFF8ADABD),
     GIFT("gift", "礼物", R.drawable.ic_ledger_gift, 0xFFAD466E, 0xFFEE9EBE),
     WALLET("wallet", "钱包", R.drawable.ic_ledger_wallet, 0xFF8C5F1C, 0xFFF0BE68),
-    TAG("tag", "标签", R.drawable.ic_ledger_tag, 0xFF606675, 0xFFB6BDCD);
+    TAG("tag", "标签", R.drawable.ic_ledger_tag, 0xFF606675, 0xFFB6BDCD),
+    SALARY("salary", "薪资", R.drawable.ic_ledger_salary, 0xFFB14548, 0xFFFF9F9D),
+    FINANCE("finance", "理财", R.drawable.ic_ledger_finance, 0xFF966011, 0xFFFFBE62),
+    TRANSFER_IN("transfer_in", "收转账", R.drawable.ic_ledger_transfer_in, 0xFF966011, 0xFFFFBE62),
+    BORROW("borrow", "借入", R.drawable.ic_ledger_borrow, 0xFF966011, 0xFFFFBE62),
+    RECEIPT("receipt", "收款", R.drawable.ic_ledger_receipt, 0xFF19735D, 0xFF71D0B0);
 
     private static final Map<String, CategoryIcon> BY_ID;
     private static final Map<String, CategoryIcon> BY_LABEL;
@@ -48,6 +53,7 @@ public enum CategoryIcon {
             ids.put(icon.id, icon);
             labels.put(icon.label, icon);
         }
+        labels.put("收红包", ENVELOPE);
         BY_ID = Collections.unmodifiableMap(ids);
         BY_LABEL = Collections.unmodifiableMap(labels);
     }

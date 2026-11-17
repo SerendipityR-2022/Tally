@@ -119,7 +119,7 @@ public class AutoCategoryResolverTest {
         }
     }
     @Test public void enabledAiIsTriedEvenWhenLocalHasMatched() throws Exception {
-        for (Source source : Arrays.asList(Source.LOCAL, Source.HINT, Source.LEARNED)) {
+        for (Source source : Arrays.asList(Source.LOCAL, Source.HINT)) {
             try (AutoCategoryResolver resolver = new AutoCategoryResolver(Runnable::run)) {
                 CountDownLatch done = new CountDownLatch(1);
                 AtomicReference<Result> result = new AtomicReference<>();
@@ -131,6 +131,20 @@ public class AutoCategoryResolverTest {
             }
         }
     }
+    @Test public void confirmationMatchSkipsTheAiProvider() {
+        try (AutoCategoryResolver resolver = new AutoCategoryResolver(Runnable::run)) {
+            Result learned = new Result("餐饮", "咖啡", Source.LEARNED);
+            AtomicReference<Result> result = new AtomicReference<>();
+            AtomicInteger calls = new AtomicInteger();
+            resolver.resolve(catalog, learned, true, true, () -> {
+                calls.incrementAndGet();
+                return new Result("购物", "超市", Source.AI);
+            }, result::set);
+            assertSame(learned, result.get());
+            assertEquals(0, calls.get());
+        }
+    }
+
     @Test public void aiFirstFailureRetainsRuleInsteadOfDefaultLocalOrder() throws Exception {
         try (AutoCategoryResolver resolver = new AutoCategoryResolver(Runnable::run)) {
             Result rule = new Result("购物", "超市", Source.RULE);

@@ -1,15 +1,17 @@
-# Tally · 3.8.5-based
+# Tally · 3.8.6
 
 [![Android Build](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml/badge.svg)](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml) [下载正式 APK](https://github.com/SerendipityR-2022/Tally/releases/latest)
 
-这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的社区分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。版本名为 `3.8.5-based`，应用包名为 `com.example.budgetapp`。[本次完整改动](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.5-based)
+这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的社区分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。当前版本为 `3.8.6`，应用包名为 `com.example.budgetapp`。[发行说明与下载](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.6)
 
 分支 APK 使用分支签名。如果手机上的同包名版本采用不同签名，需先备份账本再换装。
 
 ## 分支改动
 
 - **自动记账**：保留原生无障碍，新增 Shizuku 实验模式和免确认入账，并扩展原版的 Shizuku 保活以支持实验模式。自动记账调试可采集并导出页面节点和日志，在测试账本回放规则。Release 提供独立的模拟支付 DEMO。
-- **分类与 AI**：自动记账共用分类规则、关键词和确认学习。启用 AI 分类时，有效模型结果优先，超时按本地规则回退；可设置 1–10 秒超时，最多保留 2000 条确认学习记录。AI 设置支持获取和选择服务端模型。
+- **分类与 AI**：自动记账优先使用确认学习记录；未命中时才调用已启用的 AI 分类，超时后按本地规则回退。在确认窗口接受 AI 分类或手动纠正分类并成功保存后，开启反向学习时会记录该选择。超时可设为 1–10 秒，最多保留 2000 条学习记录。AI 设置支持获取和选择服务端模型。
+- **数据恢复**：本地 ZIP 合并导入会恢复备份中已有的储蓄目标、周期记账规则和资产关联，支持原版 3.8.5 的备份；重复导入同一备份不会增加相同记录。
+- **收入分类**：新增薪资、理财、收红包、收转账、借入、收款、其他及相应图标，保留原有分类和自定义图标。
 - **界面**：改进日历、记账表单、明细、预算和资产总览，设置支持搜索。统计概览四等分，周、月、年趋势均显示数据点。确认窗中的备注输入会随键盘上移。
 
 ## 屏幕自动记账
@@ -45,15 +47,18 @@
 <details>
 <summary>软件截图（展开查看）</summary>
 
-<img src=".github/screenshots/stats.png" alt="统计概览与月趋势" width="240"> <img src=".github/screenshots/assistant.png" alt="记账助手设置" width="240">
+截图使用合成账本。点击图片可查看原图。
 
-<img src=".github/screenshots/settings.png" alt="设置首页" width="240"> <img src=".github/screenshots/asset-categories.png" alt="资产分类设置" width="240">
+| 记一笔 | 统计（长图） | 明细（长图） |
+| :---: | :---: | :---: |
+| [<img src=".github/screenshots/record.png" alt="记一笔收入表单及内置分类" width="240">](.github/screenshots/record.png) | [<img src=".github/screenshots/stats.png" alt="统计概览、月趋势、分类构成和支出排行长图" width="240">](.github/screenshots/stats.png) | [<img src=".github/screenshots/details.png" alt="明细月总览及合成账单长图" width="240">](.github/screenshots/details.png) |
 
 </details>
 
 <details>
 <summary>WebDAV、AI 记账与隐私</summary>
 
+- **本地迁移**：先从原版导出 ZIP 并存到下载目录或电脑。安装分支后，到「设置 → 导入与导出 → 导入数据 (Zip)」恢复。旧备份中的照片只有路径，照片文件需要单独保留。
 - **云备份**：在「设置 → 云备份」配置 WebDAV 地址、用户名和密码，验证连接后可以手动备份或开启自动同步。恢复会覆盖本地数据。
 - **AI 记账**：在「设置 → AI 记账配置」填写兼容 OpenAI 的服务地址和 API Key，选择模型并测试连接。按模型支持情况录入文字、图片或语音。
 - 账本数据默认保存在本地。WebDAV 与 AI 功能需要主动配置，分别使用你选择的备份服务和模型服务。

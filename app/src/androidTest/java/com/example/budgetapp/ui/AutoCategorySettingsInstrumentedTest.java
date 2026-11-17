@@ -49,6 +49,8 @@ public class AutoCategorySettingsInstrumentedTest {
                 assertNotNull(activity.findViewById(R.id.btn_category_priority_reset));
                 assertEquals(View.INVISIBLE, priorities.findViewHolderForAdapterPosition(0).itemView
                         .findViewById(R.id.btn_strategy_drag).getVisibility());
+                assertEquals(View.INVISIBLE, priorities.findViewHolderForAdapterPosition(1).itemView
+                        .findViewById(R.id.btn_strategy_drag).getVisibility());
                 assertEquals(View.INVISIBLE, priorities.findViewHolderForAdapterPosition(5).itemView
                         .findViewById(R.id.btn_strategy_drag).getVisibility());
                 assertTrue(((TextView) activity.findViewById(R.id.tv_category_learning_count)).getText().length() > 0);
@@ -76,16 +78,16 @@ public class AutoCategorySettingsInstrumentedTest {
             });
             saveScreenshot("tally-priority-order.png");
             onView(allOf(withId(R.id.btn_strategy_drag), withParent(hasDescendant(
-                    allOf(withId(R.id.tv_priority_rank), withText("2"))))))
+                    allOf(withId(R.id.tv_priority_rank), withText("3"))))))
                     .perform(new GeneralSwipeAction(Swipe.SLOW, GeneralLocation.CENTER, handle -> {
                         RecyclerView list = (RecyclerView) handle.getParent().getParent();
-                        View target = list.findViewHolderForAdapterPosition(2).itemView;
+                        View target = list.findViewHolderForAdapterPosition(3).itemView;
                         int[] position = new int[2];
                         target.getLocationOnScreen(position);
                         return new float[]{GeneralLocation.CENTER.calculateCoordinates(handle)[0],
                                 position[1] + target.getHeight() * 0.75f};
                     }, Press.FINGER));
-            assertEquals(before.move(1, 2).getSources(), AutoCategoryManager.getPriority(context).getSources());
+            assertEquals(before.move(2, 3).getSources(), AutoCategoryManager.getPriority(context).getSources());
             scenario.recreate();
             onView(withText(R.string.auto_category_rules_description)).check((caption, error) -> {
                 if (error != null) throw error;

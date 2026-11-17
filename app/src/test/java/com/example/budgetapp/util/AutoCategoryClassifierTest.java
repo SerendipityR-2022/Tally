@@ -46,12 +46,12 @@ public class AutoCategoryClassifierTest {
         Result result = local(input("参加周末陶艺课"), Arrays.asList(cat("陶艺", "材料"), cat("其他")));
         assertEquals("陶艺", result.category);
     }
-    @Test public void explicitRulesBeatLearningAndAi() {
+    @Test public void confirmedLearningBeatsAnExplicitRuleForTheSameMerchant() {
         Result result = classifyLocal(input("瑞幸"), catalog,
                 Arrays.asList(new Rule("瑞幸", "购物", "超市", 0)),
                 Arrays.asList(learned("瑞幸", "餐饮", "咖啡")), true);
-        assertEquals(Source.RULE, result.source);
-        assertEquals("餐饮", applyAi(catalog, result, "餐饮", "咖啡", true).category);
+        assertEquals(Source.LEARNED, result.source);
+        assertEquals("餐饮", result.category);
     }
     @Test public void firstMatchingRuleWinsAndMovingRulesChangesPriority() {
         Rule broad = new Rule("咖啡", "购物", "", 0);

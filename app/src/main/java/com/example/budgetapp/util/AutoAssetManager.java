@@ -8,6 +8,7 @@ import com.example.budgetapp.database.AssetAccount;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -37,6 +38,7 @@ public class AutoAssetManager {
         }
 
         public static AssetRule fromString(String str) {
+            if (str == null) return null;
             String[] parts = str.split("\\|");
             if (parts.length == 3) {
                 try {
@@ -75,6 +77,22 @@ public class AutoAssetManager {
         Set<String> set = new HashSet<>(prefs.getStringSet(KEY_RULES, new HashSet<>()));
         set.add(rule.toString());
         prefs.edit().putStringSet(KEY_RULES, set).apply();
+    }
+
+    /** Replace matching rules with the imported rule using the mapped asset ID. */
+    public static void mergeRestoredRules(Context context, List<AssetRule> restored) {
+        if (restored.isEmpty()) return;
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        Set<String> rules = new HashSet<>(prefs.getStringSet(KEY_RULES, new HashSet<>()));
+        for (AssetRule incoming : restored) {
+            rules.removeIf(stored -> {
+                AssetRule current = AssetRule.fromString(stored);
+                return current != null && Objects.equals(current.packageName, incoming.packageName)
+                        && Objects.equals(current.keyword, incoming.keyword);
+            });
+            rules.add(incoming.toString());
+        }
+        prefs.edit().putStringSet(KEY_RULES, rules).apply();
     }
 
     public static void removeRule(Context context, AssetRule rule) {

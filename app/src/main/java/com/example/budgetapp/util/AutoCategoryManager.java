@@ -128,8 +128,8 @@ public final class AutoCategoryManager {
         }
     }
 
-    /** Call only after the user saved successfully, never on cancel or background auto-save. */
-    public static synchronized void rememberCorrection(Context context, AutoCategoryClassifier.Input input,
+    /** Learn a correction or an accepted model suggestion only after the confirmation was saved. */
+    public static synchronized void rememberConfirmation(Context context, AutoCategoryClassifier.Input input,
             AutoCategoryClassifier.Result initial, int finalType, String category, String subCategory) {
         if (!isLearningEnabled(context) || finalType != input.type || (finalType != 0 && finalType != 1)) return;
         String identity = AutoCategoryClassifier.learningIdentity(input.description);
@@ -137,8 +137,10 @@ public final class AutoCategoryManager {
         boolean useSub = CategoryManager.isSubCategoryEnabled(context);
         AutoCategoryClassifier.Result confirmed = AutoCategoryClassifier.validate(getCatalog(context, finalType),
                 category, subCategory, AutoCategoryClassifier.Source.LEARNED, useSub);
-        if (confirmed == null || (confirmed.category.equals(initial.category)
-                && confirmed.subCategory.equals(initial.subCategory))) return;
+        if (confirmed == null) return;
+        boolean unchanged = confirmed.category.equals(initial.category)
+                && confirmed.subCategory.equals(initial.subCategory);
+        if (unchanged && initial.source != AutoCategoryClassifier.Source.AI) return;
         List<AutoCategoryClassifier.Learned> rules = new ArrayList<>(getLearned(context));
         rules.removeIf(rule -> rule.type == finalType && rule.packageName.equals(input.packageName)
                 && rule.identity.equals(identity));

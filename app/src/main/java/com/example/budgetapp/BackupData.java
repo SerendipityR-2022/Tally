@@ -17,6 +17,7 @@ public class BackupData {
     public List<AssetAccount> assets;
     public List<String> expenseCategories;
     public List<String> incomeCategories;
+    public boolean incomeCatalogUpdated; // Absent in backups before the expanded income catalog.
     public Map<String, List<String>> subCategoryMap;
     public List<Goal> goals;
     public List<RecurringRule> recurringRules; // 【新增】周期记账规则

@@ -3,11 +3,11 @@
     <string name="auto_category_title">自动分类与学习</string>
     <string name="auto_category_local_description">所有支付页面共用分类器。根据当前分类名称、二级分类和常见消费语义匹配，新增分类即时生效。复杂的新名称可配置关键词，或开启 AI 理解；本地识别不联网。</string>
     <string name="auto_category_priority_title">分类优先级（从高到低）</string>
-    <string name="auto_category_priority">启用 AI 时优先采用有效的模型结果。拖动把手调整本地回退顺序。</string>
+    <string name="auto_category_priority">先匹配确认学习；未命中时，启用 AI 才会请求模型。拖动把手可调整本地回退顺序。</string>
     <string name="auto_category_rules">管理分类关键词规则</string>
     <string name="auto_category_rules_description">与 AI 记账共用规则；屏幕记账只匹配相同收支类型，不改动金额、时间或收支类型。</string>
     <string name="auto_category_learning">确认窗口反向学习</string>
-    <string name="auto_category_learning_description">修改分类后成功保存，才记住该应用、收支类型和商户描述的选择；取消或直接保存原建议不会学习。关闭后不保存也不使用学习记录。删除或重命名的分类、二级分类不再命中旧记录。</string>
+    <string name="auto_category_learning_description">确认窗口成功保存时，会记住你接受的 AI 分类或手动修改的分类。以后同一应用、收支类型和商户再次出现时优先使用。关闭后不记录也不匹配；取消或免确认入账不会学习。</string>
     <string name="auto_category_learning_count">已保存 %1$d 条学习记录（最多 %2$d 条）</string>
     <string name="auto_category_clear">清除学习记录</string>
     <string name="auto_category_clear_message">仅清除自动分类的学习记录，不删除账单、分类预设或关键词规则。此操作不可撤销。</string>

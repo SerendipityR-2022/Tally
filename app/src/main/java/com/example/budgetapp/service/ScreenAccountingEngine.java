@@ -561,10 +561,12 @@ public class ScreenAccountingEngine extends ContextWrapper {
         final long generation = ++classificationGeneration;
         final AutoCategoryClassifier.Input input = new AutoCategoryClassifier.Input(sourcePackage, merchantDescription, type, hint);
         final AutoCategoryClassifier.Result local = AutoCategoryManager.classifyLocal(this, input);
-        final List<AutoCategoryClassifier.Category> catalog = AutoCategoryManager.getCatalog(this, type);
         final boolean useSub = CategoryManager.isSubCategoryEnabled(this);
-        final AiConfig aiConfig = replay == null ? loadScreenCategoryAiConfig() : null;
-        boolean enableAi = aiConfig != null && !input.description.isEmpty();
+        final AiConfig aiConfig = replay == null && local.source != AutoCategoryClassifier.Source.LEARNED
+                && !input.description.isEmpty() ? loadScreenCategoryAiConfig() : null;
+        boolean enableAi = aiConfig != null;
+        final List<AutoCategoryClassifier.Category> catalog = enableAi
+                ? AutoCategoryManager.getCatalog(this, type) : java.util.Collections.emptyList();
         if (categoryResolver == null) categoryResolver = new AutoCategoryResolver(command -> handler.post(command));
         int timeoutMs = enableAi ? AutoCategoryManager.getAiTimeoutSeconds(this) * 1000 : 0;
         pendingClassification = categoryResolver.resolve(catalog, local, useSub, enableAi,
@@ -942,7 +944,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
                     saveToDatabase(finalAmountValue, finalTypeInt, finalCatName, selectedSubCategory,
                             finalRemarkText, accountRemark, assetIdInt, finalSymbol, currentPhotoPath[0],
                             transactionTime, targetObject, liabilityLoanType, isExcludedFromBudget[0],
-                            () -> AutoCategoryManager.rememberCorrection(getApplicationContext(), classificationInput,
+                            () -> AutoCategoryManager.rememberConfirmation(getApplicationContext(), classificationInput,
                                     classification, confirmedType, confirmedCategory, confirmedSubCategory));
                     closeWindow(windowManager, floatView);
                     Toast.makeText(this, "已记账", Toast.LENGTH_SHORT).show();

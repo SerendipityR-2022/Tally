@@ -11,7 +11,7 @@ import java.util.List;
 @Dao
 public interface AssetAccountDao {
     @Insert
-    void insert(AssetAccount account);
+    long insert(AssetAccount account);
 
     @Delete
     void delete(AssetAccount account);

@@ -17,18 +17,19 @@ public class AutoCategoryPriorityTest {
 
     @Test public void repairsUnknownDuplicatesAndPrematureFallback() {
         AutoCategoryPriority order = AutoCategoryPriority.parse("AI,FALLBACK,AI,UNKNOWN,HINT");
-        assertEquals(Arrays.asList(Source.AI, Source.HINT, Source.RULE, Source.LEARNED, Source.LOCAL, Source.FALLBACK), order.getSources());
+        assertEquals(Arrays.asList(Source.LEARNED, Source.AI, Source.HINT, Source.RULE, Source.LOCAL, Source.FALLBACK), order.getSources());
         assertEquals(AutoCategoryPriority.defaults().serialize(), AutoCategoryPriority.parse(null).serialize());
         assertEquals(order.serialize(), AutoCategoryPriority.parse(order.serialize()).serialize());
     }
 
-    @Test public void aiAndFallbackCannotBeMovedOrDisplaced() {
+    @Test public void learningAiAndFallbackCannotBeMovedOrDisplaced() {
         AutoCategoryPriority order = AutoCategoryPriority.defaults();
         assertEquals(order.serialize(), order.move(0, 5).serialize());
         assertEquals(order.serialize(), order.move(5, 0).serialize());
         assertEquals(order.serialize(), order.move(-1, 1).serialize());
         assertEquals(order.serialize(), order.move(2, 0).serialize());
-        assertEquals(Source.LEARNED, order.move(2, 1).getSources().get(1));
+        assertEquals(order.serialize(), order.move(2, 1).serialize());
+        assertEquals(Source.LOCAL, order.move(3, 2).getSources().get(2));
     }
 
     @Test public void strategyListCannotBeMutated() {
@@ -36,14 +37,15 @@ public class AutoCategoryPriorityTest {
     }
 
     @Test public void allLocalOrdersChooseFirstMatchAndValidAiStillWins() {
-        List<Source> sources = new ArrayList<>(AutoCategoryPriority.defaults().getSources().subList(1, 5));
+        List<Source> sources = new ArrayList<>(AutoCategoryPriority.defaults().getSources().subList(2, 5));
         verifyPermutations(sources, 0);
     }
 
     private void verifyPermutations(List<Source> sources, int start) {
         if (start == sources.size()) {
             AutoCategoryPriority order = new AutoCategoryPriority(sources);
-            Result local = classifyLocal(input, catalog, rules, learned, true, order);
+            Result local = classifyLocal(input, catalog, rules, Collections.emptyList(), true, order);
+            assertEquals(Source.LEARNED, classifyLocal(input, catalog, rules, learned, true, order).source);
             Source firstLocal = sources.get(0);
             assertEquals(order.serialize(), firstLocal, local.source);
             Result resolved = applyAi(catalog, local, "餐饮", "咖啡", true);

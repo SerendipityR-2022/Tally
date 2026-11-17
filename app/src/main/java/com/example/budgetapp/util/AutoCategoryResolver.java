@@ -76,7 +76,8 @@ public final class AutoCategoryResolver implements AutoCloseable {
         Handle handle = new Handle(callback);
         if (closed) { handle.cancel(); return handle; }
         pending.add(handle);
-        if (!enableAi || !busy.compareAndSet(false, true)) {
+        if (local.source == AutoCategoryClassifier.Source.LEARNED || !enableAi
+                || !busy.compareAndSet(false, true)) {
             handle.deliver(local);
             return handle;
         }

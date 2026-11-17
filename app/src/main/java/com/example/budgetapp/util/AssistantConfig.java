@@ -104,6 +104,24 @@ public class AssistantConfig {
         prefs.edit().putInt(KEY_DEFAULT_ASSET_ID, id).apply();
     }
 
+    public void mergeRestoredKeywords(Set<String> expense, Set<String> income) {
+        SharedPreferences.Editor editor = prefs.edit();
+        mergeRestoredKeywords(editor, KEY_KEYWORDS_EXPENSE, expense);
+        mergeRestoredKeywords(editor, KEY_KEYWORDS_INCOME, income);
+        editor.apply();
+    }
+
+    private void mergeRestoredKeywords(SharedPreferences.Editor editor, String key, Set<String> restored) {
+        if (restored == null) return;
+        Set<String> words = new HashSet<>(restored);
+        try {
+            words.addAll(prefs.getStringSet(key, java.util.Collections.emptySet()));
+        } catch (ClassCastException ignored) {
+            // An older restore may have written an encoded set as a plain string.
+        }
+        editor.putStringSet(key, words);
+    }
+
     // --- 关键字管理 ---
     public Set<String> getExpenseKeywords() {
         return new HashSet<>(prefs.getStringSet(KEY_KEYWORDS_EXPENSE, new HashSet<>()));

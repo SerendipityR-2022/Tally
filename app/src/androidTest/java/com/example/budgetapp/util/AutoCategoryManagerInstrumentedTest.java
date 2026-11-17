@@ -37,30 +37,56 @@ public class AutoCategoryManagerInstrumentedTest {
     }
     @Test public void correctedConfirmationIsPersistedAndReused() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberCorrection(context, input, original, 0, "购物", "超市");
+        AutoCategoryManager.rememberConfirmation(context, input, original, 0, "购物", "超市");
         Result next = AutoCategoryManager.classifyLocal(context,
                 new Input("com.tencent.mm", "11-16 08:00 瑞幸", 0, "购物"));
         assertEquals(Source.LEARNED, next.source);
         assertEquals("购物", next.category);
         assertEquals("超市", next.subCategory);
     }
-    @Test public void acceptingUnchangedSuggestionDoesNotTrain() {
+    @Test public void acceptingUnchangedLocalSuggestionDoesNotTrain() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberCorrection(context, input, original, 0, original.category, original.subCategory);
+        AutoCategoryManager.rememberConfirmation(context, input, original, 0, original.category, original.subCategory);
         assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
     }
+    @Test public void acceptedAiIsLearnedButAnEditStoresOnlyTheUserChoice() {
+        Result model = new Result("餐饮", "咖啡", Source.AI);
+        AutoCategoryManager.setLearningEnabled(context, false);
+        AutoCategoryManager.rememberConfirmation(context, input, model, 0, "餐饮", "咖啡");
+        assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+        AutoCategoryManager.setLearningEnabled(context, true);
+        AutoCategoryManager.rememberConfirmation(context, input, model, 0, "餐饮", "咖啡");
+        assertEquals(Source.LEARNED, AutoCategoryManager.classifyLocal(context, input).source);
+        assertEquals("咖啡", AutoCategoryManager.classifyLocal(context, input).subCategory);
+        AutoCategoryManager.rememberConfirmation(context, input, model, 0, "购物", "超市");
+        assertEquals(1, AutoCategoryManager.getLearned(context).size());
+        assertEquals("购物", AutoCategoryManager.getLearned(context).get(0).category);
+    }
+
+    @Test public void incomePresetsAppendOnceWithoutLosingCustomCategories() {
+        context.getSharedPreferences("category_prefs", Context.MODE_PRIVATE).edit()
+                .putString("key_income_categories", "自订收入,收款,自定义").remove("income_catalog_386").commit();
+        assertEquals(Arrays.asList("自订收入", "收款", "薪资", "理财", "收红包", "收转账", "借入", "其他", "自定义"),
+                CategoryManager.getIncomeCategories(context));
+        assertEquals(CategoryIcon.RECEIPT, CategoryManager.getIcon(context, false, "收款"));
+        assertEquals(CategoryIcon.BORROW, CategoryManager.getIcon(context, false, "借入"));
+        assertEquals(CategoryIcon.ENVELOPE, CategoryManager.getIcon(context, false, "收红包"));
+        CategoryManager.saveIncomeCategories(context, Arrays.asList("自订收入", "收款", "自定义"));
+        assertEquals(Arrays.asList("自订收入", "收款", "自定义"), CategoryManager.getIncomeCategories(context));
+    }
+
     @Test public void changedTypeAndUnregisteredCustomCategoryAreNotLearned() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberCorrection(context, input, original, 1, "工资", "");
-        AutoCategoryManager.rememberCorrection(context, input, original, 0, "临时自定义", "");
+        AutoCategoryManager.rememberConfirmation(context, input, original, 1, "工资", "");
+        AutoCategoryManager.rememberConfirmation(context, input, original, 0, "临时自定义", "");
         assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
     }
     @Test public void learningCanBeDisabledAndClearedIndependently() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberCorrection(context, input, original, 0, "购物", "超市");
+        AutoCategoryManager.rememberConfirmation(context, input, original, 0, "购物", "超市");
         AutoCategoryManager.setLearningEnabled(context, false);
         assertNotEquals(Source.LEARNED, AutoCategoryManager.classifyLocal(context, input).source);
-        AutoCategoryManager.rememberCorrection(context, new Input("com.tencent.mm", "蜜雪", 0, "购物"),
+        AutoCategoryManager.rememberConfirmation(context, new Input("com.tencent.mm", "蜜雪", 0, "购物"),
                 original, 0, "购物", "超市");
         assertEquals(1, AutoCategoryManager.getLearned(context).size());
         AutoCategoryManager.clearLearned(context);
@@ -69,14 +95,14 @@ public class AutoCategoryManagerInstrumentedTest {
     }
     @Test public void changingClassificationReplacesSameMerchantLearning() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberCorrection(context, input, original, 0, "购物", "超市");
-        AutoCategoryManager.rememberCorrection(context, input,
+        AutoCategoryManager.rememberConfirmation(context, input, original, 0, "购物", "超市");
+        AutoCategoryManager.rememberConfirmation(context, input,
                 AutoCategoryManager.classifyLocal(context, input), 0, "餐饮", "奶茶");
         assertEquals(1, AutoCategoryManager.getLearned(context).size());
         assertEquals("奶茶", AutoCategoryManager.classifyLocal(context, input).subCategory);
     }
     @Test public void removedSubCategoryInvalidatesLearning() {
-        AutoCategoryManager.rememberCorrection(context, input,
+        AutoCategoryManager.rememberConfirmation(context, input,
                 AutoCategoryManager.classifyLocal(context, input), 0, "购物", "超市");
         CategoryManager.saveSubCategories(context, "购物", Arrays.asList("百货"));
         assertNotEquals(Source.LEARNED, AutoCategoryManager.classifyLocal(context, input).source);
@@ -105,7 +131,7 @@ public class AutoCategoryManagerInstrumentedTest {
                 .put("identity", "旧商户" + i).put("type", 0).put("category", "购物").put("subCategory", "超市"));
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit()
                 .putString("screen_category_learned_rules", records.toString()).commit();
-        AutoCategoryManager.rememberCorrection(context, input,
+        AutoCategoryManager.rememberConfirmation(context, input,
                 AutoCategoryManager.classifyLocal(context, input), 0, "购物", "超市");
         assertEquals(2000, AutoCategoryManager.getLearned(context).size());
         assertEquals("旧商户1998", AutoCategoryManager.getLearned(context).get(1999).identity);
@@ -133,14 +159,15 @@ public class AutoCategoryManagerInstrumentedTest {
         assertEquals(Source.HINT, AutoCategoryManager.classifyLocal(context, input).source);
         assertEquals("购物", AutoCategoryManager.classifyLocal(context, input).category);
         assertTrue(context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).contains("screen_category_strategy_order"));
-        assertEquals(Source.HINT, AutoCategoryManager.getPriority(context).getSources().get(1));
+        assertEquals(Source.HINT, AutoCategoryManager.getPriority(context).getSources().get(2));
         AutoCategoryManager.setPriority(context, AutoCategoryPriority.defaults());
         assertEquals(Source.LOCAL, AutoCategoryManager.classifyLocal(context, input).source);
     }
     @Test public void restoredMalformedOrderIsSafelyNormalized() {
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit()
                 .putString("screen_category_strategy_order", "FALLBACK,AI,AI,UNKNOWN,LOCAL").commit();
-        assertEquals(Source.AI, AutoCategoryManager.getPriority(context).getSources().get(0));
+        assertEquals(Source.LEARNED, AutoCategoryManager.getPriority(context).getSources().get(0));
+        assertEquals(Source.AI, AutoCategoryManager.getPriority(context).getSources().get(1));
         assertEquals(Source.FALLBACK, AutoCategoryManager.getPriority(context).getSources().get(5));
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit()
                 .putInt("screen_category_strategy_order", 123).commit();

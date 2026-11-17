@@ -10,6 +10,7 @@ import com.example.budgetapp.database.AppDatabase;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 public class CategoryManager {
     public static final String CUSTOM_CATEGORY = "自定义";
@@ -18,10 +19,12 @@ public class CategoryManager {
     private static final String KEY_INCOME = "key_income_categories";
     private static final String KEY_ENABLE_SUB_CATEGORY = "enable_sub_category";
     private static final String KEY_EXPENSE_CATALOG = "expense_catalog_390";
+    private static final String KEY_INCOME_CATALOG = "income_catalog_386";
     private static final String SUB_PREFIX = "sub_cat_";
 
     private static final String DEFAULT_EXPENSE = "消费,餐饮,购物,住房,交通,通讯,娱乐,医疗,教育,红包,旅行,投资,美容,亲子,人情社交,宠物,快递,其他,居家,自定义";
-    private static final String DEFAULT_INCOME = "工资,奖金,投资,兼职,礼金,自定义";
+    private static final String DEFAULT_INCOME = "工资,奖金,投资,兼职,礼金,薪资,理财,收红包,收转账,借入,收款,其他,自定义";
+    private static final List<String> NEW_INCOME_PRESETS = Arrays.asList("薪资", "理财", "收红包", "收转账", "借入", "收款", "其他");
     private static final List<String> NEW_PRESETS = Arrays.asList(
             "消费", "住房", "通讯", "红包", "旅行", "投资", "美容", "亲子", "人情社交", "宠物", "快递", "其他");
 
@@ -40,8 +43,42 @@ public class CategoryManager {
         return categories;
     }
 
-    public static List<String> getIncomeCategories(Context context) {
-        return getList(preferences(context), KEY_INCOME, DEFAULT_INCOME);
+    public static synchronized List<String> getIncomeCategories(Context context) {
+        SharedPreferences prefs = preferences(context);
+        List<String> categories = getList(prefs, KEY_INCOME, DEFAULT_INCOME);
+        if (prefs.contains(KEY_INCOME) && !prefs.getBoolean(KEY_INCOME_CATALOG, false)) {
+            categories = withIncomePresets(categories);
+            writeCategories(prefs, false, categories);
+        }
+        return categories;
+    }
+
+    private static List<String> withIncomePresets(List<String> categories) {
+        List<String> updated = new ArrayList<>(categories);
+        int insert = updated.indexOf(CUSTOM_CATEGORY);
+        if (insert < 0) insert = updated.size();
+        for (String preset : NEW_INCOME_PRESETS) {
+            if (!updated.contains(preset)) updated.add(insert++, preset);
+        }
+        return updated;
+    }
+
+    /** Restore settings together; the import schedules one backup after the ledger is ready. */
+    public static synchronized void restoreBackupCategories(Context context, List<String> expense,
+            List<String> income, Map<String, List<String>> subCategories, boolean incomeCatalogUpdated) {
+        SharedPreferences.Editor editor = preferences(context).edit();
+        if (expense != null) editor.putString(KEY_EXPENSE, TextUtils.join(",", expense))
+                .putBoolean(KEY_EXPENSE_CATALOG, true);
+        if (income != null) editor.putString(KEY_INCOME,
+                TextUtils.join(",", incomeCatalogUpdated ? income : withIncomePresets(income)))
+                .putBoolean(KEY_INCOME_CATALOG, true);
+        if (subCategories != null) {
+            for (Map.Entry<String, List<String>> entry : subCategories.entrySet()) {
+                if (entry.getValue() != null) editor.putString(SUB_PREFIX + entry.getKey(),
+                        TextUtils.join(",", entry.getValue()));
+            }
+        }
+        editor.apply();
     }
 
     public static synchronized void saveExpenseCategories(Context context, List<String> list) {
@@ -135,7 +172,7 @@ public class CategoryManager {
 
     private static void writeCategories(SharedPreferences prefs, boolean expense, List<String> list) {
         SharedPreferences.Editor editor = prefs.edit().putString(expense ? KEY_EXPENSE : KEY_INCOME, TextUtils.join(",", list));
-        if (expense) editor.putBoolean(KEY_EXPENSE_CATALOG, true);
+        editor.putBoolean(expense ? KEY_EXPENSE_CATALOG : KEY_INCOME_CATALOG, true);
         editor.apply();
     }
 }

@@ -7,14 +7,15 @@ import java.util.List;
 
 import static com.example.budgetapp.util.AutoCategoryClassifier.Source;
 
-/** AI is fixed at the top when enabled; only the local fallback strategies can move. */
+/** Confirmed matches and then AI precede the configurable local fallback strategies. */
 public final class AutoCategoryPriority {
     private static final List<Source> DEFAULT = Collections.unmodifiableList(Arrays.asList(
-            Source.AI, Source.RULE, Source.LEARNED, Source.LOCAL, Source.HINT, Source.FALLBACK));
+            Source.LEARNED, Source.AI, Source.RULE, Source.LOCAL, Source.HINT, Source.FALLBACK));
     private final List<Source> sources;
 
     public AutoCategoryPriority(List<Source> requested) {
         List<Source> result = new ArrayList<>();
+        result.add(Source.LEARNED);
         result.add(Source.AI);
         if (requested != null) {
             for (Source source : requested) {
@@ -39,7 +40,7 @@ public final class AutoCategoryPriority {
     }
 
     public List<Source> getSources() { return sources; }
-    public boolean canMove(int position) { return position > 0 && position < sources.size() - 1; }
+    public boolean canMove(int position) { return position >= 2 && position < sources.size() - 1; }
 
     public AutoCategoryPriority move(int from, int to) {
         if (!canMove(from) || !canMove(to)) return this;
