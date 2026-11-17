@@ -2,6 +2,7 @@ package com.example.budgetapp.ui;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -11,7 +12,9 @@ import android.os.SystemClock;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.NumberPicker;
 import android.widget.TextView;
+import androidx.appcompat.widget.SwitchCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.fragment.app.Fragment;
@@ -23,10 +26,15 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.example.budgetapp.MainActivity;
 import com.example.budgetapp.R;
+import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.database.TransactionDao;
+import com.example.budgetapp.util.DailyBudgetPlan;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -34,17 +42,26 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ThreadLocalRandom;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import static org.junit.Assert.*;
+import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.action.ViewActions.click;
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
+import static androidx.test.espresso.matcher.ViewMatchers.withId;
 
 @RunWith(AndroidJUnit4.class)
 public class LedgerUiRegressionTest {
+    private static final YearMonth BUDGET_FIXTURE_MONTH = YearMonth.of(2001, 6);
+    private static final String BUDGET_FIXTURE_OVERRIDE = "budget_2001_6";
     private static final String[] PREF_KEYS = {"default_page", "is_budget_enabled", "is_detailed_budget_enabled",
-            "enable_details_module", "key_enable_assets_module", "theme_mode", DefaultPageActivity.KEY_DETAILS_BUDGET_SHORTCUT};
+            "enable_details_module", "key_enable_assets_module", "theme_mode", DefaultPageActivity.KEY_DETAILS_BUDGET_SHORTCUT,
+            DailyBudgetPlan.PREF_DYNAMIC, "monthly_budget", "budget_start_time", BUDGET_FIXTURE_OVERRIDE,
+            "bill_card_replace_budget", DefaultPageActivity.KEY_BILL_CARD};
     private final Map<String, Object> original = new HashMap<>();
     private SharedPreferences prefs;
 
@@ -65,6 +82,8 @@ public class LedgerUiRegressionTest {
             if (value == null) edit.remove(key);
             else if (value instanceof Integer) edit.putInt(key, (Integer) value);
             else if (value instanceof Boolean) edit.putBoolean(key, (Boolean) value);
+            else if (value instanceof Float) edit.putFloat(key, (Float) value);
+            else if (value instanceof Long) edit.putLong(key, (Long) value);
             else if (value instanceof String) edit.putString(key, (String) value);
         }
         edit.commit();
@@ -145,6 +164,84 @@ public class LedgerUiRegressionTest {
                 assertEquals(View.GONE, active(activity).requireView().findViewById(R.id.ledger_details_budget).getVisibility());
             });
         }
+    }
+
+    @Test public void enablingDynamicBudgetUpdatesTheRecordCardAndCalendarAfterReturningFromSettings() {
+        prefs.edit().putInt("default_page", 0).remove(DailyBudgetPlan.PREF_DYNAMIC).remove("budget_start_time")
+                .putFloat("monthly_budget", 1800f).putFloat(BUDGET_FIXTURE_OVERRIDE, 1500f)
+                .putBoolean("bill_card_replace_budget", false).putBoolean(DefaultPageActivity.KEY_BILL_CARD, true).commit();
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        TransactionDao dao = AppDatabase.getDatabase(context).transactionDao();
+        List<Transaction> fixtures = new ArrayList<>();
+        try {
+            for (int day = 1; day <= 2; day++) {
+                long date = BUDGET_FIXTURE_MONTH.atDay(day).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                Transaction expense = new Transaction(date, 0, "餐饮", day == 1 ? 30 : 50.50);
+                expense.id = ThreadLocalRandom.current().nextInt(Integer.MIN_VALUE, -10);
+                dao.insert(expense);
+                fixtures.add(expense);
+            }
+            try (ActivityScenario<MainActivity> main = ActivityScenario.launch(MainActivity.class)) {
+                main.onActivity(activity -> active(activity).requireView().findViewById(R.id.tv_month_title).performClick());
+                setPicker(R.id.np_year, BUDGET_FIXTURE_MONTH.getYear());
+                setPicker(R.id.np_month, BUDGET_FIXTURE_MONTH.getMonthValue());
+                setPicker(R.id.np_day, 2);
+                onView(withId(R.id.btn_confirm)).inRoot(isDialog()).perform(click());
+                awaitBudgetAmount(main, 50.50, 50.00);
+                main.onActivity(activity -> assertTrue(isSecondDayOverBudget(activity)));
+
+                main.onActivity(activity -> activity.startActivity(new Intent(activity, BudgetManagementActivity.class)));
+                onView(withId(R.id.switch_dynamic_daily_budget)).check((view, error) -> {
+                    if (error != null) throw error;
+                    assertTrue(view.isEnabled());
+                    assertFalse(((SwitchCompat) view).isChecked());
+                }).perform(click()).check((view, error) -> {
+                    if (error != null) throw error;
+                    assertTrue(((SwitchCompat) view).isChecked());
+                });
+                androidx.test.espresso.Espresso.pressBack();
+                awaitBudgetAmount(main, 50.50, 50.69);
+                main.onActivity(activity -> {
+                    assertFalse(isSecondDayOverBudget(activity));
+                    assertEquals(View.GONE, active(activity).requireView().findViewById(R.id.card_bill_slider).getVisibility());
+                });
+            }
+        } finally {
+            for (Transaction expense : fixtures) dao.delete(expense);
+        }
+    }
+
+    private static void setPicker(int id, int value) {
+        onView(withId(id)).inRoot(isDialog()).check((view, error) -> {
+            if (error != null) throw error;
+            ((NumberPicker) view).setValue(value);
+        });
+    }
+
+    private static void awaitBudgetAmount(ActivityScenario<MainActivity> main, double used, double limit) {
+        AtomicReference<String> actual = new AtomicReference<>();
+        AtomicReference<String> expected = new AtomicReference<>();
+        long until = SystemClock.uptimeMillis() + 3000;
+        do {
+            main.onActivity(activity -> {
+                View root = active(activity).requireView();
+                TextView text = root.findViewById(R.id.tv_budget_text);
+                expected.set(activity.getString(R.string.record_budget_amounts, used, limit));
+                actual.set(text.isShown() ? text.getText().toString() : "");
+            });
+            if (expected.get().equals(actual.get())) break;
+            SystemClock.sleep(25);
+        } while (SystemClock.uptimeMillis() < until);
+        assertEquals(expected.get(), actual.get());
+        idle();
+    }
+
+    private static boolean isSecondDayOverBudget(MainActivity activity) {
+        RecyclerView calendar = active(activity).requireView().findViewById(R.id.calendar_recycler);
+        int position = BUDGET_FIXTURE_MONTH.atDay(1).getDayOfWeek().getValue() % 7 + 1;
+        RecyclerView.ViewHolder day = calendar.findViewHolderForAdapterPosition(position);
+        assertNotNull(day);
+        return day.itemView.getContentDescription().toString().contains(activity.getString(R.string.calendar_day_over_budget_description));
     }
 
     @Test public void editingFromDetailsShowsTheFullSaveLabelOnOneLine() {

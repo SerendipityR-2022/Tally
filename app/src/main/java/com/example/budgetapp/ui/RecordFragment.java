@@ -61,6 +61,7 @@ import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.util.TransactionRemarks;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.CategoryManager;
+import com.example.budgetapp.util.DailyBudgetPlan;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
@@ -115,8 +116,9 @@ public class RecordFragment extends Fragment {
     private int currentFilterMode = 0;
 
     private androidx.cardview.widget.CardView cardBudgetStatus;
-    private TextView tvBudgetText;
+    private TextView tvBudgetTitle, tvBudgetText;
     private android.widget.ProgressBar pbBudget;
+    private DailyBudgetPlan dailyBudgetPlan;
 
     // 账单滑动卡片相关
     private View layoutBillSlider;
@@ -320,6 +322,7 @@ public class RecordFragment extends Fragment {
 
         // 在 onCreateView 中绑定视图
         cardBudgetStatus = view.findViewById(R.id.card_budget_status);
+        tvBudgetTitle = view.findViewById(R.id.tv_budget_title);
         tvBudgetText = view.findViewById(R.id.tv_budget_text);
         pbBudget = view.findViewById(R.id.pb_budget);
 
@@ -389,10 +392,13 @@ public class RecordFragment extends Fragment {
                 selectedDate = date;
                 adapter.setSelectedDate(date);
 
-                // 立即刷新预算卡片 (保留高性能的 getRangeTransactions)
                 List<Transaction> currentList = viewModel.getRangeTransactions().getValue();
-                if (currentList != null) {
+                LocalDate today = LocalDate.now();
+                if (currentList != null && (dailyBudgetPlan == null || !dailyBudgetPlan.isFor(currentMonth, today))) {
                     updateBudgetCard(currentList);
+                } else {
+                    if (cardBudgetStatus.getVisibility() == View.VISIBLE) updateBudgetCardContent(date, today);
+                    updateBillSlider(currentList);
                 }
             }
         });
@@ -491,62 +497,39 @@ public class RecordFragment extends Fragment {
         if (transactions == null || getContext() == null) return;
 
         SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        boolean isBudgetEnabled = prefs.getBoolean("is_budget_enabled", false);
-
-        // --- 新增：判断是否开启了详细预算 ---
-        boolean isDetailedEnabled = prefs.getBoolean("is_detailed_budget_enabled", false);
-
-        // 1. 检查当前浏览的月份是否有效
+        boolean enabled = prefs.getBoolean("is_budget_enabled", false);
         long budgetStartTime = prefs.getLong("budget_start_time", 0);
-        boolean isEffectiveMonth = true;
-        if (budgetStartTime > 0) {
-            YearMonth startYM = YearMonth.from(Instant.ofEpochMilli(budgetStartTime).atZone(ZoneId.systemDefault()).toLocalDate());
-            if (currentMonth.isBefore(startYM)) {
-                isEffectiveMonth = false;
+        ZoneId zone = ZoneId.systemDefault();
+        if (enabled && budgetStartTime > 0) {
+            YearMonth startMonth = YearMonth.from(Instant.ofEpochMilli(budgetStartTime).atZone(zone));
+            enabled = !currentMonth.isBefore(startMonth);
+        }
+
+        double monthlyBudget = 0;
+        if (enabled) {
+            if (prefs.getBoolean("is_detailed_budget_enabled", false)) {
+                for (String cat : CategoryManager.getExpenseCategories(requireContext())) {
+                    monthlyBudget += prefs.getFloat("budget_cat_" + cat, 0f);
+                }
+            } else {
+                String monthKey = "budget_" + currentMonth.getYear() + "_" + currentMonth.getMonthValue();
+                monthlyBudget = prefs.getFloat(monthKey, prefs.getFloat("monthly_budget", 0f));
             }
         }
 
-        boolean finalBudgetEnabled = isBudgetEnabled && isEffectiveMonth;
+        LocalDate today = LocalDate.now(zone);
+        dailyBudgetPlan = enabled && monthlyBudget > 0 && Double.isFinite(monthlyBudget)
+                ? new DailyBudgetPlan(currentMonth, today, zone, monthlyBudget,
+                        prefs.getBoolean(DailyBudgetPlan.PREF_DYNAMIC, false), transactions) : null;
+        adapter.setBudgetPlan(dailyBudgetPlan);
 
-        // --- 2. 核心修改：统一预算获取逻辑 ---
-        float monthlyBudget = 0;
-        if (isDetailedEnabled) {
-            // 如果开启了详细预算，月总预算等于各个分类预算之和
-            List<String> expenseCategories = CategoryManager.getExpenseCategories(requireContext());
-            for (String cat : expenseCategories) {
-                monthlyBudget += prefs.getFloat("budget_cat_" + cat, 0f);
-            }
-        } else {
-            // 普通模式：读取当月独立设置的预算
-            String monthKey = "budget_" + currentMonth.getYear() + "_" + currentMonth.getMonthValue();
-            float defaultBudget = prefs.getFloat("monthly_budget", 0f);
-            monthlyBudget = prefs.getFloat(monthKey, defaultBudget);
+        boolean showBudget = dailyBudgetPlan != null && !prefs.getBoolean("bill_card_replace_budget", false);
+        cardBudgetStatus.setVisibility(showBudget ? View.VISIBLE : View.GONE);
+        if (showBudget) {
+            LocalDate target = selectedDate != null && YearMonth.from(selectedDate).equals(currentMonth) ? selectedDate
+                    : YearMonth.from(today).equals(currentMonth) ? today : currentMonth.atDay(1);
+            updateBudgetCardContent(target, today);
         }
-        // ------------------------------------
-
-        // 检查是否应该显示预算卡片
-        // 条件：预算开关开启 + 有预算金额 + 账单卡片开关未开启（或替代开关开启）
-        // 如果账单卡片开关开启且替代开关关闭，预算卡片根据账单卡片开关状态决定显示
-        boolean shouldShowBudgetCard = finalBudgetEnabled && monthlyBudget > 0;
-        boolean isBillCardReplace = prefs.getBoolean("bill_card_replace_budget", false);
-        boolean isBillCardEnabled = prefs.getBoolean("bill_card", false);
-
-        // 替代开关开启时，账单卡片替代预算位置，隐藏预算卡片
-        if (shouldShowBudgetCard && isBillCardReplace) {
-            cardBudgetStatus.setVisibility(View.GONE);
-        } else if (shouldShowBudgetCard && !isBillCardReplace) {
-            // 预算开关开启且替代开关关闭：显示预算卡片（账单卡片开关开也隐藏）
-            cardBudgetStatus.setVisibility(View.VISIBLE);
-            updateBudgetCardContent(transactions, monthlyBudget);
-        } else {
-            cardBudgetStatus.setVisibility(View.GONE);
-        }
-
-        // 核心：把过滤后的状态传给日历适配器。
-        // 如果 finalBudgetEnabled 为 false（比如查看去年的账单），日历背景色就不会变
-        adapter.setBudgetConfig(finalBudgetEnabled, monthlyBudget);
-
-        // 更新账单卡片（如果开启了账单卡片替换功能）
         updateBillSlider(transactions);
     }
 
@@ -580,98 +563,38 @@ public class RecordFragment extends Fragment {
         });
     }
 
-    /**
-     * 更新预算卡片内容
-     * @param transactions 交易列表
-     * @param monthlyBudget 月度预算
-     */
-    private void updateBudgetCardContent(List<Transaction> transactions, float monthlyBudget) {
-        if (cardBudgetStatus == null || tvBudgetText == null) return;
+    private void updateBudgetCardContent(LocalDate date, LocalDate today) {
+        if (dailyBudgetPlan == null) return;
+        int day = date.getDayOfMonth();
+        double budget = dailyBudgetPlan.limitOn(day);
+        double spending = dailyBudgetPlan.spendingOn(day);
+        boolean overBudget = dailyBudgetPlan.isOverBudget(day);
 
-        // 获取需要计算的日期（如果没有选定日期，默认用今天）
-        LocalDate targetDate = selectedDate != null ? selectedDate : LocalDate.now();
-        YearMonth currentMonth = YearMonth.from(targetDate);
-
-        // 使用当前浏览月份的天数来计算平均预算
-        int daysInMonth = currentMonth.lengthOfMonth();
-        double dailyBudget = monthlyBudget / daysInMonth;
-
-        // 计算目标日期的总支出
-        double targetExpense = 0;
-        long startOfDay = targetDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-        long endOfDay = targetDate.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-
-        for (Transaction t : transactions) {
-            boolean isTransfer = (t.type == 2) || "资产互转".equals(t.category);
-            // 只有非转账且标记为"计入预算"的支出才会被累加
-            if (t.date >= startOfDay && t.date < endOfDay && t.type == 0 && !isTransfer && !t.excludeFromBudget) {
-                targetExpense += t.amount;
-            }
-        }
-
-        // 更新金额和进度条
-        tvBudgetText.setText(String.format("%.2f / %.2f", targetExpense, dailyBudget));
-        int progress = (int) ((targetExpense / dailyBudget) * 100);
-        pbBudget.setProgress(Math.min(progress, 100));
-
-        // 超出预算进度条变红
-        if (targetExpense > dailyBudget) {
-            pbBudget.setProgressTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.budget_progress_exceed)));
-            tvBudgetText.setTextColor(ContextCompat.getColor(requireContext(), R.color.budget_progress_exceed));
-        } else {
-            pbBudget.setProgressTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.budget_progress_safe)));
-            tvBudgetText.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary));
-        }
-
-        // 动态修改卡片标题
-        try {
-            LinearLayout budgetTextContainer = (LinearLayout) tvBudgetText.getParent();
-            TextView tvBudgetTitle = (TextView) budgetTextContainer.getChildAt(0);
-            if (targetDate.equals(LocalDate.now())) {
-                tvBudgetTitle.setText("今日预算");
-            } else {
-                tvBudgetTitle.setText(targetDate.format(DateTimeFormatter.ofPattern("M月d日预算")));
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        tvBudgetTitle.setText(date.equals(today) ? getString(R.string.record_budget_today)
+                : getString(R.string.record_budget_day, date.getMonthValue(), day));
+        tvBudgetText.setText(getString(R.string.record_budget_amounts, spending, budget));
+        int progress = budget > 0 ? (int) Math.round(Math.max(0, Math.min(100, 100 * spending / budget)))
+                : (overBudget ? 100 : 0);
+        pbBudget.setProgress(progress);
+        pbBudget.setProgressTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(),
+                overBudget ? R.color.budget_progress_exceed : R.color.budget_progress_safe)));
+        tvBudgetText.setTextColor(ContextCompat.getColor(requireContext(),
+                overBudget ? R.color.budget_progress_exceed : R.color.text_secondary));
     }
 
     /**
      * 更新账单滑动卡片
      *
-     * 显示逻辑：
-     * 1. 替代开关开启 → 账单卡片替代预算卡片位置（隐藏预算卡片，显示账单卡片）
-     * 2. 替代开关关闭 + 预算开关开启 → 隐藏账单卡片
-     * 3. 替代开关关闭 + 预算开关关闭 + 账单卡片开关开启 → 显示账单卡片
-     * 4. 其他情况 → 隐藏账单卡片
+     * 预算卡片和账单卡片共用同一个位置。
      */
     private void updateBillSlider(List<Transaction> transactions) {
         if (transactions == null || getContext() == null) return;
 
         SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        boolean isBudgetEnabled = prefs.getBoolean("budget_enabled", false);
         boolean isBillCardReplace = prefs.getBoolean("bill_card_replace_budget", false);
         boolean isBillCardEnabled = prefs.getBoolean("bill_card", false);
 
-        // 如果替代开关开启，账单卡片替代预算卡片位置显示
-        if (isBillCardReplace) {
-            // 隐藏预算卡片
-            if (cardBudgetStatus != null) cardBudgetStatus.setVisibility(View.GONE);
-            showBillCard(transactions);
-            return;
-        }
-
-        // 预算开关开启时，隐藏账单卡片
-        if (isBudgetEnabled) {
-            if (cardBillSlider != null) cardBillSlider.setVisibility(View.GONE);
-            if (cardNoBill != null) cardNoBill.setVisibility(View.GONE);
-            if (layoutNoBill != null) layoutNoBill.setVisibility(View.GONE);
-            return;
-        }
-
-        // 账单卡片开关开启，显示账单卡片
-        if (isBillCardEnabled) {
+        if (isBillCardReplace || (isBillCardEnabled && cardBudgetStatus.getVisibility() != View.VISIBLE)) {
             showBillCard(transactions);
         } else {
             // 隐藏账单卡片

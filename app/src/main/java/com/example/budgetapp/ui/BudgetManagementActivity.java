@@ -18,8 +18,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.view.WindowCompat;
 
+import com.example.budgetapp.BackupManager;
 import com.example.budgetapp.R;
 import com.example.budgetapp.util.CategoryManager;
+import com.example.budgetapp.util.DailyBudgetPlan;
 
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -27,7 +29,8 @@ import java.util.List;
 
 public class BudgetManagementActivity extends AppCompatActivity {
 
-    private SwitchCompat switchBudget, switchDetailedBudget, switchBillCardReplace;
+    private SwitchCompat switchBudget, switchDetailedBudget, switchDynamicBudget, switchBillCardReplace;
+    private View dynamicBudgetRow;
     private View cardBudgetInput;
     private LinearLayout llNormalBudgetInput, llDetailedBudgetContainer;
     private EditText etMonthlyBudget;
@@ -53,6 +56,8 @@ public class BudgetManagementActivity extends AppCompatActivity {
 
         switchBudget = findViewById(R.id.switch_budget);
         switchDetailedBudget = findViewById(R.id.switch_detailed_budget);
+        switchDynamicBudget = findViewById(R.id.switch_dynamic_daily_budget);
+        dynamicBudgetRow = findViewById(R.id.row_dynamic_daily_budget);
         switchBillCardReplace = findViewById(R.id.switch_bill_card_replace);
         cardBudgetInput = findViewById(R.id.card_budget_input);
         llNormalBudgetInput = findViewById(R.id.ll_normal_budget_input);
@@ -69,6 +74,7 @@ public class BudgetManagementActivity extends AppCompatActivity {
 
         switchBudget.setChecked(isBudgetEnabled);
         switchDetailedBudget.setChecked(isDetailedEnabled);
+        switchDynamicBudget.setChecked(prefs.getBoolean(DailyBudgetPlan.PREF_DYNAMIC, false));
         switchBillCardReplace.setChecked(isBillCardReplace);
 
         // 构建动态视图
@@ -77,8 +83,8 @@ public class BudgetManagementActivity extends AppCompatActivity {
 
         if (monthlyBudget > 0) {
             etMonthlyBudget.setText(String.valueOf(monthlyBudget));
-            updateDailyHint(monthlyBudget);
         }
+        updateDailyHint();
 
         switchBudget.setOnCheckedChangeListener((buttonView, isChecked) -> {
             prefs.edit().putBoolean("is_budget_enabled", isChecked).apply();
@@ -88,7 +94,13 @@ public class BudgetManagementActivity extends AppCompatActivity {
         switchDetailedBudget.setOnCheckedChangeListener((buttonView, isChecked) -> {
             prefs.edit().putBoolean("is_detailed_budget_enabled", isChecked).apply();
             updateUI(switchBudget.isChecked(), isChecked);
-            calculateDynamicTotal(); // 切换时立刻重算提示金额
+            updateDailyHint();
+        });
+
+        switchDynamicBudget.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean(DailyBudgetPlan.PREF_DYNAMIC, isChecked).apply();
+            updateDailyHint();
+            BackupManager.triggerAutoUploadIfEnabled(this);
         });
 
         switchBillCardReplace.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -99,13 +111,7 @@ public class BudgetManagementActivity extends AppCompatActivity {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) {
-                if (!switchDetailedBudget.isChecked()) {
-                    try {
-                        updateDailyHint(Float.parseFloat(s.toString()));
-                    } catch (NumberFormatException e) {
-                        tvDailyBudgetHint.setText("当月平均每日预算: 0.00");
-                    }
-                }
+                if (!switchDetailedBudget.isChecked()) updateDailyHint();
             }
         });
 
@@ -116,6 +122,8 @@ public class BudgetManagementActivity extends AppCompatActivity {
         cardBudgetInput.setVisibility(isBudgetEnabled ? View.VISIBLE : View.GONE);
         llNormalBudgetInput.setVisibility(isDetailedEnabled ? View.GONE : View.VISIBLE);
         llDetailedBudgetContainer.setVisibility(isDetailedEnabled ? View.VISIBLE : View.GONE);
+        switchDynamicBudget.setEnabled(isBudgetEnabled);
+        dynamicBudgetRow.setAlpha(isBudgetEnabled ? 1f : 0.65f);
     }
 
     /**
@@ -149,7 +157,7 @@ public class BudgetManagementActivity extends AppCompatActivity {
                 @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
                 @Override public void afterTextChanged(Editable s) {
-                    if (switchDetailedBudget.isChecked()) calculateDynamicTotal();
+                    if (switchDetailedBudget.isChecked()) updateDailyHint();
                 }
             });
 
@@ -158,20 +166,24 @@ public class BudgetManagementActivity extends AppCompatActivity {
         }
     }
 
-    private void calculateDynamicTotal() {
-        float total = 0;
-        for (CategoryInputHolder holder : categoryInputs) {
-            try {
-                total += Float.parseFloat(holder.editText.getText().toString());
-            } catch (Exception ignored) {}
+    private void updateDailyHint() {
+        double total = 0;
+        if (switchDetailedBudget.isChecked()) {
+            for (CategoryInputHolder holder : categoryInputs) total += previewAmount(holder.editText);
+        } else {
+            total = previewAmount(etMonthlyBudget);
         }
-        updateDailyHint(total);
+        tvDailyBudgetHint.setText(getString(switchDynamicBudget.isChecked() ? R.string.settings_daily_budget_initial
+                : R.string.settings_daily_budget_average, total / YearMonth.now().lengthOfMonth()));
     }
 
-    private void updateDailyHint(float monthlyBudget) {
-        int days = YearMonth.now().lengthOfMonth();
-        float daily = monthlyBudget / days;
-        tvDailyBudgetHint.setText(String.format("当月平均每日预算: %.2f", daily));
+    private double previewAmount(EditText input) {
+        try {
+            double amount = Double.parseDouble(input.getText().toString());
+            return Double.isFinite(amount) ? amount : 0;
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     private void saveSettings(SharedPreferences prefs) {

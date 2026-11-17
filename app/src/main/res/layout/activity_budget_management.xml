@@ -117,6 +117,41 @@
                         android:background="@color/divider"
                         android:layout_marginHorizontal="20dp" />
                     <LinearLayout
+                        android:id="@+id/row_dynamic_daily_budget"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="20dp">
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="12dp"
+                            android:orientation="vertical">
+                            <TextView
+                                style="@style/TallySettingsLinkTitle"
+                                android:text="@string/settings_dynamic_daily_budget" />
+                            <TextView
+                                style="@style/TallySettingsLinkDescription"
+                                android:text="@string/settings_dynamic_daily_budget_description" />
+                        </LinearLayout>
+                        <androidx.appcompat.widget.SwitchCompat
+                            android:id="@+id/switch_dynamic_daily_budget"
+                            style="@style/TallySettingsSwitch"
+                            android:layout_width="wrap_content"
+                            android:paddingHorizontal="0dp"
+                            android:background="@null"
+                            android:minHeight="48dp"
+                            android:contentDescription="@string/settings_dynamic_daily_budget"
+                            android:saveEnabled="false" />
+                    </LinearLayout>
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/divider"
+                        android:layout_marginHorizontal="20dp" />
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
@@ -212,7 +247,6 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="16dp"
-                        android:text="当月平均每日可用: 0.00"
                         android:textColor="@color/app_blue"
                         android:textSize="14sp"
                         android:textStyle="bold" />

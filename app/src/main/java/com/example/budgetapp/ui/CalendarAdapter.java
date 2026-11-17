@@ -9,11 +9,13 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.widget.TextViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.RenewalItem;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.DailyBudgetPlan;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -34,14 +36,11 @@ public class CalendarAdapter extends RecyclerView.Adapter<CalendarAdapter.ViewHo
     private YearMonth currentMonth;
     private int rowHeight;
 
-    private boolean isBudgetEnabled = false;
-    private float monthlyBudget = 0f;
+    private DailyBudgetPlan dailyBudgetPlan;
 
-    // 增加一个公开方法用于接收配置
-    public void setBudgetConfig(boolean enabled, float budget) {
-        if (isBudgetEnabled == enabled && Float.compare(monthlyBudget, budget) == 0) return;
-        isBudgetEnabled = enabled;
-        monthlyBudget = budget;
+    public void setBudgetPlan(@Nullable DailyBudgetPlan plan) {
+        if (dailyBudgetPlan == plan) return;
+        dailyBudgetPlan = plan;
         notifyDataSetChanged();
     }
 
@@ -125,7 +124,6 @@ public class CalendarAdapter extends RecyclerView.Adapter<CalendarAdapter.ViewHo
 
         double dailySum = 0;
         double dailyHours = 0; // 新增：统计每日工时
-        double dailyExpenseForBudget = 0; // <--- 1. 新增这行，定义每日支出变量
         long start = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         long end = date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 
@@ -141,11 +139,6 @@ public class CalendarAdapter extends RecyclerView.Adapter<CalendarAdapter.ViewHo
                 boolean isTransfer = (t.type == 2) || "资产互转".equals(t.category);
                 if (isTransfer) {
                     continue;
-                }
-
-                // <--- 2. 新增这块：只要是支出(type==0)，就累加到预算统计里 --->
-                if (t.type == 0) {
-                    dailyExpenseForBudget += t.amount;
                 }
 
                 switch (filterMode) {
@@ -209,8 +202,9 @@ public class CalendarAdapter extends RecyclerView.Adapter<CalendarAdapter.ViewHo
                 break;
             }
         }
-        boolean showsBudget = isBudgetEnabled && monthlyBudget > 0 && isCurrentMonth && !date.isAfter(today);
-        boolean overBudget = showsBudget && dailyExpenseForBudget > monthlyBudget / date.lengthOfMonth();
+        boolean showsBudget = dailyBudgetPlan != null && isCurrentMonth && !date.isAfter(today)
+                && dailyBudgetPlan.isFor(currentMonth, today);
+        boolean overBudget = showsBudget && dailyBudgetPlan.isOverBudget(date.getDayOfMonth());
         int surface = 0;
         if (isSelected) {
             surface = R.drawable.bg_record_calendar_selected;

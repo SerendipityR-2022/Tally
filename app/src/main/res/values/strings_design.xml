@@ -9,6 +9,9 @@
     <string name="record_save_changes">保存修改</string>
     <string name="record_today_bills_action">今日账单</string>
     <string name="record_ai_action">AI 记账</string>
+    <string name="record_budget_today">今日预算</string>
+    <string name="record_budget_day">%1$d月%2$d日预算</string>
+    <string name="record_budget_amounts">%1$.2f / %2$.2f</string>
     <string name="stats_empty">这段时间还没有账单</string>
     <string name="stats_expense_total">支出</string>
     <string name="stats_income_total">收入</string>
