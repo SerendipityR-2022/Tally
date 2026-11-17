@@ -124,8 +124,7 @@ public class LedgerReferenceInstrumentedTest {
         }
     }
 
-    @Test public void expenseRingAnimatesFocusAndOnlyListRowsOpenBills() throws Exception {
-        Instrumentation test = InstrumentationRegistry.getInstrumentation();
+    @Test public void incomeAndExpenseRingsSelectSlicesWithoutOpeningBillLists() throws Exception {
         LocalDate date = LocalDate.now();
         List<Transaction> fixture = java.util.Arrays.asList(
                 tx(date, 15, 0, "购物", 191.92, "示例购物"),
@@ -133,81 +132,86 @@ public class LedgerReferenceInstrumentedTest {
                 tx(date, 13, 0, "餐饮", 49.45, "示例晚餐"),
                 tx(date, 12, 0, "教育", 19.78, "示例课程"),
                 tx(date, 11, 1, "工资", 40, ""),
-                tx(date, 10, 1, "薪资", 60, ""));
+                tx(date, 10, 1, "薪资", 60, ""),
+                tx(date, 9, 1, "奖金", 45.75, "示例奖金"),
+                tx(date, 8, 1, "理财", 12.25, "示例理财"));
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             navigate(scenario, R.id.nav_stats);
-            AtomicReference<ExpenseCompositionChart> ring = new AtomicReference<>();
             AtomicReference<View> root = new AtomicReference<>();
             scenario.onActivity(activity -> {
                 StatsFragment stats = (StatsFragment) active(activity);
                 stats.renderTransactions(fixture);
                 root.set(stats.requireView());
-                ring.set(root.get().findViewById(R.id.chart_pie));
-                PieChart income = root.get().findViewById(R.id.chart_pie_income);
-                assertEquals(1, income.getData().getEntryCount());
+                LedgerCompositionChart expense = root.get().findViewById(R.id.chart_pie);
+                LedgerCompositionChart income = root.get().findViewById(R.id.chart_pie_income);
+                assertEquals(expense.getLayoutParams().height, income.getLayoutParams().height);
+                assertEquals(expense.getData().getDataSet().getColor(0), income.getData().getDataSet().getColor(0));
+                assertEquals(3, income.getData().getEntryCount());
                 assertEquals("薪资", income.getData().getDataSet().getEntryForIndex(0).getLabel());
             });
-            test.waitForIdleSync();
-            scenario.onActivity(activity -> {
-                ExpenseCompositionChart chart = ring.get();
-                ScrollView scroll = root.get().findViewById(R.id.scroll_view_stats);
-                Rect area = new Rect();
-                chart.getDrawingRect(area);
-                scroll.offsetDescendantRectToMyCoords(chart, area);
-                scroll.scrollTo(0, Math.max(0, area.top - 30));
-            });
-            long waitUntil = SystemClock.uptimeMillis() + 3500;
-            java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
-            do {
-                scenario.onActivity(activity -> finished.set(ring.get().getAnimator().getPhaseY() == 1f));
-                if (finished.get()) break;
-                SystemClock.sleep(35);
-            } while (SystemClock.uptimeMillis() < waitUntil);
-            assertTrue("The visible ring must complete its entrance animation", finished.get());
-            scenario.onActivity(activity -> {
-                ExpenseCompositionChart chart = ring.get();
-                assertEquals("449.51\n支出（元）", chart.getCenterText().toString());
-                com.github.mikephil.charting.utils.MPPointF center = chart.getCenterCircleBox();
-                assertNull(chart.getHighlightByTouchPoint(center.x, center.y));
-                double angle = Math.toRadians(chart.getRotationAngle() + chart.getDrawAngles()[0] / 2f);
-                float x = center.x + chart.getRadius() * .8f * (float) Math.cos(angle);
-                float y = center.y + chart.getRadius() * .8f * (float) Math.sin(angle);
-                com.github.mikephil.charting.utils.MPPointF.recycleInstance(center);
-                assertNotNull(chart.getHighlightByTouchPoint(x, y));
-                tap(chart, x, y);
-            });
-            SystemClock.sleep(330);
-            test.waitForIdleSync();
-            scenario.onActivity(activity -> {
-                ExpenseCompositionChart chart = ring.get();
-                assertTrue(chart.valuesToHighlight());
-                assertEquals("191.92\n购物（元）", chart.getCenterText().toString());
-                assertNull(activity.findViewById(R.id.rv_detail_list));
-            });
-            if ("true".equals(InstrumentationRegistry.getArguments().getString("rc1Screens"))) {
-                AtomicReference<Bitmap> bitmap = new AtomicReference<>();
-                scenario.onActivity(activity -> {
-                    ExpenseCompositionChart chart = ring.get();
-                    Bitmap full = Bitmap.createBitmap(chart.getWidth(), chart.getHeight(), Bitmap.Config.ARGB_8888);
-                    Canvas canvas = new Canvas(full);
-                    canvas.drawColor(chart.getContext().getColor(R.color.ledger_panel));
-                    chart.draw(canvas);
-                    bitmap.set(full);
-                });
-                save(bitmap.get(), "tally-rc1-composition.png");
-            }
-            androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText(
-                    org.hamcrest.Matchers.containsString("消费清单"))).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
-            scenario.onActivity(activity -> {
-                LinearLayout rows = root.get().findViewById(R.id.ledger_expense_categories);
-                assertTrue(rows.getChildAt(0).performClick());
-            });
-            androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText(
-                    org.hamcrest.Matchers.containsString("购物 - 消费清单")))
-                    .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
-                    .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()));
-            androidx.test.espresso.Espresso.pressBack();
+            verifyComposition(scenario, root.get(), R.id.chart_pie, R.id.ledger_expense_categories,
+                    "449.51\n支出（元）", "191.92\n购物（元）", "购物 - 消费清单", "tally-expense-composition.png");
+            verifyComposition(scenario, root.get(), R.id.chart_pie_income, R.id.ledger_income_categories,
+                    "158.00\n收入（元）", "100.00\n薪资（元）", "薪资 - 收入清单", "tally-income-composition.png");
         }
+    }
+
+    private static void verifyComposition(ActivityScenario<MainActivity> scenario, View root, int chartId, int rowsId,
+            String total, String selected, String billListTitle, String screenshot) throws Exception {
+        Instrumentation test = InstrumentationRegistry.getInstrumentation();
+        LedgerCompositionChart chart = root.findViewById(chartId);
+        test.waitForIdleSync();
+        scenario.onActivity(activity -> {
+            ScrollView scroll = root.findViewById(R.id.scroll_view_stats);
+            Rect area = new Rect();
+            chart.getDrawingRect(area);
+            scroll.offsetDescendantRectToMyCoords(chart, area);
+            scroll.scrollTo(0, Math.max(0, area.top - 30));
+        });
+        long deadline = SystemClock.uptimeMillis() + 3500;
+        java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
+        do {
+            scenario.onActivity(activity -> finished.set(chart.getAnimator().getPhaseY() == 1f));
+            if (finished.get()) break;
+            SystemClock.sleep(35);
+        } while (SystemClock.uptimeMillis() < deadline);
+        assertTrue("The visible ring must complete its entrance animation", finished.get());
+        scenario.onActivity(activity -> {
+            assertEquals(total, chart.getCenterText().toString());
+            com.github.mikephil.charting.utils.MPPointF center = chart.getCenterCircleBox();
+            assertNull(chart.getHighlightByTouchPoint(center.x, center.y));
+            double angle = Math.toRadians(chart.getRotationAngle() + chart.getDrawAngles()[0] / 2f);
+            float x = center.x + chart.getRadius() * .8f * (float) Math.cos(angle);
+            float y = center.y + chart.getRadius() * .8f * (float) Math.sin(angle);
+            com.github.mikephil.charting.utils.MPPointF.recycleInstance(center);
+            assertNotNull(chart.getHighlightByTouchPoint(x, y));
+            tap(chart, x, y);
+            assertTrue(chart.valuesToHighlight());
+            assertEquals(selected, chart.getCenterText().toString());
+        });
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withId(R.id.rv_detail_list))
+                .check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
+        if ("true".equals(InstrumentationRegistry.getArguments().getString("compositionScreens"))) {
+            SystemClock.sleep(330);
+            AtomicReference<Bitmap> bitmap = new AtomicReference<>();
+            scenario.onActivity(activity -> {
+                Bitmap full = Bitmap.createBitmap(chart.getWidth(), chart.getHeight(), Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(full);
+                canvas.drawColor(chart.getContext().getColor(R.color.ledger_panel));
+                chart.draw(canvas);
+                bitmap.set(full);
+            });
+            save(bitmap.get(), screenshot);
+        }
+        scenario.onActivity(activity -> {
+            LinearLayout rows = root.findViewById(rowsId);
+            assertTrue(rows.getChildAt(0).performClick());
+        });
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText(
+                org.hamcrest.Matchers.containsString(billListTitle)))
+                .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
+                .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()));
+        androidx.test.espresso.Espresso.pressBack();
     }
 
     private static void tap(View view, float x, float y) {

@@ -16,6 +16,8 @@ import android.util.TypedValue;
 import android.view.ViewTreeObserver;
 import android.view.animation.DecelerateInterpolator;
 
+import androidx.annotation.StringRes;
+
 import com.example.budgetapp.R;
 import com.github.mikephil.charting.charts.PieChart;
 import com.github.mikephil.charting.data.Entry;
@@ -33,22 +35,24 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
-/** The expense ring selects a slice without opening the ledger. */
-public final class ExpenseCompositionChart extends PieChart implements OnChartValueSelectedListener {
+/** Shared income and expense ring. Selecting a slice shows its amount in the center. */
+public final class LedgerCompositionChart extends PieChart implements OnChartValueSelectedListener {
     private static final float SELECTION_SHIFT = 8f;
     private static final int[] LIGHT_SLICES = {0xff3d6ce6, 0xff559ce9, 0xff019bc2, 0xff09a698, 0xff6262cd, 0xff467bc0, 0xff1e887e};
     private static final int[] DARK_SLICES = {0xff477af2, 0xff65aaf5, 0xff10beea, 0xff0bd7c9, 0xff8a83ed, 0xff83a6ee, 0xff66c6cd};
+    static final int MAX_CATEGORY_SLICES = LIGHT_SLICES.length;
     private final Rect exposed = new Rect();
     private final Runnable revealWhenVisible = this::revealIfVisible;
     private final ViewTreeObserver.OnScrollChangedListener scrollListener = this::revealIfVisible;
     private boolean revealPending;
     private ValueAnimator revealAnimator, selectionAnimator;
     private double total;
+    @StringRes private int totalLabel = R.string.stats_expense_total;
     private String period;
     private String centerAmount = "", centerCaption = "";
     private float selectionShift;
 
-    public ExpenseCompositionChart(Context context, AttributeSet attrs) {
+    public LedgerCompositionChart(Context context, AttributeSet attrs) {
         super(context, attrs);
         setRenderer(new RingRenderer());
         getDescription().setEnabled(false);
@@ -81,16 +85,17 @@ public final class ExpenseCompositionChart extends PieChart implements OnChartVa
         return (dark ? DARK_SLICES : LIGHT_SLICES)[index];
     }
 
-    void setComposition(List<PieEntry> entries, List<Integer> colors, double amount, String periodKey) {
+    void setComposition(List<PieEntry> entries, List<Integer> colors, double amount, @StringRes int label, String periodKey) {
         if (entries.isEmpty()) {
             revealPending = false;
             cancelAnimations();
             clear();
             return;
         }
-        if (sameComposition(entries, amount, periodKey)) return;
+        if (label == totalLabel && sameComposition(entries, amount, periodKey)) return;
         cancelAnimations();
         total = amount;
+        totalLabel = label;
         period = periodKey;
         PieDataSet set = new PieDataSet(entries, "");
         set.setColors(colors);
@@ -184,7 +189,7 @@ public final class ExpenseCompositionChart extends PieChart implements OnChartVa
     }
 
     private void updateCenter(PieEntry selection) {
-        String label = selection == null ? getResources().getString(R.string.stats_expense_total) : selection.getLabel();
+        String label = selection == null ? getResources().getString(totalLabel) : selection.getLabel();
         double amount = selection == null ? total : ((Number) selection.getData()).doubleValue();
         centerAmount = LedgerTransactionRow.money(amount);
         centerCaption = getResources().getString(R.string.stats_pie_yuan, label);
@@ -207,7 +212,7 @@ public final class ExpenseCompositionChart extends PieChart implements OnChartVa
         private final List<Leader> left = new ArrayList<>(), right = new ArrayList<>();
 
         RingRenderer() {
-            super(ExpenseCompositionChart.this, getAnimator(), getViewPortHandler());
+            super(LedgerCompositionChart.this, getAnimator(), getViewPortHandler());
             amount.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
             amount.setTextAlign(Paint.Align.CENTER);
             caption.setTextAlign(Paint.Align.CENTER);

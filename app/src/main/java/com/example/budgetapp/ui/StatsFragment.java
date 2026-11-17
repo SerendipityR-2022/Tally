@@ -49,17 +49,12 @@ import com.example.budgetapp.util.CategoryIcon;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
 import com.github.mikephil.charting.charts.LineChart;
-import com.github.mikephil.charting.charts.PieChart;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
-import com.github.mikephil.charting.data.PieData;
-import com.github.mikephil.charting.data.PieDataSet;
 import com.github.mikephil.charting.data.PieEntry;
 import com.github.mikephil.charting.formatter.ValueFormatter;
-import com.github.mikephil.charting.highlight.Highlight;
-import com.github.mikephil.charting.listener.OnChartValueSelectedListener;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
@@ -89,8 +84,8 @@ public class StatsFragment extends Fragment {
 
     private FinanceViewModel viewModel;
     private LineChart lineChart;
-    private ExpenseCompositionChart expensePieChart;
-    private PieChart incomePieChart;
+    private LedgerCompositionChart expensePieChart;
+    private LedgerCompositionChart incomePieChart;
     private LinearLayout layoutTrend;
     private LinearLayout layoutExpense;
     private TextView emptyState;
@@ -131,7 +126,6 @@ public class StatsFragment extends Fragment {
         initViews(view);
         setupGestures();
         setupLineChart();
-        setupPieCharts();
         RadioGroup trend = view.findViewById(R.id.ledger_trend_toggle);
         trend.check(trendMode == 1 ? R.id.ledger_trend_income : trendMode == 2 ? R.id.ledger_trend_net : R.id.ledger_trend_expense);
         trend.setOnCheckedChangeListener((group, id) -> {
@@ -1389,14 +1383,15 @@ public class StatsFragment extends Fragment {
         lineChart.invalidate();
     }
 
-    private void renderComposition(PieChart chart, int panelId, int rowsId, Map<String, Double> values,
+    private void renderComposition(LedgerCompositionChart chart, int panelId, int rowsId, Map<String, Double> values,
                                    Map<String, Integer> counts, double total, int type) {
         View panel = dashboard.findViewById(panelId);
         panel.setVisibility(total > 0 ? View.VISIBLE : View.GONE);
         LinearLayout rows = dashboard.findViewById(rowsId);
         rows.removeAllViews();
+        int totalLabel = type == 0 ? R.string.stats_expense_total : R.string.stats_income_total;
         if (total <= 0) {
-            if (chart == expensePieChart) expensePieChart.setComposition(Collections.emptyList(), Collections.emptyList(), 0, null);
+            chart.setComposition(Collections.emptyList(), Collections.emptyList(), 0, totalLabel, null);
             return;
         }
         List<Map.Entry<String, Double>> sorted = new ArrayList<>(values.entrySet());
@@ -1412,10 +1407,10 @@ public class StatsFragment extends Fragment {
             String category = item.getKey();
             double value = item.getValue();
             CategoryIcon icon = LedgerCategory.icon(requireContext(), category, type);
-            int color = chart == expensePieChart && i < 7 ? expensePieChart.sliceColor(i) : icon.tint(requireContext());
-            if (i < 7 && value > 0) {
-                slices.add(chart == expensePieChart ? new PieEntry((float) value, category, value)
-                        : new PieEntry((float) value, category));
+            boolean hasNamedSlice = i < LedgerCompositionChart.MAX_CATEGORY_SLICES;
+            int color = hasNamedSlice ? chart.sliceColor(i) : icon.tint(requireContext());
+            if (hasNamedSlice && value > 0) {
+                slices.add(new PieEntry((float) value, category, value));
                 colors.add(color);
             } else if (value > 0) remaining += value;
             View row = LayoutInflater.from(requireContext()).inflate(R.layout.item_ledger_category_rank, rows, false);
@@ -1430,24 +1425,10 @@ public class StatsFragment extends Fragment {
             rows.addView(row);
         }
         if (remaining > 0) {
-            slices.add(chart == expensePieChart ? new PieEntry((float) remaining, "其余分类", remaining)
-                    : new PieEntry((float) remaining, "其余分类", Boolean.TRUE));
+            slices.add(new PieEntry((float) remaining, "其余分类", remaining));
             colors.add(requireContext().getColor(R.color.ledger_muted));
         }
-        if (chart == expensePieChart) {
-            expensePieChart.setComposition(slices, colors, total, currentMode + ":" + periodStart(selectedDate));
-            return;
-        }
-        PieDataSet data = new PieDataSet(slices, "");
-        data.setColors(colors);
-        data.setSliceSpace(3f);
-        data.setDrawValues(false);
-        data.setSelectionShift(4f);
-        chart.setData(new PieData(data));
-        chart.highlightValues(null);
-        chart.setCenterText(LedgerTransactionRow.money(total) + (type == 0 ? "\n支出" : "\n收入"));
-        chart.setContentDescription((type == 0 ? "支出构成 " : "收入构成 ") + LedgerTransactionRow.money(total));
-        chart.invalidate();
+        chart.setComposition(slices, colors, total, totalLabel, currentMode + ":" + periodStart(selectedDate));
     }
 
     private void renderMonthlyComparison(YearMonth anchor, Map<YearMonth, Double> values) {
@@ -1690,30 +1671,6 @@ public class StatsFragment extends Fragment {
         markerView = new CustomMarkerView(requireContext(), R.layout.view_chart_marker);
         markerView.setChartView(lineChart);
         lineChart.setMarker(markerView);
-    }
-
-    private void setupPieCharts() {
-        initPieChartStyle(incomePieChart, 1);
-    }
-
-    private void initPieChartStyle(PieChart chart, int type) {
-        chart.getDescription().setEnabled(false);
-        chart.getLegend().setEnabled(false);
-        chart.setHoleRadius(61f);
-        chart.setTransparentCircleRadius(0);
-        chart.setHoleColor(Color.TRANSPARENT);
-        chart.setDrawEntryLabels(false);
-        chart.setCenterTextColor(requireContext().getColor(R.color.ledger_text));
-        chart.setCenterTextSize(16f);
-        chart.setRotationEnabled(false);
-        chart.setOnChartValueSelectedListener(new OnChartValueSelectedListener() {
-            @Override public void onValueSelected(Entry entry, Highlight highlight) {
-                if (entry instanceof PieEntry && !Boolean.TRUE.equals(entry.getData())) {
-                    showCategoryDetailDialog(((PieEntry) entry).getLabel(), type);
-                }
-            }
-            @Override public void onNothingSelected() { }
-        });
     }
 
     @Override

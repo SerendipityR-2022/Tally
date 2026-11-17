@@ -11,6 +11,7 @@
     <string name="record_ai_action">AI 记账</string>
     <string name="stats_empty">这段时间还没有账单</string>
     <string name="stats_expense_total">支出</string>
+    <string name="stats_income_total">收入</string>
     <string name="stats_pie_yuan">%1$s（元）</string>
     <string name="details_empty">没有找到符合条件的账单</string>
     <string name="assets_empty">添加第一个账户</string>
