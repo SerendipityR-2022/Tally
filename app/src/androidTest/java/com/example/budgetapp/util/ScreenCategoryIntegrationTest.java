@@ -400,6 +400,38 @@ public class ScreenCategoryIntegrationTest {
         verifyHttpClassification(4, true);
     }
 
+    @Test public void wechatBillDetailWithOrderSuffixUsesAiAfterRemovingOnlyTheLongNumber() throws Exception {
+        String pkg = KeywordManager.PKG_WECHAT;
+        String merchant = "示例米粉店-美团外卖App-";
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            CompletableFuture<JSONObject> request = new CompletableFuture<>();
+            Thread backend = serveClassification(server, request, () -> { });
+            enableHttpAi(server, 5);
+            ScreenNode detail = receipt(pkg, false, "美团", "小程序", "特价外卖团购", "交易详情", "-16.80",
+                    "美团", "当前状态", "支付成功", "支付时间", "2026年1月1日 12:43:06", "商品",
+                    merchant + "202601010000000000009999", "收单机构", "示例支付公司", "支付方式", "零钱通",
+                    "交易单号", "100000000000001", "商户单号", "200000000000002", "交易服务");
+            runMain(() -> {
+                service.requireConfirmation();
+                service.analyze(detail);
+            });
+            JSONObject sent = request.get(5, TimeUnit.SECONDS);
+            assertEquals(merchant, sent.getString("description"));
+            assertEquals("支出", sent.getString("type"));
+            assertEquals("购物", sent.getString("businessHint"));
+            assertEquals(3, sent.length());
+            View root = awaitOverlay();
+            String summary = ((TextView) root.findViewById(R.id.tv_window_category_result)).getText().toString();
+            assertTrue(summary, summary.contains("餐饮") && summary.contains("AI 分类"));
+            runMain(() -> root.findViewById(R.id.btn_window_save).performClick());
+            Transaction saved = awaitSaved();
+            assertEquals(16.80, saved.amount, 0.001);
+            assertEquals(AutoCategoryClassifier.learningIdentity(merchant, pkg), saved.screenMerchantIdentity);
+            backend.join(4000);
+            assertFalse(backend.isAlive());
+        }
+    }
+
     @Test public void oneSecondBudgetKeepsTheLocalResultAfterALateHttpResponse() throws Exception {
         verifyHttpClassification(1, false);
     }

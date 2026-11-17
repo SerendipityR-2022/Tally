@@ -6,6 +6,8 @@ import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.example.budgetapp.ai.AiConfig;
+import com.example.budgetapp.ai.AiModelProfile;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.Goal;
@@ -101,16 +103,7 @@ public class BackupManager {
         List<com.example.budgetapp.database.RecurringRule> recurringRules = db.recurringRuleDao().getAllRulesSync();
         data.recurringRules = recurringRules;
 
-        // 【修复】携带原始数据类型保存 SharedPreferences
-        SharedPreferences prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        Map<String, BackupData.PrefItem> prefsMap = new HashMap<>();
-        for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
-            if (entry.getValue() != null) {
-                String type = entry.getValue().getClass().getSimpleName();
-                prefsMap.put(entry.getKey(), new BackupData.PrefItem(type, String.valueOf(entry.getValue())));
-            }
-        }
-        data.appPreferences = prefsMap;
+        data.appPreferences = collectAppPreferences(context);
 
         String jsonString = gson.toJson(data);
         try (OutputStream outputStream = context.getContentResolver().openOutputStream(uri);
@@ -1276,13 +1269,29 @@ public class BackupManager {
         throw new java.io.IOException("无法识别的备份文件：未找到数据文件 " + JSON_FILE_NAME);
     }
 
+    private static Map<String, BackupData.PrefItem> collectAppPreferences(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+        Map<String, BackupData.PrefItem> result = new HashMap<>();
+        for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+            Object value = entry.getValue();
+            if (value != null && !AiModelProfile.BACKUP_KEY.equals(entry.getKey())) {
+                result.put(entry.getKey(), new BackupData.PrefItem(value.getClass().getSimpleName(), String.valueOf(value)));
+            }
+        }
+        String profiles = AiModelProfile.getBackupJson(context);
+        if (profiles != null) result.put(AiModelProfile.BACKUP_KEY, new BackupData.PrefItem("String", profiles));
+        return result;
+    }
+
     private static void restoreAppPreferences(Context context, Map<String, BackupData.PrefItem> preferences) {
         if (preferences == null) return;
         SharedPreferences.Editor editor = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit();
+        Map<String, String> modelPreferences = new HashMap<>();
         for (Map.Entry<String, BackupData.PrefItem> entry : preferences.entrySet()) {
             BackupData.PrefItem item = entry.getValue();
             if (item == null || item.value == null) continue;
             String key = entry.getKey();
+            if (restoreAiPreference(context, modelPreferences, key, item.value)) continue;
             try {
                 switch (item.type) {
                     case "Boolean": editor.putBoolean(key, Boolean.parseBoolean(item.value)); break;
@@ -1297,7 +1306,21 @@ public class BackupManager {
                 Log.e("BackupManager", "恢复配置异常", e);
             }
         }
+        AiConfig.restoreModelPreferences(editor, modelPreferences);
         editor.apply();
+    }
+
+    private static boolean restoreAiPreference(Context context, Map<String, String> modelPreferences,
+                                               String key, String value) {
+        if (AiConfig.isModelPreference(key)) {
+            modelPreferences.put(key, value);
+            return true;
+        }
+        if (AiModelProfile.BACKUP_KEY.equals(key)) {
+            AiModelProfile.restoreBackupJson(context, value);
+            return true;
+        }
+        return false;
     }
 
     // ============================================================================================
@@ -1409,14 +1432,10 @@ public class BackupManager {
         // -------------------------
         csvBuilder.append("=== 应用偏好设置 ===\n");
         csvBuilder.append("键,类型,值\n"); // 【修复】增加"类型"列
-        SharedPreferences prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
-            Object val = entry.getValue();
-            if (val == null) continue;
-            String type = val.getClass().getSimpleName();
+        for (Map.Entry<String, BackupData.PrefItem> entry : collectAppPreferences(context).entrySet()) {
             csvBuilder.append(escapeCsv(entry.getKey())).append(",")
-                    .append(escapeCsv(type)).append(",")
-                    .append(escapeCsv(String.valueOf(val))).append("\n");
+                    .append(escapeCsv(entry.getValue().type)).append(",")
+                    .append(escapeCsv(entry.getValue().value)).append("\n");
         }
         csvBuilder.append("\n\n");
 
@@ -1598,10 +1617,12 @@ public class BackupManager {
         // 【修复】按照带类型的三列格式恢复配置。如果是旧版两列格式，则进行智能数据类型推断
         MonthlyBudgetHistory.checkpointBeforeSettingsChange(context);
         SharedPreferences.Editor editor = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit();
+        Map<String, String> modelPreferences = new HashMap<>();
         for (List<String> row : appPrefsRows) {
             if (row.size() < 2) continue;
 
             String key = row.get(0);
+            if (restoreAiPreference(context, modelPreferences, key, row.get(row.size() == 2 ? 1 : 2))) continue;
 
             // 兼容旧版本：只有「键、值」两列的情况
             if (row.size() == 2) {
@@ -1647,6 +1668,7 @@ public class BackupManager {
                 Log.e("BackupManager", "Excel解析配置行失败", e);
             }
         }
+        AiConfig.restoreModelPreferences(editor, modelPreferences);
         editor.apply();
         // 解析分类
         for (List<String> row : categoryRows) {
@@ -2281,15 +2303,7 @@ public class BackupManager {
         data.assistantConfig = configData;
         data.renewalList = config.getRenewalList();
 
-        SharedPreferences prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        Map<String, BackupData.PrefItem> prefsMap = new HashMap<>();
-        for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
-            if (entry.getValue() != null) {
-                String type = entry.getValue().getClass().getSimpleName();
-                prefsMap.put(entry.getKey(), new BackupData.PrefItem(type, String.valueOf(entry.getValue())));
-            }
-        }
-        data.appPreferences = prefsMap;
+        data.appPreferences = collectAppPreferences(context);
 
         String jsonString = gson.toJson(data);
 

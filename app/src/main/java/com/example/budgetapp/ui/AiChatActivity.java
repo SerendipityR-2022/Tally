@@ -536,6 +536,7 @@ public class AiChatActivity extends AppCompatActivity {
     }
 
     private void processImageAccountingWithRetry(Bitmap bitmap, ChatMessage originalMessage) {
+        if (!ensureScreenshotReady()) return;
         isRefreshing = true;
         notifyRefreshStateChanged();
 

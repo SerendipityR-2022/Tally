@@ -43,6 +43,21 @@ public class ScreenCategoryTextExtractorTest {
         assertEquals("7-11便利店", ScreenCategoryTextExtractor.extract(Arrays.asList("商户名称", "7-11便利店"), ""));
         assertEquals("", ScreenCategoryTextExtractor.extract(Arrays.asList("商户名称", "6222123412341234"), ""));
     }
+
+    @Test public void removesLongNumbersWithoutDroppingBusinessTextOrChangingOtherFilters() {
+        String wechat = KeywordManager.PKG_WECHAT;
+        String item = "示例米粉店-美团外卖App-202601010000000000009999";
+        String expected = "示例米粉店-美团外卖App-";
+        assertEquals(expected, ScreenCategoryTextExtractor.extract(Arrays.asList("商品", item), "微信账单", wechat));
+        assertEquals(expected, ScreenCategoryTextExtractor.extract(Arrays.asList("商品", item), item, wechat));
+        AutoCategoryClassifier.Input input = new AutoCategoryClassifier.Input(wechat, item, 0, "购物");
+        assertEquals(expected, input.description);
+        assertEquals(AutoCategoryClassifier.learningIdentity(expected, wechat), input.merchantIdentity);
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("银行(1234)", wechat));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("1234.56", wechat));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("卡号: 1234 示例银行", wechat));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("示例米粉店\n外卖App-202601010000000000009999", wechat));
+    }
     @Test public void ignoresPriceAndAddressLabelsWhileLookingForMerchant() {
         assertEquals("瑞幸", ScreenCategoryTextExtractor.extract(Arrays.asList(
                 "商品名称", "价格", "19.90", "收货地址", "私人地址", "商户名称", "瑞幸"), "京东购物"));

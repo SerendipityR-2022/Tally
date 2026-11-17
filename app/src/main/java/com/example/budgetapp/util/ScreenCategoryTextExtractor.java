@@ -12,6 +12,8 @@ public final class ScreenCategoryTextExtractor {
             "交易单号", "商户单号", "商户订单号", "订单编号", "交易订单号", "交易时间", "支付时间", "创建时间", "收款时间", "账号", "余额", "实付金额", "支付金额", "交易金额", "订单金额", "订单总额", "实付", "实际支付", "应付金额",
             "金额", "价格", "总价", "实付款", "合计", "优惠", "立减", "收货地址", "收货人", "电话", "联系电话", "地址", "订单详情", "账单详情", "交易详情", "收银台", "支付成功", "账户余额", "完成", "返回", "查看订单", "查看账单", "查看详情", "领取"};
     private static final Pattern PRIVATE_VALUE = Pattern.compile("\\d{4,}|尾号|银行卡|卡号|订单号|交易单号|商户单号|余额|付款方式|支付方式");
+    private static final Pattern LONG_NUMBER = Pattern.compile("\\p{Nd}{4,}");
+    private static final Pattern BANK_CARD_VALUE = Pattern.compile("[^()（）\\r\\n]*银行(?:信用卡|储蓄卡)?\\s*[(（]\\s*\\p{Nd}{4,}\\s*[)）]");
     private static final Pattern PRICE = Pattern.compile("[¥￥$€£]?\\s*\\d+\\.\\d{1,2}\\s*元?");
 
     private static final Pattern AMOUNT = Pattern.compile("[+\\-−]?\\s*[¥￥$€£]?\\s*\\d[\\d,]*(?:\\.\\d{1,2})?\\s*元?");
@@ -28,8 +30,15 @@ public final class ScreenCategoryTextExtractor {
 
     static String merchantIdentity(String description, String sourcePackage) {
         String value = AutoCategoryClassifier.cleanDescription(description);
+        // Identify standalone amounts and payment accounts before redaction changes their shape.
+        if (AMOUNT.matcher(value).matches() || BANK_CARD_VALUE.matcher(value).matches()) return "";
+        value = removeLongNumbers(value);
         if (value.isEmpty() || isUnsafeValue(value) || AMOUNT.matcher(value).matches()) return "";
         return AutoCategoryClassifier.learningIdentity(value, sourcePackage);
+    }
+
+    static String removeLongNumbers(String value) {
+        return LONG_NUMBER.matcher(value).replaceAll("").trim();
     }
 
     public static String extract(List<String> texts, String existingDescription) {
@@ -38,7 +47,9 @@ public final class ScreenCategoryTextExtractor {
 
     public static String extract(List<String> texts, String existingDescription, String sourcePackage) {
         // Preserve proven page-specific extraction, if it is not just a platform placeholder.
-        if (hasMerchant(existingDescription, sourcePackage)) return AutoCategoryClassifier.cleanDescription(existingDescription);
+        if (hasMerchant(existingDescription, sourcePackage)) {
+            return removeLongNumbers(AutoCategoryClassifier.cleanDescription(existingDescription));
+        }
         String product = extractLabelled(texts, PRODUCT_LABELS, sourcePackage);
         return product.isEmpty() ? extractLabelled(texts, PAYEE_LABELS, sourcePackage) : product;
     }
@@ -108,8 +119,8 @@ public final class ScreenCategoryTextExtractor {
     }
 
     private static String merchantValue(String value, String sourcePackage) {
-        if (isUnsafeValue(value)) return "";
-        String cleaned = PRICE.matcher(AutoCategoryClassifier.cleanDescription(value)).replaceAll("").trim();
+        if (!hasMerchant(value, sourcePackage)) return "";
+        String cleaned = PRICE.matcher(removeLongNumbers(AutoCategoryClassifier.cleanDescription(value))).replaceAll("").trim();
         return hasMerchant(cleaned, sourcePackage) ? cleaned : "";
     }
 }

@@ -1,6 +1,11 @@
 package com.example.budgetapp.ai;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.util.Base64;
 
 import com.example.budgetapp.database.AppDatabase;
@@ -14,6 +19,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,6 +35,7 @@ import java.util.Locale;
 public class AiAccountingClient {
     private static final int CONNECT_TIMEOUT_MS = 20000;
     private static final int READ_TIMEOUT_MS = 30000;
+    private static final String VISION_PROBE_TEXT = "4729";
 
     private AiConfig config;
 
@@ -198,27 +205,13 @@ public class AiAccountingClient {
             result.visionMessage = "未配置视觉模型";
         } else {
             try {
-                // 使用 8x8 红色 PNG 作为测试图片（比 1x1 更兼容各模型）
-                byte[] testPng = Base64.decode(
-                        "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAADklEQVQI12P4z8BQDwAEgAF/QualzQAAAABJRU5ErkJggg==",
-                        Base64.DEFAULT
-                );
-                probeVisionWithEndpoint("这是一张测试图片，请回复 ok。", testPng, "image/png",
+                String reply = probeVisionWithEndpoint("请读取测试图片上的四位数字，只返回数字。",
+                        buildVisionProbeJpeg(), "image/jpeg",
                         config.getEffectiveVisionBaseUrl(), config.getEffectiveVisionApiKey());
-                result.visionOk = true;
-                result.visionMessage = "可用";
+                result.visionOk = reply.replaceAll("\\s+", "").contains(VISION_PROBE_TEXT);
+                result.visionMessage = result.visionOk ? "可用" : "检测失败：未能读出测试图片上的数字。";
             } catch (Exception e) {
-                String msg = e.getMessage() == null ? "" : e.getMessage();
-                // 只有明确的配置错误才判定为不可用
-                if (msg.contains("鉴权失败") || msg.contains("401")) {
-                    result.visionMessage = "API Key 无效，请检查配置";
-                } else if (msg.contains("接口地址或模型不存在") || msg.contains("404")) {
-                    result.visionMessage = "模型不存在，请检查模型名称";
-                } else {
-                    // 其他错误（如图片太小、格式问题等）不代表模型不支持视觉
-                    result.visionOk = true;
-                    result.visionMessage = "可用";
-                }
+                result.visionMessage = describeVisionTestFailure(e);
             }
         }
 
@@ -276,7 +269,7 @@ public class AiAccountingClient {
             int responseCode = connection.getResponseCode();
             String response = readResponse(connection, responseCode);
             if (responseCode < 200 || responseCode >= 300) {
-                throw new IOException(buildHttpError(responseCode, response));
+                throw new HttpStatusException(responseCode, buildHttpError(responseCode, response));
             }
             JSONObject root = new JSONObject(response);
             JSONArray choices = root.optJSONArray("choices");
@@ -289,8 +282,25 @@ public class AiAccountingClient {
         }
     }
 
-    private String probeVision(String prompt, byte[] imageBytes, String mimeType) throws Exception {
-        return probeVisionWithEndpoint(prompt, imageBytes, mimeType, config.baseUrl, config.apiKey);
+    private static byte[] buildVisionProbeJpeg() throws IOException {
+        Bitmap sample = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888);
+        try {
+            Canvas canvas = new Canvas(sample);
+            canvas.drawColor(Color.WHITE);
+            Paint digits = new Paint(Paint.ANTI_ALIAS_FLAG);
+            digits.setColor(Color.BLACK);
+            digits.setTypeface(Typeface.DEFAULT_BOLD);
+            digits.setTextSize(72);
+            digits.setTextAlign(Paint.Align.CENTER);
+            canvas.drawText(VISION_PROBE_TEXT, 128, 128 - (digits.ascent() + digits.descent()) / 2, digits);
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            if (!sample.compress(Bitmap.CompressFormat.JPEG, 90, output) || output.size() == 0) {
+                throw new IOException("无法生成测试图片。");
+            }
+            return output.toByteArray();
+        } finally {
+            sample.recycle();
+        }
     }
 
     private String probeVisionWithEndpoint(String prompt, byte[] imageBytes, String mimeType, String baseUrl, String apiKey) throws Exception {
@@ -315,7 +325,7 @@ public class AiAccountingClient {
             content.put(new JSONObject().put("type", "image_url").put("image_url", imageUrl));
         }
 
-        String systemPrompt = isDeepSeekOcr ? "" : "你是视觉能力测试助手，读取图片后只回复 ok。";
+        String systemPrompt = isDeepSeekOcr ? "" : "你是视觉能力测试助手。只根据图片回答。";
         return chatWithEndpoint(
                 config.visionModel,
                 baseUrl,
@@ -323,6 +333,27 @@ public class AiAccountingClient {
                 systemPrompt,
                 new JSONObject().put("role", "user").put("content", content)
         );
+    }
+
+    private static final class HttpStatusException extends IOException {
+        final int status;
+
+        HttpStatusException(int status, String message) {
+            super(message);
+            this.status = status;
+        }
+    }
+
+    private static String describeVisionTestFailure(Exception failure) {
+        if (failure instanceof HttpStatusException) {
+            int status = ((HttpStatusException) failure).status;
+            if (status == 401 || status == 403) return "鉴权失败，请检查视觉模型的 API Key。";
+            if (status == 404) return "接口或视觉模型不存在。";
+            if (status == 429) return "请求过于频繁或额度不足。";
+            return "检测失败：接口返回 HTTP " + status + "。";
+        }
+        if (failure instanceof java.net.SocketTimeoutException) return "检测失败：请求超时。";
+        return "检测失败，请检查视觉模型配置和网络连接。";
     }
 
     private List<TransactionDraft> parseDrafts(Context context, String responseText) throws Exception {

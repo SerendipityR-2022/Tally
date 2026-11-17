@@ -3,6 +3,11 @@ package com.example.budgetapp.ai;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 public class AiConfig {
     public static final String PREFS_NAME = "app_prefs";
     public static final String KEY_ENABLED = "ai_accounting_enabled";
@@ -32,6 +37,12 @@ public class AiConfig {
     private static final String LEGACY_KEY_MODEL = "ai_model";
     private static final String LEGACY_KEY_SUPPORTS_VISION = "ai_supports_vision";
     private static final String LEGACY_KEY_SUPPORTS_AUDIO = "ai_supports_audio";
+    private static final List<String> MODEL_VALUE_KEYS = Arrays.asList(KEY_BASE_URL, KEY_API_KEY,
+            KEY_TEXT_MODEL, KEY_TEXT_BASE_URL, KEY_TEXT_API_KEY,
+            KEY_VISION_MODEL, KEY_VISION_BASE_URL, KEY_VISION_API_KEY,
+            KEY_AUDIO_MODEL, KEY_AUDIO_BASE_URL, KEY_AUDIO_API_KEY, LEGACY_KEY_MODEL);
+    private static final List<String> MODEL_FLAG_KEYS = Arrays.asList(KEY_ENABLED, KEY_TEXT_TEST_OK,
+            KEY_VISION_TEST_OK, KEY_AUDIO_TEST_OK, LEGACY_KEY_SUPPORTS_VISION, LEGACY_KEY_SUPPORTS_AUDIO);
 
     public boolean enabled;
     
@@ -60,6 +71,10 @@ public class AiConfig {
     public static AiConfig load(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String legacyModel = trim(prefs.getString(LEGACY_KEY_MODEL, ""));
+        boolean legacyVision = !prefs.contains(KEY_VISION_MODEL)
+                && prefs.getBoolean(LEGACY_KEY_SUPPORTS_VISION, false);
+        boolean legacyAudio = !prefs.contains(KEY_AUDIO_MODEL)
+                && prefs.getBoolean(LEGACY_KEY_SUPPORTS_AUDIO, false);
 
         AiConfig config = new AiConfig();
         config.enabled = prefs.getBoolean(KEY_ENABLED, false);
@@ -69,24 +84,44 @@ public class AiConfig {
         config.apiKey = trim(prefs.getString(KEY_API_KEY, ""));
         
         // 加载文本模型配置
-        config.textModel = firstNonEmpty(trim(prefs.getString(KEY_TEXT_MODEL, "")), legacyModel);
+        config.textModel = trim(prefs.getString(KEY_TEXT_MODEL, legacyModel));
         config.textBaseUrl = trim(prefs.getString(KEY_TEXT_BASE_URL, ""));
         config.textApiKey = trim(prefs.getString(KEY_TEXT_API_KEY, ""));
         config.textTestOk = prefs.getBoolean(KEY_TEXT_TEST_OK, !config.textModel.isEmpty());
         
         // 加载视觉模型配置
-        config.visionModel = firstNonEmpty(trim(prefs.getString(KEY_VISION_MODEL, "")), legacyModel);
+        config.visionModel = trim(prefs.getString(KEY_VISION_MODEL, legacyVision ? legacyModel : ""));
         config.visionBaseUrl = trim(prefs.getString(KEY_VISION_BASE_URL, ""));
         config.visionApiKey = trim(prefs.getString(KEY_VISION_API_KEY, ""));
-        config.visionTestOk = prefs.getBoolean(KEY_VISION_TEST_OK, prefs.getBoolean(LEGACY_KEY_SUPPORTS_VISION, false));
+        config.visionTestOk = prefs.getBoolean(KEY_VISION_TEST_OK, legacyVision);
         
         // 加载音频模型配置
-        config.audioModel = firstNonEmpty(trim(prefs.getString(KEY_AUDIO_MODEL, "")), legacyModel);
+        config.audioModel = trim(prefs.getString(KEY_AUDIO_MODEL, legacyAudio ? legacyModel : ""));
         config.audioBaseUrl = trim(prefs.getString(KEY_AUDIO_BASE_URL, ""));
         config.audioApiKey = trim(prefs.getString(KEY_AUDIO_API_KEY, ""));
-        config.audioTestOk = prefs.getBoolean(KEY_AUDIO_TEST_OK, prefs.getBoolean(LEGACY_KEY_SUPPORTS_AUDIO, false));
+        config.audioTestOk = prefs.getBoolean(KEY_AUDIO_TEST_OK, legacyAudio);
         
         return config;
+    }
+
+    public static boolean isModelPreference(String key) {
+        return MODEL_VALUE_KEYS.contains(key) || MODEL_FLAG_KEYS.contains(key);
+    }
+
+    public static void restoreModelPreferences(SharedPreferences.Editor editor, Map<String, String> values) {
+        // A backup with model connection values is a snapshot. Do not pair its model with
+        // endpoint/key overrides that only existed on the receiving device.
+        boolean hasModelConfig = !Collections.disjoint(MODEL_VALUE_KEYS, values.keySet());
+        for (String key : MODEL_VALUE_KEYS) {
+            String value = values.get(key);
+            if (value != null) editor.putString(key, trim(value));
+            else if (hasModelConfig) editor.remove(key);
+        }
+        for (String key : MODEL_FLAG_KEYS) {
+            String value = values.get(key);
+            if (value != null) editor.putBoolean(key, Boolean.parseBoolean(trim(value)));
+            else if (hasModelConfig) editor.remove(key);
+        }
     }
 
     public void save(Context context) {
@@ -202,10 +237,6 @@ public class AiConfig {
 
     public boolean hasAnyScreenshotSupport() {
         return isTextReady() || isVisionReady();
-    }
-
-    private static String firstNonEmpty(String primary, String fallback) {
-        return !trim(primary).isEmpty() ? trim(primary) : trim(fallback);
     }
 
     private static String trim(String value) {

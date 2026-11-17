@@ -32,8 +32,8 @@ public final class AutoCategoryClassifier {
 
         public Input(String packageName, String description, int type, String hint) {
             this.packageName = value(packageName);
-            this.description = cleanDescription(description);
-            this.merchantIdentity = ScreenCategoryTextExtractor.merchantIdentity(this.description, this.packageName);
+            this.description = ScreenCategoryTextExtractor.removeLongNumbers(cleanDescription(description));
+            this.merchantIdentity = ScreenCategoryTextExtractor.merchantIdentity(description, this.packageName);
             this.type = type;
             this.hint = value(hint);
         }

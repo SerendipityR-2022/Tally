@@ -17,6 +17,7 @@ import java.util.List;
 public class AiModelProfile {
     private static final String PREFS_NAME = "ai_model_profiles";
     private static final String KEY_PROFILES = "profiles";
+    public static final String BACKUP_KEY = "ai_saved_model_profiles";
     
     public String id;  // 唯一标识
     public String name;  // 配置名称
@@ -75,6 +76,22 @@ public class AiModelProfile {
                     .apply();
         } catch (JSONException e) {
             e.printStackTrace();
+        }
+    }
+
+    public static String getBackupJson(Context context) {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_PROFILES, null);
+    }
+
+    public static void restoreBackupJson(Context context, String serialized) {
+        try {
+            JSONArray profiles = new JSONArray(serialized);
+            // Keep the local list if an imported list is malformed.
+            for (int i = 0; i < profiles.length(); i++) fromJson(profiles.getJSONObject(i));
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                    .putString(KEY_PROFILES, profiles.toString()).apply();
+        } catch (JSONException ignored) {
+            // Profiles are optional; an invalid list should not fail the rest of the restore.
         }
     }
     
