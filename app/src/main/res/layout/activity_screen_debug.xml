@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/screen_debug_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bar_background"
+    android:focusableInTouchMode="true"
+    android:orientation="vertical">
+    <LinearLayout android:id="@+id/settings_toolbar" style="@style/TallySettingsToolbar">
+        <com.example.budgetapp.ui.BackButton android:layout_width="48dp" android:layout_height="48dp" />
+        <TextView style="@style/TallySettingsTitle" android:text="@string/screen_debug_title" />
+    </LinearLayout>
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/debug_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="none">
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="20dp"
+            android:paddingBottom="12dp">
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintWidth_max="720dp">
+                <LinearLayout style="@style/TallyDebugPanel">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+                        <TextView
+                            style="@style/TallyDebugPanelTitle"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/screen_debug_capture_title" />
+                        <TextView
+                            android:id="@+id/debug_capture_badge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:background="@drawable/bg_debug_badge"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="5dp"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp"
+                            android:text="@string/screen_debug_state_idle" />
+                    </LinearLayout>
+                    <TextView
+                        android:id="@+id/debug_service"
+                        style="@style/TallyDebugBody"
+                        android:layout_marginTop="8dp" />
+                    <TextView
+                        android:id="@+id/debug_capture_status"
+                        style="@style/TallyDebugBody"
+                        android:layout_marginTop="4dp"
+                        android:accessibilityLiveRegion="polite"
+                        android:textColor="@color/text_primary" />
+                    <TextView
+                        android:id="@+id/debug_capture_counters"
+                        style="@style/TallyDebugBody"
+                        android:layout_marginTop="8dp"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:hint="@string/screen_debug_package">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/debug_package"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri"
+                            android:singleLine="true"
+                            android:imeOptions="actionDone" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="12dp">
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/debug_select_app"
+                            style="@style/Widget.Tally.Button.Secondary"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/screen_debug_choose" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/debug_start"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/screen_debug_start" />
+                    </LinearLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/debug_launch_demo"
+                        style="@style/Widget.Tally.Button.Text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/screen_debug_demo" />
+                    <TextView
+                        style="@style/TallyDebugBody"
+                        android:textSize="12sp"
+                        android:text="@string/screen_debug_guide" />
+                </LinearLayout>
+                <LinearLayout style="@style/TallyDebugPanel">
+                    <TextView style="@style/TallyDebugPanelTitle" android:text="@string/screen_debug_files_title" />
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="12dp">
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/debug_save_log"
+                            style="@style/Widget.Tally.Button.Secondary"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/screen_debug_save_log" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/debug_copy_log"
+                            style="@style/Widget.Tally.Button.Secondary"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/screen_debug_copy_log" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="8dp">
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/debug_export"
+                            style="@style/Widget.Tally.Button.Secondary"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/screen_debug_save" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/debug_copy_xml"
+                            style="@style/Widget.Tally.Button.Secondary"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/screen_debug_copy" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/debug_import_xml"
+                            style="@style/Widget.Tally.Button.Text"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/screen_debug_import" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/debug_clear"
+                            style="@style/Widget.Tally.Button.Text"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/screen_debug_clear" />
+                    </LinearLayout>
+                </LinearLayout>
+                <LinearLayout style="@style/TallyDebugPanel">
+                    <TextView style="@style/TallyDebugPanelTitle" android:text="@string/screen_debug_rule_title" />
+                    <TextView
+                        style="@style/TallyDebugBody"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/screen_debug_rule_hint" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/debug_verify"
+                        style="@style/Widget.Tally.Button.Secondary"
+                        android:layout_marginTop="8dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/screen_debug_verify" />
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:hint="@string/screen_debug_draft">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/debug_draft"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="text"
+                            android:singleLine="true"
+                            android:imeOptions="actionDone" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <androidx.appcompat.widget.AppCompatSpinner
+                        android:id="@+id/debug_draft_type"
+                        style="@style/Widget.Tally.FormSpinner"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginVertical="8dp"
+                        android:contentDescription="@string/screen_debug_rule_direction" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/debug_verify_draft"
+                        style="@style/Widget.Tally.Button.Secondary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/screen_debug_verify_draft" />
+                    <TextView
+                        android:id="@+id/debug_rule_result"
+                        style="@style/TallyDebugBody"
+                        android:layout_marginTop="8dp"
+                        android:accessibilityLiveRegion="polite"
+                        android:textColor="@color/text_primary"
+                        android:visibility="gone" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/debug_add_rule"
+                        style="@style/Widget.Tally.Button.Text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone"
+                        android:text="@string/screen_debug_add_rule" />
+                </LinearLayout>
+                <LinearLayout style="@style/TallyDebugPanel">
+                    <TextView style="@style/TallyDebugPanelTitle" android:text="@string/screen_debug_preview_title" />
+                    <TextView
+                        android:id="@+id/debug_preview"
+                        style="@style/TallyDebugBody"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_input_field"
+                        android:padding="12dp"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_primary"
+                        android:textIsSelectable="true"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

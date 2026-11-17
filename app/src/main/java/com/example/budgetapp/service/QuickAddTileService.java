@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
-import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
@@ -43,17 +42,16 @@ import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.ui.CategoryAdapter;
+import com.example.budgetapp.ui.ConfirmationOverlay;
+import com.example.budgetapp.util.AssetSpinnerAdapter;
 import com.example.budgetapp.ui.PhotoActionActivity;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.CategoryManager;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class QuickAddTileService extends TileService {
 
@@ -116,18 +114,7 @@ public class QuickAddTileService extends TileService {
 
         try {
             WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-            WindowManager.LayoutParams params = new WindowManager.LayoutParams();
-
-            params.type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ?
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
-            params.format = PixelFormat.TRANSLUCENT;
-            params.width = WindowManager.LayoutParams.MATCH_PARENT;
-            params.height = WindowManager.LayoutParams.MATCH_PARENT;
-            params.flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_DIM_BEHIND;
-            params.dimAmount = 0.5f;
-            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
-            params.gravity = Gravity.CENTER;
-            params.y = -350;
+            WindowManager.LayoutParams params = ConfirmationOverlay.windowParams();
 
             ContextThemeWrapper themeContext = new ContextThemeWrapper(this, R.style.Theme_BudgetApp);
             LayoutInflater inflater = LayoutInflater.from(themeContext);
@@ -151,7 +138,6 @@ public class QuickAddTileService extends TileService {
             RadioGroup rgType = floatView.findViewById(R.id.rg_window_type);
             RecyclerView rvCategory = floatView.findViewById(R.id.rv_window_category);
             EditText etCategory = floatView.findViewById(R.id.et_window_category);
-            EditText etNote = floatView.findViewById(R.id.et_window_note);
             EditText etRemark = floatView.findViewById(R.id.et_window_remark);
             Spinner spAsset = floatView.findViewById(R.id.sp_asset);
             Button btnCurrency = floatView.findViewById(R.id.btn_window_currency);
@@ -232,21 +218,11 @@ public class QuickAddTileService extends TileService {
             List<String> expenseCategories = CategoryManager.getExpenseCategories(this);
             List<String> incomeCategories = CategoryManager.getIncomeCategories(this);
 
-// 动态判断：如果是详细分类，则使用弹性流式布局；否则恢复 5 列网格布局
-            boolean isDetailed = com.example.budgetapp.util.CategoryManager.isDetailedCategoryEnabled(this);
-            if (isDetailed) {
-                com.google.android.flexbox.FlexboxLayoutManager flexboxLayoutManager = new com.google.android.flexbox.FlexboxLayoutManager(themeContext);
-                flexboxLayoutManager.setFlexWrap(com.google.android.flexbox.FlexWrap.WRAP);
-                flexboxLayoutManager.setFlexDirection(com.google.android.flexbox.FlexDirection.ROW);
-                flexboxLayoutManager.setJustifyContent(com.google.android.flexbox.JustifyContent.FLEX_START);
-                rvCategory.setLayoutManager(flexboxLayoutManager);
-            } else {
-                rvCategory.setLayoutManager(new GridLayoutManager(themeContext, 5));
-            }
+            rvCategory.setLayoutManager(new GridLayoutManager(themeContext, 5));
 
             final String[] selectedCategory = {expenseCategories.isEmpty() ? "自定义" : expenseCategories.get(0)};
 
-            CategoryAdapter categoryAdapter = new CategoryAdapter(themeContext, expenseCategories, selectedCategory[0], cat -> {
+            CategoryAdapter categoryAdapter = new CategoryAdapter(themeContext, expenseCategories, selectedCategory[0], true, cat -> {
                 selectedCategory[0] = cat;
                 selectedSubCategory = null;
                 if ("自定义".equals(cat)) {
@@ -277,18 +253,16 @@ public class QuickAddTileService extends TileService {
                 if (checkedId == R.id.rb_window_income) {
                     rvCategory.setVisibility(View.VISIBLE);
                     etTarget.setVisibility(View.GONE);
-                    categoryAdapter.updateData(incomeCategories);
                     String first = incomeCategories.isEmpty() ? "自定义" : incomeCategories.get(0);
-                    categoryAdapter.setSelectedCategory(first);
+                    categoryAdapter.setCategories(incomeCategories, first, false);
                     selectedCategory[0] = first;
                     selectedSubCategory = null;
                     etCategory.setVisibility("自定义".equals(first) ? View.VISIBLE : View.GONE);
                 } else if (checkedId == R.id.rb_window_expense) {
                     rvCategory.setVisibility(View.VISIBLE);
                     etTarget.setVisibility(View.GONE);
-                    categoryAdapter.updateData(expenseCategories);
                     String first = expenseCategories.isEmpty() ? "自定义" : expenseCategories.get(0);
-                    categoryAdapter.setSelectedCategory(first);
+                    categoryAdapter.setCategories(expenseCategories, first, true);
                     selectedCategory[0] = first;
                     selectedSubCategory = null;
                     etCategory.setVisibility("自定义".equals(first) ? View.VISIBLE : View.GONE);
@@ -307,17 +281,14 @@ public class QuickAddTileService extends TileService {
                 }
             });
 
-            SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm", Locale.getDefault());
-            etNote.setText(sdf.format(new Date()));
-
             AssistantConfig config = new AssistantConfig(this);
             boolean isAssetEnabled = config.isAssetsEnabled();
 
             if (isAssetEnabled) {
                 spAsset.setVisibility(View.VISIBLE);
-                com.example.budgetapp.util.AssetSpinnerAdapter adapter = new com.example.budgetapp.util.AssetSpinnerAdapter(this);
+                AssetSpinnerAdapter adapter = new AssetSpinnerAdapter(themeContext, R.layout.item_spinner_asset_confirmation);
                 spAsset.setAdapter(adapter);
-                com.example.budgetapp.util.AssetSpinnerAdapter.limitDropDownHeight(spAsset);
+                AssetSpinnerAdapter.limitDropDownHeight(spAsset);
 
                 AppDatabase.databaseWriteExecutor.execute(() -> {
                     // 【修改】同时加载资产(0)和负债(1)
@@ -362,7 +333,6 @@ public class QuickAddTileService extends TileService {
                 }
                 try {
                     double finalAmount = Double.parseDouble(amountStr);
-                    String finalNote = etNote.getText().toString();
                     String finalRemark = etRemark.getText().toString().trim();
 
                     int checkedId = rgType.getCheckedRadioButtonId();
@@ -404,7 +374,7 @@ public class QuickAddTileService extends TileService {
                     String symbol = isCurrencyEnabled ? btnCurrency.getText().toString() : "¥";
 
                     // 【修改】加上最后的 isExcludedFromBudget[0]
-                    saveToDatabase(finalAmount, finalType, finalCat, selectedSubCategory, finalNote, finalRemark, assetId, symbol, currentPhotoPath[0], targetObject, liabilityLoanType, isExcludedFromBudget[0]);
+                    saveToDatabase(finalAmount, finalType, finalCat, selectedSubCategory, finalRemark, assetId, symbol, currentPhotoPath[0], targetObject, liabilityLoanType, isExcludedFromBudget[0]);
                     closeWindow(windowManager, floatView);
                     Toast.makeText(this, "记账成功", Toast.LENGTH_SHORT).show();
                 } catch (Exception e) {
@@ -592,7 +562,7 @@ public class QuickAddTileService extends TileService {
         }
     }
 
-    private void saveToDatabase(double amount, int type, String category, String subCategory, String note, String remark, int assetId, String currencySymbol, String photoPath, String targetObject, int liabilityLoanType, boolean excludeFromBudget) {
+    private void saveToDatabase(double amount, int type, String category, String subCategory, String remark, int assetId, String currencySymbol, String photoPath, String targetObject, int liabilityLoanType, boolean excludeFromBudget) {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             AppDatabase db = AppDatabase.getDatabase(getApplicationContext());
 
@@ -602,7 +572,6 @@ public class QuickAddTileService extends TileService {
             t.category = category;
             t.subCategory = subCategory;
             t.amount = amount;
-            t.note = note;
             t.remark = remark;
             t.assetId = assetId;
             t.currencySymbol = currencySymbol;

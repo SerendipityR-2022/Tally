@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:minHeight="57dp" android:orientation="horizontal" android:gravity="center_vertical" android:foreground="?attr/selectableItemBackground"
+    android:paddingVertical="5dp">
+    <TextView android:id="@+id/ledger_category_rank_index" android:layout_width="24dp" android:layout_height="wrap_content"
+        android:textColor="@color/ledger_muted" android:textSize="12sp" android:fontFeatureSettings="tnum" />
+    <ImageView android:id="@+id/ledger_category_rank_icon" android:layout_width="34dp" android:layout_height="34dp"
+        android:padding="6dp" android:background="@drawable/bg_ledger_icon" android:importantForAccessibility="no" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical"
+        android:layout_marginStart="9dp" android:layout_marginEnd="8dp">
+        <TextView android:id="@+id/ledger_category_rank_label" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:maxLines="1" android:ellipsize="end" android:textColor="@color/ledger_text" android:textSize="14sp" />
+        <ProgressBar android:id="@+id/ledger_category_rank_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent"
+            android:layout_height="4dp" android:layout_marginTop="6dp" android:indeterminate="false"
+            android:progressBackgroundTint="@color/ledger_rule" android:importantForAccessibility="no" />
+    </LinearLayout>
+    <TextView android:id="@+id/ledger_category_rank_amount" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:maxWidth="108dp" android:ellipsize="end" android:maxLines="1" android:gravity="end" android:textColor="@color/ledger_text"
+        android:textSize="15sp" android:fontFamily="sans-serif-medium" android:fontFeatureSettings="tnum" />
+    <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_marginStart="4dp"
+        android:src="@drawable/ic_arrow_right" android:tint="@color/ledger_muted" android:importantForAccessibility="no" />
+</LinearLayout>

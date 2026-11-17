@@ -20,6 +20,7 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.TransactionRemarks;
 import com.example.budgetapp.util.AssetIconHelper;
 
 import java.util.ArrayList;
@@ -104,7 +105,6 @@ public class BillSliderAdapter extends RecyclerView.Adapter<BillSliderAdapter.Bi
             holder.tvCategory.setTextColor(grayColor);
             holder.tvSubCategory.setTextColor(grayColor);
             holder.tvNote.setTextColor(grayColor);
-            holder.tvRemark.setTextColor(grayColor);
             holder.tvAssetName.setTextColor(grayColor);
             holder.itemView.setAlpha(0.6f);
         } else {
@@ -114,29 +114,13 @@ public class BillSliderAdapter extends RecyclerView.Adapter<BillSliderAdapter.Bi
             holder.tvCategory.setTextColor(textPrimary);
             holder.tvSubCategory.setTextColor(textSecondary);
             holder.tvNote.setTextColor(textSecondary);
-            holder.tvRemark.setTextColor(textSecondary);
             holder.itemView.setAlpha(1.0f);
         }
 
-        // 备注
-        String note = transaction.note;
-        if (note != null && !note.isEmpty()) {
-            holder.tvNote.setVisibility(View.VISIBLE);
-            holder.tvNote.setText(note);
-        } else {
-            holder.tvNote.setVisibility(View.GONE);
-        }
-
-        // 记录标识 (remark)
-        String remark = transaction.remark;
-        if (remark != null && !remark.isEmpty()) {
-            holder.tvRemark.setVisibility(View.VISIBLE);
-            holder.tvRemark.setText(remark);
-            holder.viewRemarkIndicator.setVisibility(View.VISIBLE);
-        } else {
-            holder.tvRemark.setVisibility(View.GONE);
-            holder.viewRemarkIndicator.setVisibility(View.GONE);
-        }
+        String remark = TransactionRemarks.display(transaction);
+        holder.tvNote.setText(TransactionRemarks.withTime(transaction, android.text.format.DateFormat.getTimeFormat(context)));
+        holder.tvNote.setVisibility(View.VISIBLE);
+        holder.viewRemarkIndicator.setVisibility(remark.isEmpty() ? View.GONE : View.VISIBLE);
 
         // 资产信息
         if (transaction.assetId > 0) {
@@ -220,7 +204,7 @@ public class BillSliderAdapter extends RecyclerView.Adapter<BillSliderAdapter.Bi
     }
 
     static class BillViewHolder extends RecyclerView.ViewHolder {
-        TextView tvCategory, tvSubCategory, tvAmount, tvNote, tvRemark;
+        TextView tvCategory, tvSubCategory, tvAmount, tvNote;
         TextView tvAssetName;
         ImageView ivAssetIcon;
         LinearLayout llAssetInfo;
@@ -232,7 +216,6 @@ public class BillSliderAdapter extends RecyclerView.Adapter<BillSliderAdapter.Bi
             tvSubCategory = itemView.findViewById(R.id.tv_bill_sub_category);
             tvAmount = itemView.findViewById(R.id.tv_bill_amount);
             tvNote = itemView.findViewById(R.id.tv_bill_note);
-            tvRemark = itemView.findViewById(R.id.tv_bill_remark);
             tvAssetName = itemView.findViewById(R.id.tv_asset_name);
             ivAssetIcon = itemView.findViewById(R.id.iv_asset_icon);
             llAssetInfo = itemView.findViewById(R.id.ll_asset_info);

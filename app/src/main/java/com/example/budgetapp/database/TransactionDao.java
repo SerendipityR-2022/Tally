@@ -44,8 +44,8 @@ public interface TransactionDao {
     List<Transaction> getTransactionsByRange(long start, long end);
 
     // 【新增】批量修改一级分类名称（历史账单同步）
-    @Query("UPDATE transactions SET category = :newCategory WHERE category = :oldCategory")
-    void updateCategoryName(String oldCategory, String newCategory);
+    @Query("UPDATE transactions SET category = :newCategory WHERE category = :oldCategory AND type = :type")
+    void updateCategoryName(String oldCategory, String newCategory, int type);
 
     // 【新增】批量修改二级分类名称（历史账单同步）
     @Query("UPDATE transactions SET subCategory = :newSubCategory WHERE category = :parentCategory AND subCategory = :oldSubCategory")
@@ -68,7 +68,7 @@ public interface TransactionDao {
             "AND (:type IS NULL OR t.type = :type) " +
             "AND (:minAmount IS NULL OR t.amount >= :minAmount) " +
             "AND (:maxAmount IS NULL OR t.amount <= :maxAmount) " +
-            "AND (:keyword IS NULL OR t.category LIKE '%' || :keyword || '%' OR t.subCategory LIKE '%' || :keyword || '%' OR t.note LIKE '%' || :keyword || '%') " +
+            "AND (:keyword IS NULL OR t.category LIKE '%' || :keyword || '%' OR t.subCategory LIKE '%' || :keyword || '%' OR t.note LIKE '%' || :keyword || '%' OR t.remark LIKE '%' || :keyword || '%') " +
             "AND (:assetName IS NULL OR a.name LIKE '%' || :assetName || '%' OR t.remark LIKE '%' || :assetName || '%') " +
             "ORDER BY t.date DESC")
     LiveData<List<Transaction>> getFilteredTransactions(long startDate, long endDate, Integer type, Float minAmount, Float maxAmount, String keyword, String assetName);

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="tally_form_text_inset">16dp</dimen>
+    <dimen name="tally_picker_column_height">126dp</dimen>
+    <dimen name="tally_picker_text_size">18sp</dimen>
+</resources>

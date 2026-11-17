@@ -1,20 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="320dp"
     android:layout_height="wrap_content"
     android:layout_gravity="center"
     app:cardBackgroundColor="@color/white"
-    app:cardCornerRadius="28dp"
+    app:cardCornerRadius="12dp"
     app:cardElevation="0dp">
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
-
-        <!-- 标题栏 -->
         <TextView
             android:id="@+id/tv_dialog_title"
             android:layout_width="match_parent"
@@ -26,8 +24,6 @@
             android:textColor="@color/text_primary"
             android:textSize="18sp"
             android:textStyle="bold" />
-
-        <!-- 可滚动内容区：彻底去除滑动条 (scrollbars="none") -->
         <com.example.budgetapp.ui.MaxHeightScrollView
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -35,15 +31,12 @@
             android:overScrollMode="never"
             android:scrollbars="none"
             app:maxHeight="520dp">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:paddingHorizontal="20dp"
                 android:paddingBottom="12dp">
-
-                <!-- 1. 收支类型选择器 -->
                 <RadioGroup
                     android:id="@+id/rg_type"
                     android:layout_width="match_parent"
@@ -51,7 +44,6 @@
                     android:background="@drawable/bg_type_selector"
                     android:orientation="horizontal"
                     android:padding="2dp">
-
                     <RadioButton
                         android:id="@+id/rb_expense"
                         android:layout_width="0dp"
@@ -65,7 +57,6 @@
                         android:textColor="@color/text_type_selector"
                         android:textSize="15sp"
                         android:textStyle="bold" />
-
                     <RadioButton
                         android:id="@+id/rb_income"
                         android:layout_width="0dp"
@@ -79,8 +70,6 @@
                         android:textSize="15sp"
                         android:textStyle="bold" />
                 </RadioGroup>
-
-                <!-- 2. 金额与币种输入行 -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -89,12 +78,10 @@
                     android:text="金额与币种"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
                     android:orientation="horizontal">
-
                     <com.example.budgetapp.ui.CustomHighlightEditText
                         android:id="@+id/et_amount"
                         android:layout_width="0dp"
@@ -107,7 +94,6 @@
                         android:textColor="@color/text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
-
                     <TextView
                         android:id="@+id/tv_currency"
                         android:layout_width="wrap_content"
@@ -122,22 +108,17 @@
                         android:textStyle="bold"
                         tools:text="¥ 人民币" />
                 </LinearLayout>
-
-                <!-- 3. 分类与账户行 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:orientation="horizontal">
-
-                    <!-- 分类选择 -->
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginEnd="6dp"
                         android:orientation="vertical">
-
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
@@ -145,7 +126,6 @@
                             android:text="交易分类"
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
-
                         <TextView
                             android:id="@+id/tv_category"
                             android:layout_width="match_parent"
@@ -159,15 +139,12 @@
                             android:textColor="@color/text_primary"
                             android:textSize="14sp" />
                     </LinearLayout>
-
-                    <!-- 账户选择 -->
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1.2"
                         android:layout_marginStart="6dp"
                         android:orientation="vertical">
-
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
@@ -175,7 +152,6 @@
                             android:text="交易账户"
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
-
                         <Spinner
                             android:id="@+id/spinner_asset"
                             android:layout_width="match_parent"
@@ -186,8 +162,6 @@
                             android:spinnerMode="dropdown" />
                     </LinearLayout>
                 </LinearLayout>
-
-                <!-- 4. 周期设定 -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -196,13 +170,11 @@
                     android:text="周期频率"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="50dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
-
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -211,7 +183,6 @@
                         android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
-
                     <com.example.budgetapp.ui.CustomHighlightEditText
                         android:id="@+id/et_interval"
                         android:layout_width="0dp"
@@ -224,7 +195,6 @@
                         android:text="1"
                         android:textColor="@color/text_primary"
                         android:textSize="15sp" />
-
                     <Spinner
                         android:id="@+id/spinner_period_unit"
                         android:layout_width="100dp"
@@ -235,21 +205,17 @@
                         android:popupElevation="0dp"
                         android:spinnerMode="dropdown" />
                 </LinearLayout>
-
-                <!-- 5. 开始日期与生效时间 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:orientation="horizontal">
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1.3"
                         android:layout_marginEnd="6dp"
                         android:orientation="vertical">
-
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
@@ -257,7 +223,6 @@
                             android:text="开始日期"
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
-
                         <TextView
                             android:id="@+id/tv_start_date"
                             android:layout_width="match_parent"
@@ -269,14 +234,12 @@
                             android:textSize="14sp"
                             tools:text="2026-10-07" />
                     </LinearLayout>
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginStart="6dp"
                         android:orientation="vertical">
-
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
@@ -284,7 +247,6 @@
                             android:text="生效时间"
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
-
                         <TextView
                             android:id="@+id/tv_trigger_time"
                             android:layout_width="match_parent"
@@ -297,15 +259,12 @@
                             android:textStyle="bold" />
                     </LinearLayout>
                 </LinearLayout>
-
-                <!-- 6. 结束日期开关及选择框 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
-
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -313,7 +272,6 @@
                         android:text="设置结束日期"
                         android:textColor="@color/text_primary"
                         android:textSize="14sp" />
-
                     <androidx.appcompat.widget.SwitchCompat
                         android:id="@+id/switch_has_end_date"
                         android:layout_width="wrap_content"
@@ -323,9 +281,9 @@
                         app:showText="false"
                         app:thumbTint="@null"
                         app:track="@drawable/switch_track_custom"
-                        app:trackTint="@null" />
+                        app:trackTint="@null"
+                        android:minHeight="48dp" />
                 </LinearLayout>
-
                 <TextView
                     android:id="@+id/tv_end_date"
                     android:layout_width="match_parent"
@@ -339,8 +297,6 @@
                     android:visibility="gone"
                     tools:text="2027-10-07"
                     tools:visibility="visible" />
-
-                <!-- 7. 备注说明 -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -349,7 +305,6 @@
                     android:text="备注 (选填)"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
-
                 <com.example.budgetapp.ui.CustomHighlightEditText
                     android:id="@+id/et_note"
                     android:layout_width="match_parent"
@@ -361,11 +316,8 @@
                     android:paddingHorizontal="14dp"
                     android:textColor="@color/text_primary"
                     android:textSize="14sp" />
-
             </LinearLayout>
         </com.example.budgetapp.ui.MaxHeightScrollView>
-
-        <!-- 底部确定 / 取消按钮 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -373,40 +325,24 @@
             android:paddingHorizontal="20dp"
             android:paddingTop="8dp"
             android:paddingBottom="20dp">
-
-            <Button
+            <com.google.android.material.button.MaterialButton
+                style="@style/Widget.Tally.Button.Secondary"
                 android:id="@+id/btn_cancel"
-                style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
                 android:layout_height="50dp"
                 android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:backgroundTint="@color/input_bg"
                 android:elevation="0dp"
-                android:stateListAnimator="@null"
-                android:text="取消"
-                android:textColor="@color/text_primary"
-                android:textSize="15sp"
-                app:cornerRadius="14dp"
-                app:elevation="0dp" />
-
-            <Button
+                android:text="取消" />
+            <com.google.android.material.button.MaterialButton
+                style="@style/Widget.Tally.Button"
                 android:id="@+id/btn_confirm"
-                style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
                 android:layout_width="0dp"
                 android:layout_height="50dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:backgroundTint="@color/app_blue"
                 android:elevation="0dp"
-                android:stateListAnimator="@null"
-                android:text="保存"
-                android:textColor="@color/real_white"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                app:cornerRadius="14dp"
-                app:elevation="0dp" />
+                android:text="保存" />
         </LinearLayout>
-
     </LinearLayout>
 </androidx.cardview.widget.CardView>

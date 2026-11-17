@@ -14,10 +14,7 @@ import com.example.budgetapp.util.CategoryManager;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -50,11 +47,7 @@ public class BudgetHistoryActivity extends AppCompatActivity {
         setContentView(R.layout.activity_budget_history);
 
         View rootLayout = findViewById(R.id.root_layout);
-        ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(0, insets.top, 0, insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootLayout);
 
         rvTimeline = findViewById(R.id.rv_timeline);
         rvTimeline.setLayoutManager(new LinearLayoutManager(this));

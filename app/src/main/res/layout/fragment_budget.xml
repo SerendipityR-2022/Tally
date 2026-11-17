@@ -1,123 +1,63 @@
-<?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:importantForAccessibility="noHideDescendants"
     android:background="@color/bar_background">
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/tv_top_title"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:background="@color/bar_background"
-            android:gravity="center"
-            android:text="预算"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary" />
-
-        <androidx.cardview.widget.CardView
-            android:id="@+id/card_month_summary"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="20dp"
-            android:layout_marginBottom="12dp"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="0dp"
-            app:cardBackgroundColor="@color/white">
-
-            <LinearLayout
-                android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:gravity="center_vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="8dp">
+            <TextView
+                android:id="@+id/tv_top_title"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:gravity="start|center_vertical"
+                android:text="预算"
+                android:textSize="24sp"
+                android:textColor="@color/text_primary"
+                android:layout_weight="1"
+                android:fontFamily="sans-serif-medium" />
+            <com.google.android.material.button.MaterialButton
+                style="@style/Widget.Tally.Button.Text"
+                android:id="@+id/btn_budget_setup"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="20dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="本月预算累积结余"
-                    android:textSize="14sp"
-                    android:textColor="@color/text_secondary"/>
-
-                <TextView
-                    android:id="@+id/tv_total_surplus"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0.00"
-                    android:textSize="32sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/app_blue"
-                    android:layout_marginTop="4dp"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/divider"
-                    android:layout_marginVertical="12dp"/>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <LinearLayout
-                        android:id="@+id/layout_monthly_budget"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:background="@drawable/ripple_stat_item"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:paddingVertical="4dp"
-                        android:paddingEnd="8dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="月总预算"
-                            android:textSize="12sp"
-                            android:textColor="@color/text_secondary"/>
-                        <TextView
-                            android:id="@+id/tv_header_monthly_budget"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0.00"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:textColor="?android:attr/textColorPrimary"/>
+                android:minHeight="48dp"
+                android:text="设置预算"
+                android:layout_marginEnd="12dp" />
+            <com.example.budgetapp.ui.PageSettingsButton
+                android:id="@+id/btn_page_settings"
+                android:layout_width="48dp"
+                android:layout_height="48dp" />
+        </LinearLayout>
+        <com.example.budgetapp.ui.LedgerSummaryCard android:id="@+id/card_month_summary" style="@style/TallySummaryCard">
+            <LinearLayout style="@style/TallySummaryContent">
+                <LinearLayout style="@style/TallySummaryPrimary">
+                    <TextView android:id="@+id/tv_total_surplus_label" style="@style/TallySummaryPrimaryLabel" android:text="本月预算结余" />
+                    <TextView android:id="@+id/tv_total_surplus" style="@style/TallySummaryPrimaryValue" android:text="0.00" />
+                </LinearLayout>
+                <View android:id="@+id/ledger_summary_divider" style="@style/TallySummaryDivider" />
+                <LinearLayout style="@style/TallySummaryMetrics">
+                    <LinearLayout style="@style/TallySummaryMetric" android:id="@+id/layout_monthly_budget" android:clickable="true" android:focusable="true"
+                        android:foreground="?attr/selectableItemBackground">
+                        <TextView style="@style/TallySummaryMetricLabel" android:text="月总预算" />
+                        <TextView android:id="@+id/tv_header_monthly_budget" style="@style/TallySummaryMetricValue" android:text="0.00" />
                     </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="今日预计可用"
-                            android:textSize="12sp"
-                            android:textColor="@color/text_secondary"/>
-                        <TextView
-                            android:id="@+id/tv_header_daily_available"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0.00"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:textColor="?android:attr/textColorPrimary"/>
+                    <LinearLayout style="@style/TallySummaryMetric">
+                        <TextView style="@style/TallySummaryMetricLabel" android:text="日可用预算" />
+                        <TextView android:id="@+id/tv_header_daily_available" style="@style/TallySummaryMetricValue" android:text="0.00" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
+        </com.example.budgetapp.ui.LedgerSummaryCard>
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tab_layout_budget"
             android:layout_width="match_parent"
@@ -126,28 +66,29 @@
             app:tabIndicatorColor="@color/app_blue"
             app:tabSelectedTextColor="?android:attr/textColorPrimary"
             app:tabTextColor="@color/text_secondary"
+            app:tabTextAppearance="@style/TextAppearance.Tally.SummaryTab"
             app:tabRippleColor="@android:color/transparent"
-            android:visibility="gone"/>
-
+            android:visibility="gone" />
         <TextView
             android:id="@+id/tv_goals_title"
-            android:layout_width="wrap_content"
+            style="@style/TallySummarySectionHeading"
+            android:text="储蓄目标"
+            android:visibility="gone" />
+        <com.google.android.material.button.MaterialButton
+            style="@style/Widget.Tally.Button.Text"
+            android:id="@+id/btn_goal_empty"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="存储目标"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary"
-            android:paddingHorizontal="24dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="12dp"
-            android:visibility="gone"/>
-
+            android:layout_marginHorizontal="20dp"
+            android:minHeight="56dp"
+            android:text="@string/goals_empty"
+            android:visibility="gone" />
         <androidx.viewpager2.widget.ViewPager2
             android:id="@+id/vp_budget"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
+            android:layout_height="0dp"
+            android:layout_weight="1" />
     </LinearLayout>
-
     <LinearLayout
         android:id="@+id/fab_container_budget"
         android:layout_width="wrap_content"
@@ -157,7 +98,6 @@
         android:layout_alignParentEnd="true"
         android:layout_margin="20dp"
         android:gravity="center_horizontal">
-
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_budget_history"
             android:layout_width="wrap_content"
@@ -167,19 +107,18 @@
             android:contentDescription="历史记录"
             app:backgroundTint="@color/white"
             app:tint="@color/app_blue"
-            app:fabSize="mini"
             app:elevation="0dp"
             app:pressedTranslationZ="0dp"
             app:borderWidth="0dp"
-            android:stateListAnimator="@null" />
-
+            android:stateListAnimator="@null"
+            app:fabCustomSize="48dp" />
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_add_goal"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:src="@android:drawable/ic_input_add"
             android:contentDescription="添加目标"
-            app:tint="@color/text_white"
+            app:tint="@color/text_on_accent"
             app:backgroundTint="@color/app_blue"
             app:elevation="0dp"
             app:pressedTranslationZ="0dp"

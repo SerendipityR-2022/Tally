@@ -30,4 +30,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "budgetapp"
-include(":app")
+include(":app", ":payment-demo")

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/bg_input_field" />
+    <item android:drawable="@drawable/ic_form_chevron" android:end="@dimen/tally_form_text_inset"
+        android:gravity="end|center_vertical" android:width="20dp" android:height="20dp" />
+</layer-list>

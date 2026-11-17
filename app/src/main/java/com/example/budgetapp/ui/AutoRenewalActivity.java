@@ -11,9 +11,7 @@ import android.view.Window;
 import android.widget.*;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.budgetapp.R;
@@ -38,11 +36,7 @@ public class AutoRenewalActivity extends AppCompatActivity {
         setContentView(R.layout.activity_auto_renewal);
 
         View rootView = findViewById(R.id.root_layout);
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         config = new AssistantConfig(this);
         rvRenewalList = findViewById(R.id.rv_renewal_list);
@@ -58,7 +52,10 @@ public class AutoRenewalActivity extends AppCompatActivity {
         WindowCompat.setDecorFitsSystemWindows(window, false);
         window.setStatusBarColor(Color.TRANSPARENT);
         window.setNavigationBarColor(Color.TRANSPARENT);
-        WindowCompat.getInsetsController(window, window.getDecorView()).setAppearanceLightStatusBars(true);
+        boolean dark = (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        WindowCompat.getInsetsController(window, window.getDecorView()).setAppearanceLightStatusBars(!dark);
     }
 
     private void showRenewalEditDialog(RenewalItem item, int position) {
@@ -184,27 +181,14 @@ public class AutoRenewalActivity extends AppCompatActivity {
         dialog.show();
     }
     private void showDatePicker(String periodType, int[] date, TextView target) {
-        final BottomSheetDialog dateDialog = new BottomSheetDialog(this);
-        View view = getLayoutInflater().inflate(R.layout.dialog_bottom_date_picker, null);
-        dateDialog.setContentView(view);
+        LedgerPickerDialog dateDialog = new LedgerPickerDialog(this, R.layout.dialog_bottom_date_picker);
 
-        dateDialog.setCanceledOnTouchOutside(true);
-        dateDialog.setOnShowListener(dialogInterface -> {
-            BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) dialogInterface;
-            View bottomSheet = bottomSheetDialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) {
-                bottomSheet.setBackgroundResource(android.R.color.transparent);
-                int margin = (int) (16 * getResources().getDisplayMetrics().density);
-                bottomSheet.setPadding(margin, 0, margin, margin);
-            }
-        });
-
-        View containerYear = view.findViewById(R.id.container_year);
-        View containerMonth = view.findViewById(R.id.container_month);
-        NumberPicker npYear = view.findViewById(R.id.np_year);
-        NumberPicker npMonth = view.findViewById(R.id.np_month);
-        NumberPicker npDay = view.findViewById(R.id.np_day);
-        TextView tvPreview = view.findViewById(R.id.tv_date_preview);
+        View containerYear = dateDialog.findViewById(R.id.container_year);
+        View containerMonth = dateDialog.findViewById(R.id.container_month);
+        NumberPicker npYear = dateDialog.findViewById(R.id.np_year);
+        NumberPicker npMonth = dateDialog.findViewById(R.id.np_month);
+        NumberPicker npDay = dateDialog.findViewById(R.id.np_day);
+        TextView tvPreview = dateDialog.findViewById(R.id.tv_date_preview);
 
         boolean isCustom = "Custom".equals(periodType);
         boolean showMonth = isCustom || "Year".equals(periodType);
@@ -232,7 +216,7 @@ public class AutoRenewalActivity extends AppCompatActivity {
         npDay.setOnValueChangedListener(listener);
         updatePreviewText(tvPreview, periodType, date[0], date[1], date[2]);
 
-        view.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+        dateDialog.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
             if (npYear != null) date[0] = npYear.getValue();
             date[1] = npMonth.getValue();
             date[2] = npDay.getValue();
@@ -245,7 +229,7 @@ public class AutoRenewalActivity extends AppCompatActivity {
             dateDialog.dismiss();
         });
 
-        view.findViewById(R.id.btn_cancel).setOnClickListener(v -> dateDialog.dismiss());
+        dateDialog.findViewById(R.id.btn_cancel).setOnClickListener(v -> dateDialog.dismiss());
         dateDialog.show();
     }
 

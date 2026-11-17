@@ -2,7 +2,6 @@ package com.example.budgetapp.util;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.view.accessibility.AccessibilityManager;
 
 import java.io.BufferedReader;
@@ -13,25 +12,15 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import moe.shizuku.server.IShizukuService;
 import rikka.shizuku.Shizuku;
 
 public class ShizukuManager {
-
-    private static final String ACCESSIBILITY_SERVICE_COMPONENT =
-            "com.example.budgetapp/com.google.android.accessibility.selecttospeak.SelectToSpeakService";
-
-    // 记录 Binder 是否已连接
-    private static boolean isBinderReady = false;
-
-    public static void setBinderReady(boolean ready) {
-        isBinderReady = ready;
-    }
 
     /**
      * 判断当前系统是否运行了 Shizuku 服务
      */
     public static boolean isShizukuAvailable() {
-        if (isBinderReady) return true;
         try {
             return Shizuku.pingBinder();
         } catch (Throwable t) {
@@ -50,19 +39,15 @@ public class ShizukuManager {
             if (Shizuku.isPreV11()) {
                 return false;
             }
-            return Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
-        } catch (Throwable t) {
+            // The SDK caches a successful grant, so check the server for current permission.
+            IShizukuService service = IShizukuService.Stub.asInterface(Shizuku.getBinder());
+            return service != null && service.checkSelfPermission();
+        } catch (Exception t) {
             return false;
         }
     }
 
-    public static void requestPermission(int requestCode) {
-        if (isShizukuAvailable() && !hasShizukuPermission()) {
-            Shizuku.requestPermission(requestCode);
-        }
-    }
-
-    public static String execCommand(String command) {
+    private static String execCommand(String command) {
         try {
             Method newProcessMethod = Shizuku.class.getDeclaredMethod(
                     "newProcess",
@@ -86,8 +71,7 @@ public class ShizukuManager {
                     output.append(line).append("\n");
                 }
             }
-            process.waitFor();
-            return output.toString().trim();
+            return process.waitFor() == 0 ? output.toString().trim() : null;
         } catch (Exception e) {
             e.printStackTrace();
             return null;
@@ -100,8 +84,8 @@ public class ShizukuManager {
         List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
         if (enabledServices != null) {
             for (AccessibilityServiceInfo service : enabledServices) {
-                if (service.getId().contains("SelectToSpeakService") ||
-                        service.getId().contains("com.example.budgetapp")) {
+                if (service != null && AccessibilityServiceIdentity.matches(
+                        context.getPackageName(), service.getId())) {
                     return true;
                 }
             }
@@ -109,32 +93,50 @@ public class ShizukuManager {
         return false;
     }
 
-    public static boolean enableAccessibilityService(Context context) {
-        if (!hasShizukuPermission()) return false;
+    public static boolean shouldRestoreAccessibility(Context context) {
+        ScreenCaptureSettings settings = new ScreenCaptureSettings(context);
+        return ScreenCapturePolicy.mayRestoreAccessibility(settings.isKeepAliveEnabled(),
+                settings.isEnabled(), new AssistantConfig(context).isEnabled(), hasShizukuPermission());
+    }
 
-        String currentServices = execCommand("settings get secure enabled_accessibility_services");
+    public static void restoreKeepAliveIfAllowed(Context context) {
+        if (!new ScreenCaptureSettings(context).isKeepAliveEnabled() || !hasShizukuPermission()) return;
+        grantBackgroundKeepAlive(context);
+        if (shouldRestoreAccessibility(context) && !isAccessibilityRunning(context)) enableAccessibilityService(context);
+    }
+
+    public static void restoreKeepAliveAsync(Context context) {
+        Context app = context.getApplicationContext();
+        new Thread(() -> restoreKeepAliveIfAllowed(app), "ShizukuKeepAlive").start();
+    }
+
+    public static boolean enableAccessibilityService(Context context) {
+        if (!shouldRestoreAccessibility(context)) return false;
+
+        String settingsForUser = "settings --user " + (android.os.Process.myUid() / 100000);
+        String currentServices = execCommand(settingsForUser + " get secure enabled_accessibility_services");
+        if (currentServices == null) return false;
         Set<String> serviceSet = new LinkedHashSet<>();
-        if (currentServices != null && !currentServices.isEmpty() && !"null".equalsIgnoreCase(currentServices)) {
+        if (!currentServices.isEmpty() && !"null".equalsIgnoreCase(currentServices)) {
             String[] split = currentServices.split(":");
             serviceSet.addAll(Arrays.asList(split));
         }
 
-        serviceSet.add(ACCESSIBILITY_SERVICE_COMPONENT);
+        serviceSet.add(AccessibilityServiceIdentity.componentId(context.getPackageName()));
         String updatedServices = String.join(":", serviceSet);
 
-        execCommand("settings put secure enabled_accessibility_services " + updatedServices);
-        execCommand("settings put secure accessibility_enabled 1");
-
-        return true;
+        if (!shouldRestoreAccessibility(context)) return false;
+        if (execCommand(settingsForUser + " put secure enabled_accessibility_services '" + updatedServices.replace("'", "'\"'\"'") + "'") == null) return false;
+        if (!shouldRestoreAccessibility(context)) return false;
+        return execCommand(settingsForUser + " put secure accessibility_enabled 1") != null;
     }
 
     public static void grantBackgroundKeepAlive(Context context) {
-        if (!hasShizukuPermission()) return;
+        if (!new ScreenCaptureSettings(context).isKeepAliveEnabled() || !hasShizukuPermission()) return;
 
         String pkgName = context.getPackageName();
         execCommand("dumpsys deviceidle whitelist +" + pkgName);
         execCommand("cmd appops set " + pkgName + " RUN_IN_BACKGROUND allow");
         execCommand("cmd appops set " + pkgName + " RUN_ANY_IN_BACKGROUND allow");
-        execCommand("pm grant " + pkgName + " android.permission.SYSTEM_ALERT_WINDOW");
     }
 }

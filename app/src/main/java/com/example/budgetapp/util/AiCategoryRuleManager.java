@@ -22,6 +22,7 @@ public class AiCategoryRuleManager {
     private static final String TAG = "AiCategoryRuleManager";
     private static final String PREF_NAME = "ai_category_rule_prefs";
     private static final String KEY_RULES = "rules";
+    private static final String BACKUP_KEY = "category_keyword_rules";
 
     /**
      * 获取所有规则
@@ -31,7 +32,16 @@ public class AiCategoryRuleManager {
     public static List<CategoryRule> getRules(Context context) {
         List<CategoryRule> rules = new ArrayList<>();
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        String rulesJson = prefs.getString(KEY_RULES, "[]");
+        SharedPreferences backedUpPrefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+        String rulesJson = backedUpPrefs.getString(BACKUP_KEY, null);
+        if (rulesJson == null) {
+            rulesJson = prefs.getString(KEY_RULES, "[]");
+            // Migrate legacy AI rules without changing their order or requiring re-entry.
+            if (prefs.contains(KEY_RULES)) {
+                backedUpPrefs.edit().putString(BACKUP_KEY, rulesJson).apply();
+                BackupManager.triggerAutoUploadIfEnabled(context);
+            }
+        }
         
         try {
             JSONArray jsonArray = new JSONArray(rulesJson);
@@ -85,6 +95,15 @@ public class AiCategoryRuleManager {
         }
     }
 
+    /** Move a rule in the shared, first-match-wins priority order. */
+    public static void moveRule(Context context, int from, int to) {
+        List<CategoryRule> rules = getRules(context);
+        if (from < 0 || to < 0 || from >= rules.size() || to >= rules.size() || from == to) return;
+        CategoryRule rule = rules.remove(from);
+        rules.add(to, rule);
+        saveRules(context, rules);
+    }
+
     /**
      * 保存规则列表到SharedPreferences
      * @param context 上下文
@@ -99,6 +118,8 @@ public class AiCategoryRuleManager {
             
             SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
             prefs.edit().putString(KEY_RULES, jsonArray.toString()).apply();
+            context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit()
+                    .putString(BACKUP_KEY, jsonArray.toString()).apply();
             
             // 触发WebDAV自动同步
             BackupManager.triggerAutoUploadIfEnabled(context);

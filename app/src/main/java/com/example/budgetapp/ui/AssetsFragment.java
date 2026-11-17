@@ -128,27 +128,9 @@ public class AssetsFragment extends Fragment {
             showAddOrEditDialog(null, currentType);
         });
 
-        // 🌟 补齐转移按钮的点击监听
-        View fabTransfer = view.findViewById(R.id.fab_transfer_asset);
-        if (fabTransfer != null) {
-            fabTransfer.setOnClickListener(v -> {
-                v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
-                if (allAccounts == null || allAccounts.size() < 2) {
-                    Toast.makeText(getContext(), "至少需要两个资产账户才能进行转移", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                showTransferDialog();
-            });
-        }
-
-        // 新增转移按钮监听
         view.findViewById(R.id.fab_transfer_asset).setOnClickListener(v -> {
             v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
-            if (allAccounts == null || allAccounts.size() < 2) {
-                Toast.makeText(getContext(), "至少需要两个资产账户才能进行转移", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            showTransferDialog();
+            AssetTransferDialog.show(requireContext(), viewModel, allAccounts);
         });
 
         layoutAssets.setOnClickListener(v -> switchType(0));
@@ -163,289 +145,6 @@ public class AssetsFragment extends Fragment {
         // 添加手势监听器（即使列表内容少也能响应滑动）
         fabGestureListener = new FabGestureListener();
         rvAssets.addOnItemTouchListener(fabGestureListener);
-    }
-
-    // 🌟 补齐完整的资产转移弹窗渲染与数据处理逻辑 (分别提示转出/转入)
-    private void showTransferDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-        View view = LayoutInflater.from(getContext()).inflate(R.layout.dialog_transfer_asset, null);
-        builder.setView(view);
-        AlertDialog dialog = builder.create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        }
-
-        android.widget.Spinner spinnerFrom = view.findViewById(R.id.spinner_from_account);
-        android.widget.Spinner spinnerTo = view.findViewById(R.id.spinner_to_account);
-        EditText etAmount = view.findViewById(R.id.et_transfer_amount);
-        EditText etDiscount = view.findViewById(R.id.et_transfer_discount);
-        EditText etNote = view.findViewById(R.id.et_transfer_note);
-        Button btnCancel = view.findViewById(R.id.btn_cancel);
-        Button btnConfirm = view.findViewById(R.id.btn_confirm);
-        
-        // 【新增】货币转换提示标签（动态创建）
-        TextView tvConversionHint = new TextView(getContext());
-        tvConversionHint.setTextSize(12);
-        tvConversionHint.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary));
-        tvConversionHint.setPadding(16, 8, 16, 8);
-        tvConversionHint.setVisibility(View.GONE);
-        
-        // 将其添加到金额输入框下方
-        ViewGroup parent = (ViewGroup) etAmount.getParent();
-        int index = parent.indexOfChild(etAmount);
-        parent.addView(tvConversionHint, index + 1);
-        final TextView finalTvConversionHint = tvConversionHint;
-
-        // 🌟 1. 分别为“转出”和“转入”创建数据列表，并插入专属提示词
-        List<String> fromAccountNames = new ArrayList<>();
-        List<String> toAccountNames = new ArrayList<>();
-        fromAccountNames.add("请选择转出账户");
-        toAccountNames.add("请选择转入账户");
-
-        for (AssetAccount acc : allAccounts) {
-            String symbol = (acc.currencySymbol != null && !acc.currencySymbol.isEmpty()) ? acc.currencySymbol : "¥";
-            String accountDisplay = acc.name + " (" + symbol + String.format("%.2f", acc.amount) + ")";
-            fromAccountNames.add(accountDisplay);
-            toAccountNames.add(accountDisplay);
-        }
-
-        // 🌟 2. 抽象出一个创建适配器的方法，让第 0 项（提示词）变成浅色且不可点击
-        android.widget.ArrayAdapter<String> fromAdapter = createHintAdapter(fromAccountNames);
-        android.widget.ArrayAdapter<String> toAdapter = createHintAdapter(toAccountNames);
-
-        spinnerFrom.setAdapter(fromAdapter);
-        spinnerTo.setAdapter(toAdapter);
-
-        // 默认显示为第0项（即提示词）
-        spinnerFrom.setSelection(0);
-        spinnerTo.setSelection(0);
-        
-        // 【新增】监听账户选择和金额输入，实时显示货币转换提示
-        android.widget.AdapterView.OnItemSelectedListener accountChangeListener = new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                updateCurrencyConversionHint(spinnerFrom, spinnerTo, etAmount, finalTvConversionHint);
-            }
-            
-            @Override
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {
-                finalTvConversionHint.setVisibility(View.GONE);
-            }
-        };
-        
-        spinnerFrom.setOnItemSelectedListener(accountChangeListener);
-        spinnerTo.setOnItemSelectedListener(accountChangeListener);
-        
-        etAmount.addTextChangedListener(new android.text.TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                updateCurrencyConversionHint(spinnerFrom, spinnerTo, etAmount, finalTvConversionHint);
-            }
-            
-            @Override
-            public void afterTextChanged(android.text.Editable s) {}
-        });
-
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
-
-        btnConfirm.setOnClickListener(v -> {
-            int fromIndex = spinnerFrom.getSelectedItemPosition();
-            int toIndex = spinnerTo.getSelectedItemPosition();
-
-            // 拦截未选择的情况 (索引为 0 代表选中的是提示词)
-            if (fromIndex == 0 || toIndex == 0) {
-                Toast.makeText(getContext(), "请选择转出和转入账户", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            if (fromIndex == toIndex) {
-                Toast.makeText(getContext(), "转出和转入账户不能相同", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            String amountStr = etAmount.getText().toString().trim();
-            if (amountStr.isEmpty()) {
-                Toast.makeText(getContext(), "请输入转账金额", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            double amount;
-            try {
-                amount = Double.parseDouble(amountStr);
-                if (amount <= 0) {
-                    Toast.makeText(getContext(), "转账金额必须大于0", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            } catch (NumberFormatException e) {
-                Toast.makeText(getContext(), "金额格式不正确", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // 【新增】：解析优惠金额
-            double discount = 0;
-            String discountStr = etDiscount.getText().toString().trim();
-            if (!discountStr.isEmpty()) {
-                try {
-                    discount = Double.parseDouble(discountStr);
-                    if (discount < 0) {
-                        Toast.makeText(getContext(), "优惠金额不能为负数", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if (discount >= amount) {
-                        Toast.makeText(getContext(), "优惠金额不能大于或等于转账金额", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                } catch (NumberFormatException e) {
-                    Toast.makeText(getContext(), "优惠金额格式不正确", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            }
-
-            // 获取实际账户时，索引需要减 1（因为第 0 项是虚拟的提示词）
-            AssetAccount fromAccount = allAccounts.get(fromIndex - 1);
-            AssetAccount toAccount = allAccounts.get(toIndex - 1);
-            String note = etNote.getText().toString().trim();
-
-            viewModel.transferAsset(fromAccount, toAccount, amount, discount, note);
-            Toast.makeText(getContext(), "资产转移成功", Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-        });
-
-        dialog.show();
-    }
-
-    // 🌟 辅助方法：生成带有浅色提示词特效的 ArrayAdapter
-    private android.widget.ArrayAdapter<String> createHintAdapter(List<String> dataList) {
-        android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<String>(
-                getContext(),
-                R.layout.item_spinner_dropdown,
-                dataList
-        ) {
-            @Override
-            public boolean isEnabled(int position) {
-                return position != 0; // 禁用第 0 项点击
-            }
-
-            @Override
-            public View getDropDownView(int position, View convertView, @NonNull ViewGroup parent) {
-                View v = super.getDropDownView(position, convertView, parent);
-                TextView tv = (TextView) v;
-                if (position == 0) {
-                    tv.setTextColor(androidx.core.content.ContextCompat.getColor(getContext(), R.color.text_secondary));
-                } else {
-                    tv.setTextColor(androidx.core.content.ContextCompat.getColor(getContext(), R.color.text_primary));
-                }
-                return v;
-            }
-
-            @NonNull
-            @Override
-            public View getView(int position, View convertView, @NonNull ViewGroup parent) {
-                View v = super.getView(position, convertView, parent);
-                TextView tv = (TextView) v;
-                if (position == 0) {
-                    tv.setTextColor(androidx.core.content.ContextCompat.getColor(getContext(), R.color.text_secondary));
-                } else {
-                    tv.setTextColor(androidx.core.content.ContextCompat.getColor(getContext(), R.color.text_primary));
-                }
-                return v;
-            }
-        };
-        adapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
-        return adapter;
-    }
-    
-    /**
-     * 【新增】更新货币转换提示
-     */
-    private void updateCurrencyConversionHint(android.widget.Spinner spinnerFrom, 
-                                              android.widget.Spinner spinnerTo, 
-                                              EditText etAmount, 
-                                              TextView tvHint) {
-        // 检查是否启用了货币功能和统一货币模式
-        SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        boolean isCurrencyEnabled = prefs.getBoolean("enable_currency", false);
-        boolean singleCurrencyMode = prefs.getBoolean("single_currency_mode", false);
-        
-        if (!isCurrencyEnabled || !singleCurrencyMode) {
-            tvHint.setVisibility(View.GONE);
-            return;
-        }
-        
-        int fromIndex = spinnerFrom.getSelectedItemPosition();
-        int toIndex = spinnerTo.getSelectedItemPosition();
-        
-        // 如果任一账户未选择，隐藏提示
-        if (fromIndex == 0 || toIndex == 0) {
-            tvHint.setVisibility(View.GONE);
-            return;
-        }
-        
-        AssetAccount fromAccount = allAccounts.get(fromIndex - 1);
-        AssetAccount toAccount = allAccounts.get(toIndex - 1);
-        
-        String fromSymbol = (fromAccount.currencySymbol != null && !fromAccount.currencySymbol.isEmpty()) 
-            ? fromAccount.currencySymbol : "¥";
-        String toSymbol = (toAccount.currencySymbol != null && !toAccount.currencySymbol.isEmpty()) 
-            ? toAccount.currencySymbol : "¥";
-        
-        String fromCode = getCurrencyCode(fromSymbol);
-        String toCode = getCurrencyCode(toSymbol);
-        
-        // 如果是相同货币，隐藏提示
-        if (fromCode.equals(toCode)) {
-            tvHint.setVisibility(View.GONE);
-            return;
-        }
-        
-        // 获取输入金额
-        String amountStr = etAmount.getText().toString().trim();
-        if (amountStr.isEmpty()) {
-            tvHint.setVisibility(View.GONE);
-            return;
-        }
-        
-        try {
-            double amount = Double.parseDouble(amountStr);
-            if (amount <= 0) {
-                tvHint.setVisibility(View.GONE);
-                return;
-            }
-            
-            // 异步获取汇率并显示转换后金额
-            com.example.budgetapp.util.ExchangeRateManager rateManager = 
-                new com.example.budgetapp.util.ExchangeRateManager(getContext());
-            
-            rateManager.getExchangeRate(fromCode, toCode, new com.example.budgetapp.util.ExchangeRateManager.ExchangeRateCallback() {
-                @Override
-                public void onSuccess(double rate) {
-                    if (getActivity() != null) {
-                        getActivity().runOnUiThread(() -> {
-                            double convertedAmount = amount * rate;
-                            String hint = String.format("💱 汇率转换: %s%.2f ≈ %s%.2f (汇率: 1:%s)", 
-                                fromSymbol, amount, toSymbol, convertedAmount, String.format("%.4f", rate));
-                            tvHint.setText(hint);
-                            tvHint.setVisibility(View.VISIBLE);
-                        });
-                    }
-                }
-                
-                @Override
-                public void onError(String error) {
-                    if (getActivity() != null) {
-                        getActivity().runOnUiThread(() -> {
-                            tvHint.setText("⚠️ 汇率获取失败，将使用缓存汇率");
-                            tvHint.setVisibility(View.VISIBLE);
-                        });
-                    }
-                }
-            });
-        } catch (NumberFormatException e) {
-            tvHint.setVisibility(View.GONE);
-        }
     }
 
     private void updateAssetCategoryFilterBar() {
@@ -542,8 +241,6 @@ public class AssetsFragment extends Fragment {
                 }
             }
 
-            // 恢复默认大字体
-            tvTotalAssets.setTextSize(32);
             tvTotalAssets.setText(String.format("%.2f", totalAsset));
             tvTotalLiability.setText(String.format("%.2f", totalLiability));
             tvTotalLent.setText(String.format("%.2f", totalLent));
@@ -599,7 +296,6 @@ public class AssetsFragment extends Fragment {
                     public void onSuccess(double convertedAmount) {
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
-                                tvTotalAssets.setTextSize(32);
                                 tvTotalAssets.setText(defaultSymbol + String.format("%.2f", convertedAmount));
                             });
                         }
@@ -688,13 +384,6 @@ public class AssetsFragment extends Fragment {
                 }
             }
 
-            // 如果包含多个币种，缩小字体以容纳更多内容
-            if (assetMap.size() > 1) {
-                tvTotalAssets.setTextSize(20);
-            } else {
-                tvTotalAssets.setTextSize(32);
-            }
-
             tvTotalAssets.setText(formatMultiCurrency(assetMap));
             tvTotalLiability.setText(formatMultiCurrency(liabilityMap));
             tvTotalLent.setText(formatMultiCurrency(lentMap));
@@ -764,6 +453,12 @@ private String formatMultiCurrency(Map<String, Double> map) {
 
         adapter.setDefaultId(config.getDefaultAssetId());
         adapter.setData(filteredList);
+        if (getView() != null) {
+            TextView empty = getView().findViewById(R.id.btn_assets_empty);
+            empty.setVisibility(filteredList.isEmpty() ? View.VISIBLE : View.GONE);
+            empty.setText(currentType == 1 ? "添加一笔负债" : currentType == 2 ? "添加一笔借出" : "添加第一个账户");
+            empty.setOnClickListener(v -> showAddOrEditDialog(null, currentType));
+        }
 
         if (currentType == 0) {
             tvListTitle.setText("我的资产");
@@ -776,13 +471,7 @@ private String formatMultiCurrency(Map<String, Double> map) {
 
     private void showDatePickerDialog(long currentDateMillis, java.util.function.Consumer<Long> onDateSelected) {
         if (getContext() == null) return;
-        com.google.android.material.bottomsheet.BottomSheetDialog dialog = new com.google.android.material.bottomsheet.BottomSheetDialog(getContext());
-        dialog.setContentView(R.layout.dialog_bottom_date_picker);
-
-        dialog.setOnShowListener(d -> {
-            View bottomSheet = ((com.google.android.material.bottomsheet.BottomSheetDialog) d).findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) bottomSheet.setBackgroundResource(android.R.color.transparent);
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_date_picker);
 
         java.time.LocalDate baseDate = java.time.Instant.ofEpochMilli(currentDateMillis).atZone(java.time.ZoneId.systemDefault()).toLocalDate();
 
@@ -845,6 +534,10 @@ private String formatMultiCurrency(Map<String, Double> map) {
         TextView tvTitle = view.findViewById(R.id.tv_dialog_title);
         // 【修改】将 RadioGroup 改为 Spinner
         android.widget.Spinner spinnerType = view.findViewById(R.id.spinner_asset_type);
+        android.widget.ArrayAdapter<CharSequence> typeAdapter = android.widget.ArrayAdapter.createFromResource(
+                requireContext(), R.array.asset_types, R.layout.item_form_spinner_value);
+        typeAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
+        spinnerType.setAdapter(typeAdapter);
         EditText etName = view.findViewById(R.id.et_asset_name);
         EditText etAmount = view.findViewById(R.id.et_asset_amount);
         Button btnCurrency = view.findViewById(R.id.btn_currency);
@@ -867,20 +560,20 @@ private String formatMultiCurrency(Map<String, Double> map) {
         android.widget.Spinner spinnerInclude = view.findViewById(R.id.spinner_include_in_total);
         android.widget.ArrayAdapter<String> includeAdapter = new android.widget.ArrayAdapter<>(
                 getContext(),
-                R.layout.item_spinner_dropdown,
+                R.layout.item_form_spinner_value,
                 new String[]{"计入总资产", "不计入总资产"}
         );
-        includeAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
+        includeAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
         spinnerInclude.setAdapter(includeAdapter);
 
         // 【修改】初始化颜色 Spinner，增加“自定义”
         android.widget.Spinner spinnerColor = view.findViewById(R.id.spinner_asset_color);
         android.widget.ArrayAdapter<String> colorAdapter = new android.widget.ArrayAdapter<>(
                 getContext(),
-                R.layout.item_spinner_dropdown,
+                R.layout.item_form_spinner_value,
                 new String[]{"默认颜色", "红色背景", "绿色背景", "自定义"} // <-- 新增自定义
         );
-        colorAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
+        colorAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
         spinnerColor.setAdapter(colorAdapter);
 
         android.widget.Spinner spinnerAssetCategory = view.findViewById(R.id.spinner_asset_category);
@@ -890,10 +583,10 @@ private String formatMultiCurrency(Map<String, Double> map) {
         assetCategories.addAll(AssetCategoryManager.getCategories(requireContext()));
         android.widget.ArrayAdapter<String> assetCategoryAdapter = new android.widget.ArrayAdapter<>(
                 getContext(),
-                R.layout.item_spinner_dropdown,
+                R.layout.item_form_spinner_value,
                 assetCategories
         );
-        assetCategoryAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
+        assetCategoryAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
         spinnerAssetCategory.setAdapter(assetCategoryAdapter);
         spinnerAssetCategory.setVisibility(isAssetCategoryEnabled ? View.VISIBLE : View.GONE);
 
@@ -947,18 +640,18 @@ private String formatMultiCurrency(Map<String, Double> map) {
         // 初始化下拉框的数据 (应用统一的下拉样式 R.layout.item_spinner_dropdown)
         android.widget.ArrayAdapter<String> depositAdapter = new android.widget.ArrayAdapter<>(
                 getContext(),
-                R.layout.item_spinner_dropdown,
+                R.layout.item_form_spinner_value,
                 new String[]{"定期", "活期"}
         );
-        depositAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
+        depositAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
         spinnerDepositType.setAdapter(depositAdapter);
 
         android.widget.ArrayAdapter<String> interestAdapter = new android.widget.ArrayAdapter<>(
                 getContext(),
-                R.layout.item_spinner_dropdown,
+                R.layout.item_form_spinner_value,
                 new String[]{"单利", "复利"}
         );
-        interestAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
+        interestAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
         spinnerInterestType.setAdapter(interestAdapter);
 
         SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
@@ -1622,7 +1315,8 @@ dialog.dismiss();
         if (view == null) return;
 
         TextView tvTopTitle = view.findViewById(R.id.tv_top_title);
-        androidx.cardview.widget.CardView cardAssetsSummary = view.findViewById(R.id.card_assets_summary);
+        LedgerSummaryCard cardAssetsSummary = view.findViewById(R.id.card_assets_summary);
+        cardAssetsSummary.applyBackground(isCustomBg);
         com.google.android.material.floatingactionbutton.FloatingActionButton fabAddAsset = view.findViewById(R.id.fab_add_asset);
         com.google.android.material.floatingactionbutton.FloatingActionButton fabTransferAsset = view.findViewById(R.id.fab_transfer_asset);
 
@@ -1632,12 +1326,6 @@ dialog.dismiss();
             if (tvTopTitle != null) tvTopTitle.setBackgroundColor(Color.TRANSPARENT);
 
             // 2. 顶部总计卡片：90%透明度 (230)
-            if (cardAssetsSummary != null) {
-                int surfaceColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.white);
-                int translucentSurface = androidx.core.graphics.ColorUtils.setAlphaComponent(surfaceColor, 230);
-                cardAssetsSummary.setCardBackgroundColor(translucentSurface);
-            }
-
             // 3. 添加资产按钮：90%透明度
             if (fabAddAsset != null) {
                 int fabColor = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.app_blue);
@@ -1655,9 +1343,6 @@ dialog.dismiss();
             view.setBackgroundResource(R.color.bar_background);
             if (tvTopTitle != null) tvTopTitle.setBackgroundResource(R.color.bar_background);
 
-            if (cardAssetsSummary != null) {
-                cardAssetsSummary.setCardBackgroundColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.white));
-            }
             if (fabAddAsset != null) {
                 fabAddAsset.setBackgroundTintList(android.content.res.ColorStateList.valueOf(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.app_blue)));
             }

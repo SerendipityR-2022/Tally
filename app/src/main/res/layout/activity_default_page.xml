@@ -1,203 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp"
     android:background="@color/bar_background">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:paddingBottom="24dp"
-        android:paddingTop="8dp">
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="应用默认页面设置"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary"/>
+    <LinearLayout android:id="@+id/settings_toolbar" style="@style/TallySettingsToolbar">
+        <com.example.budgetapp.ui.BackButton android:layout_width="48dp" android:layout_height="48dp" />
+        <TextView style="@style/TallySettingsTitle" android:text="@string/settings_pages" />
     </LinearLayout>
-
-    <androidx.cardview.widget.CardView
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="@color/white">
-
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="none">
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="20dp">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="明细模块显示快捷按钮"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="?android:attr/textColorPrimary"/>
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="显示'记一笔'按钮，长按进入AI记账助手"
-                    android:textSize="12sp"
-                    android:textColor="#888888"
-                    android:layout_marginTop="4dp"/>
-            </LinearLayout>
-
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/switchDetailsQuickButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:thumb="@drawable/switch_thumb_custom"
-                app:track="@drawable/switch_track_custom"
-                app:showText="false"
-                app:thumbTint="@null"
-                app:trackTint="@null"
-                android:background="@null"/>
-        </LinearLayout>
-    </androidx.cardview.widget.CardView>
-
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="@color/white">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="20dp">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="开启账单卡片"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="?android:attr/textColorPrimary"/>
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="记账模块显示账单卡片，无需开启预算"
-                    android:textSize="12sp"
-                    android:textColor="#888888"
-                    android:layout_marginTop="4dp"/>
-            </LinearLayout>
-
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/switchBillCard"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="false"
-                android:thumb="@drawable/switch_thumb_custom"
-                app:track="@drawable/switch_track_custom"
-                app:showText="false"
-                app:thumbTint="@null"
-                app:trackTint="@null"
-                android:background="@null"/>
-        </LinearLayout>
-    </androidx.cardview.widget.CardView>
-
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="@color/white">
-
-        <RadioGroup
-            android:id="@+id/radioGroupDefaultPage"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="20dp">
-
-            <RadioButton
-                android:id="@+id/radioRecord"
+            android:paddingHorizontal="20dp"
+            android:paddingBottom="24dp">
+            <TextView style="@style/TallySection" android:text="@string/settings_page_navigation" />
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="记账"
-                android:textSize="16sp"
-                android:padding="12dp"
-                android:textColor="?android:attr/textColorPrimary"/>
-
-            <RadioButton
-                android:id="@+id/radioDetails"
+                android:background="@drawable/assets_field"
+                android:orientation="vertical">
+                <com.example.budgetapp.ui.SettingsRow
+                    android:id="@+id/btn_default_page"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_start_page" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchDetails"
+                    style="@style/TallySettingsSwitch"
+                    android:text="@string/settings_switch_details" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchAssets"
+                    style="@style/TallySettingsSwitch"
+                    android:text="@string/settings_switch_assets" />
+            </LinearLayout>
+            <TextView style="@style/TallySection" android:text="@string/settings_page_ledger" />
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="明细"
-                android:textSize="16sp"
-                android:padding="12dp"
-                android:textColor="?android:attr/textColorPrimary"/>
-
-            <RadioButton
-                android:id="@+id/radioBudget"
+                android:background="@drawable/assets_field"
+                android:orientation="vertical">
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchBillCard"
+                    style="@style/TallySettingsSwitch"
+                    android:text="@string/settings_show_bill_card" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchDetailsQuickButton"
+                    style="@style/TallySettingsSwitch"
+                    android:text="@string/settings_show_quick_button" />
+            </LinearLayout>
+            <TextView style="@style/TallySection" android:text="@string/settings_page_calendar" />
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="预算"
-                android:textSize="16sp"
-                android:padding="12dp"
-                android:textColor="?android:attr/textColorPrimary"/>
-
-            <RadioButton
-                android:id="@+id/radioAssets"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="资产"
-                android:textSize="16sp"
-                android:padding="12dp"
-                android:textColor="?android:attr/textColorPrimary"/>
-
-            <RadioButton
-                android:id="@+id/radioStats"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="统计"
-                android:textSize="16sp"
-                android:padding="12dp"
-                android:textColor="?android:attr/textColorPrimary"/>
-
-        </RadioGroup>
-    </androidx.cardview.widget.CardView>
-
-    <Space
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"/>
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="选择应用启动时默认显示的页面"
-        android:textSize="12sp"
-        android:textColor="#888888"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="8dp"
-        android:gravity="center"/>
-
+                android:background="@drawable/assets_field"
+                android:orientation="vertical">
+                <com.example.budgetapp.ui.SettingsRow
+                    android:id="@+id/btn_default_record_display"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_calendar_display" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_minimalist"
+                    style="@style/TallySettingsSwitch"
+                    android:text="@string/settings_calendar_minimal" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 </LinearLayout>

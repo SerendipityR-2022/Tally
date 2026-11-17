@@ -18,10 +18,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.example.budgetapp.R;
 import com.example.budgetapp.ai.AiAccountingClient;
@@ -75,21 +72,7 @@ public class AiPromptEditorActivity extends AppCompatActivity {
         // 适配内边距
         View rootLayout = findViewById(R.id.root_layout);
         if (rootLayout != null) {
-            final int originalPaddingTop = rootLayout.getPaddingTop();
-            final int originalPaddingBottom = rootLayout.getPaddingBottom();
-
-            ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
-                // 【核心修复】：同时获取系统栏 (systemBars) 和 软键盘 (ime) 的高度
-                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime());
-
-                v.setPadding(
-                        v.getPaddingLeft(),
-                        originalPaddingTop + insets.top,
-                        v.getPaddingRight(),
-                        originalPaddingBottom + insets.bottom // 键盘弹出时，bottom 会变成键盘的高度
-                );
-                return WindowInsetsCompat.CONSUMED;
-            });
+            SettingsPage.applyInsets(rootLayout, true);
         }
         
         initViews();

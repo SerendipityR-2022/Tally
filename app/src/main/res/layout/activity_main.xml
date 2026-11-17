@@ -1,31 +1,35 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:importantForAccessibility="noHideDescendants"
     android:orientation="vertical"
-    android:background="@color/bar_background"> <androidx.fragment.app.FragmentContainerView
-    android:id="@+id/nav_host_fragment"
-    android:name="androidx.navigation.fragment.NavHostFragment"
-    android:layout_width="match_parent"
-    android:layout_height="0dp"
-    android:layout_weight="1"
-    android:background="@color/white"
-    app:defaultNavHost="true"
-    app:navGraph="@navigation/nav_graph" />
-
+    android:background="@color/bar_background">
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/nav_host_fragment"
+        android:name="androidx.navigation.fragment.NavHostFragment"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/app_background"
+        app:defaultNavHost="true"
+        app:navGraph="@navigation/nav_graph" />
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_nav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/down_background"
-
         app:menu="@menu/bottom_menu"
         app:labelVisibilityMode="labeled"
-
         app:itemIconTint="@color/selector_bottom_nav"
         app:itemTextColor="@color/selector_bottom_nav"
-        app:itemActiveIndicatorStyle="@style/TransparentIndicator" />
+        app:itemActiveIndicatorStyle="@style/TallyNavIndicator"
+        app:itemTextAppearanceActive="@style/TextAppearance.Tally.Nav"
+        app:itemTextAppearanceInactive="@style/TextAppearance.Tally.Nav"
+        app:elevation="0dp"
+        app:itemIconSize="22dp"
+        app:itemHorizontalTranslationEnabled="false"
+        android:minHeight="72dp" />
 </LinearLayout>

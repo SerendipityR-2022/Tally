@@ -35,7 +35,8 @@ import androidx.navigation.ui.NavigationUI;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.widget.TodaySummaryWidget;
-import com.google.android.accessibility.selecttospeak.SelectToSpeakService;
+import com.example.budgetapp.util.ScreenCaptureSettings;
+import com.example.budgetapp.util.ShizukuManager;
 import com.example.budgetapp.ui.SettingsActivity;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
@@ -181,57 +182,28 @@ public class MainActivity extends AppCompatActivity {
             return WindowInsetsCompat.CONSUMED;
         });
 
-        AssistantConfig config = new AssistantConfig(this);
-        boolean showAssets = config.isAssetsEnabled();
-        boolean showDetails = config.isDetailsEnabled(); // 新增
+        updateNavigationVisibility(bottomNav);
 
-        bottomNav.getMenu().findItem(R.id.nav_assets).setVisible(showAssets);
-        bottomNav.getMenu().findItem(R.id.nav_details).setVisible(showDetails); // 新增
-
-        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.nav_host_fragment);
-
-        if (navHostFragment != null) {
-            NavController navController = navHostFragment.getNavController();
+        NavController navController = mainNavigation();
+        if (navController != null) {
             NavigationUI.setupWithNavController(bottomNav, navController);
-
-            // 【新增】读取默认页面设置并跳转
-            int defaultPage = prefs.getInt("default_page", 0); // 0 = 记账
-            int targetNavId = R.id.nav_record; // 默认记账页面
-            
-            switch (defaultPage) {
-                case 0: // 记账
-                    targetNavId = R.id.nav_record;
-                    break;
-                case 1: // 明细
-                    targetNavId = R.id.nav_details;
-                    break;
-                case 2: // 预算
-                    targetNavId = R.id.nav_budget;
-                    break;
-                case 3: // 资产
-                    targetNavId = R.id.nav_assets;
-                    break;
-                case 4: // 统计
-                    targetNavId = R.id.nav_stats;
-                    break;
-            }
-            
-            // 如果不是默认的记账页面，则跳转到指定页面
-            if (targetNavId != R.id.nav_record) {
-                navController.navigate(targetNavId);
-            }
-
             bottomNav.setOnItemSelectedListener(item -> {
-                // 添加触摸振动反馈
-                bottomNav.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
+                if (!item.isVisible() || navController.getCurrentDestination() == null) return false;
+                if (item.getItemId() == navController.getCurrentDestination().getId()) return true;
 
-                if (item.getItemId() != navController.getCurrentDestination().getId()) {
-                    navController.navigate(item.getItemId());
+                bottomNav.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
+                // Record is the root. Restoring a saved tab against the root ID can reopen
+                // the tab we just popped, instead of returning to Record.
+                if (item.getItemId() == R.id.nav_record && navController.popBackStack(R.id.nav_record, false)) {
                     return true;
                 }
-                return false;
+                return NavigationUI.onNavDestinationSelected(item, navController);
             });
+
+            if (savedInstanceState == null) {
+                int target = startupDestination(getSafeInt(prefs, "default_page", 0));
+                if (bottomNav.getMenu().findItem(target).isVisible()) bottomNav.setSelectedItemId(target);
+            }
 
             bottomNav.post(() -> {
                 // 1. 记账: 屏蔽默认长按提示
@@ -374,11 +346,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkPermissions() {
+        // The experimental source has its own explicit setup; never prompt for accessibility here.
+        ScreenCaptureSettings captureSettings = new ScreenCaptureSettings(this);
+        if (captureSettings.isEnabled()) return;
         AssistantConfig config = new AssistantConfig(this);
 
-        if (config.isEnabled() && !isAccessibilitySettingsOn()) {
+        if (config.isEnabled() && !ShizukuManager.isAccessibilityRunning(this)) {
             showPermissionDialog("开启屏幕同步助手",
-                    "为了提取屏幕上的支付金额，请开启‘记账屏幕同步助手’。",
+                    getString(R.string.accessibility_permission_message),
                     Settings.ACTION_ACCESSIBILITY_SETTINGS);
         }
 //        else if (config.isRefundEnabled() && !isNotificationListenerEnabled()) {
@@ -386,7 +361,7 @@ public class MainActivity extends AppCompatActivity {
 //                    "为了监听微信/支付宝的退款通知，请授予‘通知使用权’。",
 //                    Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
 //        }
-        else if (config.isEnabled() && !Settings.canDrawOverlays(this)) {
+        else if (config.isEnabled() && !captureSettings.isSilentAccountingEnabled() && !Settings.canDrawOverlays(this)) {
             showPermissionDialog("开启悬浮窗权限",
                     "为了在记账时显示确认弹窗，请授予‘显示在其他应用上层’权限。",
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
@@ -428,22 +403,6 @@ public class MainActivity extends AppCompatActivity {
         });
 
         dialog.show();
-    }
-
-    private boolean isAccessibilitySettingsOn() {
-        int accessibilityEnabled = 0;
-        final String service = getPackageName() + "/" + SelectToSpeakService.class.getCanonicalName();
-        try {
-            accessibilityEnabled = Settings.Secure.getInt(getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED);
-        } catch (Settings.SettingNotFoundException e) { }
-
-        if (accessibilityEnabled == 1) {
-            String settingValue = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            if (settingValue != null) {
-                return settingValue.contains(service);
-            }
-        }
-        return false;
     }
 
     private boolean isNotificationListenerEnabled() {
@@ -499,20 +458,36 @@ public class MainActivity extends AppCompatActivity {
             }
         }).start();
 
-        // 动态控制"预算"菜单栏是否显示
         BottomNavigationView bottomNav = findViewById(R.id.bottom_nav);
-        if (bottomNav != null) {
-            SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
-            boolean isBudgetEnabled = getSafeBoolean(prefs, "is_budget_enabled", false);
+        updateNavigationVisibility(bottomNav);
+        NavController navigation = mainNavigation();
+        if (navigation == null || navigation.getCurrentDestination() == null) return;
+        android.view.MenuItem current = bottomNav.getMenu().findItem(navigation.getCurrentDestination().getId());
+        if (current != null && !current.isVisible()) switchToRecordPage();
+    }
 
-            // 如果菜单里找到了 nav_budget，就根据开关状态决定它的隐藏/显示
-            if (bottomNav.getMenu().findItem(R.id.nav_budget) != null) {
-                bottomNav.getMenu().findItem(R.id.nav_budget).setVisible(isBudgetEnabled);
-            }
+    private void updateNavigationVisibility(BottomNavigationView bottomNav) {
+        AssistantConfig config = new AssistantConfig(this);
+        bottomNav.getMenu().findItem(R.id.nav_budget).setVisible(config.isBudgetEnabled());
+        bottomNav.getMenu().findItem(R.id.nav_assets).setVisible(config.isAssetsEnabled());
+        bottomNav.getMenu().findItem(R.id.nav_details).setVisible(config.isDetailsEnabled());
+    }
+
+    private NavController mainNavigation() {
+        NavHostFragment host = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment);
+        return host == null ? null : host.getNavController();
+    }
+
+    private static int startupDestination(int savedPage) {
+        switch (savedPage) {
+            case 1: return R.id.nav_details;
+            case 2: return R.id.nav_budget;
+            case 3: return R.id.nav_assets;
+            case 4: return R.id.nav_stats;
+            default: return R.id.nav_record;
         }
     }
 
-    // ================== 新增：安全读取 SharedPreferences 的兼容方法 ==================
     private int getSafeInt(SharedPreferences prefs, String key, int defValue) {
         try {
             return prefs.getInt(key, defValue);

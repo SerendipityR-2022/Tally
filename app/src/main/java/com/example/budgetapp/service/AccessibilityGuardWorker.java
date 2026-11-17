@@ -26,16 +26,8 @@ public class AccessibilityGuardWorker extends Worker {
     public Result doWork() {
         Context context = getApplicationContext();
 
-        // 只要 Shizuku 可用且有权限
-        if (ShizukuManager.hasShizukuPermission()) {
-            // 确保电池白名单有效
-            ShizukuManager.grantBackgroundKeepAlive(context);
-
-            // 若无障碍服务被系统杀死掉线，静默重拉
-            if (!ShizukuManager.isAccessibilityRunning(context)) {
-                ShizukuManager.enableAccessibilityService(context);
-            }
-        }
+        // Respect both explicit opt-in and the experimental source; never silently re-enable accessibility.
+        ShizukuManager.restoreKeepAliveIfAllowed(context);
         return Result.success();
     }
 

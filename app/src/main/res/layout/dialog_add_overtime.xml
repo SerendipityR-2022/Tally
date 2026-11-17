@@ -1,18 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="320dp"
     android:layout_height="wrap_content"
-    app:cardCornerRadius="32dp"
-    app:cardElevation="12dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="0dp"
     app:cardBackgroundColor="@color/white">
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="24dp">
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -21,8 +20,7 @@
             android:textStyle="bold"
             android:textColor="@color/text_primary"
             android:gravity="center"
-            android:layout_marginBottom="24dp"/>
-
+            android:layout_marginBottom="24dp" />
         <com.example.budgetapp.ui.CustomHighlightEditText
             android:id="@+id/et_hourly_rate"
             android:layout_width="match_parent"
@@ -34,7 +32,6 @@
             android:textColorHint="@color/text_secondary"
             android:paddingHorizontal="16dp"
             android:textSize="16sp" />
-
         <com.example.budgetapp.ui.CustomHighlightEditText
             android:id="@+id/et_duration"
             android:layout_width="match_parent"
@@ -46,8 +43,7 @@
             android:textColor="@color/text_primary"
             android:textColorHint="@color/text_secondary"
             android:paddingHorizontal="16dp"
-            android:textSize="16sp"/>
-
+            android:textSize="16sp" />
         <TextView
             android:id="@+id/tv_calculated_amount"
             android:layout_width="match_parent"
@@ -57,36 +53,27 @@
             android:gravity="end"
             android:textColor="@color/expense_green"
             android:textStyle="bold"
-            android:textSize="16sp"/>
-
+            android:textSize="16sp" />
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="24dp">
-
-            <Button
+            <com.google.android.material.button.MaterialButton
+                style="@style/Widget.Tally.Button.Secondary"
                 android:id="@+id/btn_cancel_overtime"
                 android:layout_width="0dp"
                 android:layout_height="56dp"
                 android:layout_weight="1"
-                android:text="取 消"
-                android:textColor="@color/text_primary"
-                android:backgroundTint="@color/input_bg"
-                android:layout_marginEnd="8dp"
-                app:cornerRadius="16dp"/>
-
-            <Button
+                android:text="取消"
+                android:layout_marginEnd="8dp" />
+            <com.google.android.material.button.MaterialButton
+                style="@style/Widget.Tally.Button"
                 android:id="@+id/btn_save_overtime"
                 android:layout_width="0dp"
                 android:layout_height="56dp"
                 android:layout_weight="1"
-                android:text="确 认"
-                android:textStyle="bold"
-                android:textColor="@color/text_white"
-                android:backgroundTint="@color/app_blue"
-                app:cornerRadius="16dp"/>
+                android:text="确认" />
         </LinearLayout>
-
     </LinearLayout>
 </androidx.cardview.widget.CardView>

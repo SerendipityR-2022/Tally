@@ -12,6 +12,7 @@ import android.widget.ListPopupWindow;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import androidx.annotation.LayoutRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -30,11 +31,17 @@ public class AssetSpinnerAdapter extends ArrayAdapter<AssetAccount> {
     private static final int MAX_DROPDOWN_HEIGHT_DP = 260;
 
     private final LayoutInflater inflater;
+    private final int itemLayout;
     private final DecimalFormat decimalFormat;
     private final boolean isCurrencyEnabled;
 
     public AssetSpinnerAdapter(@NonNull Context context) {
-        super(context, R.layout.item_spinner_asset);
+        this(context, R.layout.item_spinner_asset);
+    }
+
+    public AssetSpinnerAdapter(@NonNull Context context, @LayoutRes int itemLayout) {
+        super(context, itemLayout);
+        this.itemLayout = itemLayout;
         this.inflater = LayoutInflater.from(context);
         this.decimalFormat = new DecimalFormat("#,##0.00");
         
@@ -104,7 +111,7 @@ public class AssetSpinnerAdapter extends ArrayAdapter<AssetAccount> {
         ViewHolder holder;
 
         if (view == null) {
-            view = inflater.inflate(R.layout.item_spinner_asset, parent, false);
+            view = inflater.inflate(itemLayout, parent, false);
             holder = new ViewHolder();
             holder.ivIcon = view.findViewById(R.id.iv_asset_icon);
             holder.tvName = view.findViewById(R.id.tv_asset_name);

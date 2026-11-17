@@ -14,9 +14,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.documentfile.provider.DocumentFile;
 
 import com.example.budgetapp.R;
@@ -55,16 +53,7 @@ public class PhotoBackupSettingsActivity extends AppCompatActivity {
 
         // 2. 处理 WindowInsets (状态栏和小白条)
         View rootView = findViewById(R.id.root_view);
-        final int originalPaddingLeft = rootView.getPaddingLeft();
-        final int originalPaddingTop = rootView.getPaddingTop();
-        final int originalPaddingRight = rootView.getPaddingRight();
-        final int originalPaddingBottom = rootView.getPaddingBottom();
-        
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(originalPaddingLeft + insets.left, originalPaddingTop + insets.top, originalPaddingRight + insets.right, originalPaddingBottom + insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         // 3. 【已移除】手动返回按钮逻辑
 

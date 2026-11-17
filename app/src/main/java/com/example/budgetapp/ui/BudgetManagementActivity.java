@@ -16,10 +16,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.example.budgetapp.R;
 import com.example.budgetapp.util.CategoryManager;
@@ -51,16 +48,7 @@ public class BudgetManagementActivity extends AppCompatActivity {
 
         View rootLayout = findViewById(R.id.root_layout);
         if (rootLayout != null) {
-            final int originalPaddingLeft = rootLayout.getPaddingLeft();
-            final int originalPaddingTop = rootLayout.getPaddingTop();
-            final int originalPaddingRight = rootLayout.getPaddingRight();
-            final int originalPaddingBottom = rootLayout.getPaddingBottom();
-            ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
-                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(originalPaddingLeft + insets.left, originalPaddingTop + insets.top,
-                        originalPaddingRight + insets.right, originalPaddingBottom + insets.bottom);
-                return WindowInsetsCompat.CONSUMED;
-            });
+            SettingsPage.applyInsets(rootLayout);
         }
 
         switchBudget = findViewById(R.id.switch_budget);

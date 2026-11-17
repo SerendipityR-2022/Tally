@@ -77,6 +77,15 @@ public class AssistantConfig {
         prefs.edit().putBoolean(KEY_ENABLE, enabled).apply();
     }
 
+    public boolean isBudgetEnabled() {
+        try {
+            return prefs.getBoolean("is_budget_enabled", false);
+        } catch (ClassCastException e) {
+            // Older backups can store this setting as text.
+            return "true".equalsIgnoreCase(String.valueOf(prefs.getAll().get("is_budget_enabled")));
+        }
+    }
+
     // --- 资产模块开关 ---
     public boolean isAssetsEnabled() {
         return prefs.getBoolean(KEY_ENABLE_ASSETS, true);

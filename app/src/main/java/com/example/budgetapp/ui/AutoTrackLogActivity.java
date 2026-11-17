@@ -43,17 +43,7 @@ public class AutoTrackLogActivity extends AppCompatActivity {
 
         // 动态处理沉浸式边距 (保证16dp间距的基础上，不被刘海和小白条遮挡)
         View rootLayout = findViewById(R.id.root_layout);
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, insets) -> {
-            androidx.core.graphics.Insets systemBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
-            int padding16 = (int) (16 * getResources().getDisplayMetrics().density); // 16dp 转 px
-            v.setPadding(
-                    systemBars.left + padding16,
-                    systemBars.top + padding16,
-                    systemBars.right + padding16,
-                    systemBars.bottom + padding16
-            );
-            return insets;
-        });
+        SettingsPage.applyInsets(rootLayout);
 
         rvLogs = findViewById(R.id.rv_logs);
         spinnerPackage = findViewById(R.id.spinner_package);

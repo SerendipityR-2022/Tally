@@ -8,9 +8,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.Transaction;
@@ -47,20 +45,7 @@ public class AboutActivity extends AppCompatActivity {
 
         // 处理沉浸式内边距，与其他界面保持统一
         View rootView = findViewById(R.id.about_root);
-        final int originalPaddingLeft = rootView.getPaddingLeft();
-        final int originalPaddingTop = rootView.getPaddingTop();
-        final int originalPaddingRight = rootView.getPaddingRight();
-        final int originalPaddingBottom = rootView.getPaddingBottom();
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(
-                    originalPaddingLeft + insets.left,
-                    originalPaddingTop + insets.top,
-                    originalPaddingRight + insets.right,
-                    originalPaddingBottom + insets.bottom
-            );
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         // 初始化 ViewModel 并观察数据
         financeViewModel = new ViewModelProvider(this).get(FinanceViewModel.class);

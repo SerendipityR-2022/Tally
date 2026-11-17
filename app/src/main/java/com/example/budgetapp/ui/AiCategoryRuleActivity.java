@@ -19,10 +19,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -38,6 +35,7 @@ import com.google.android.material.chip.ChipGroup;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class AiCategoryRuleActivity extends AppCompatActivity {
 
@@ -61,19 +59,7 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
         // 适配内边距
         View rootLayout = findViewById(R.id.root_layout);
         if (rootLayout != null) {
-            final int originalPaddingTop = rootLayout.getPaddingTop();
-            final int originalPaddingBottom = rootLayout.getPaddingBottom();
-            
-            ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
-                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(
-                        v.getPaddingLeft(),
-                        originalPaddingTop + insets.top,
-                        v.getPaddingRight(),
-                        originalPaddingBottom + insets.bottom
-                );
-                return WindowInsetsCompat.CONSUMED;
-            });
+            SettingsPage.applyInsets(rootLayout);
         }
 
         initViews();
@@ -126,7 +112,10 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
         
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                    | android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         }
+        view.requestFocus();
 
         TextView tvTitle = view.findViewById(R.id.tv_dialog_title);
         EditText etKeyword = view.findViewById(R.id.et_keyword);
@@ -134,13 +123,12 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
         android.widget.RadioButton rbExpense = view.findViewById(R.id.rb_expense);
         android.widget.RadioButton rbIncome = view.findViewById(R.id.rb_income);
         RecyclerView rvCategory = view.findViewById(R.id.rv_category);
-        TextView tvSelectedCategory = view.findViewById(R.id.tv_selected_category);
+        TextView tvSubCategory = view.findViewById(R.id.tv_rule_subcategory);
         TextView tvPreview = view.findViewById(R.id.tv_preview);
         Button btnCancel = view.findViewById(R.id.btn_cancel);
         Button btnConfirm = view.findViewById(R.id.btn_confirm);
 
         tvTitle.setText(title);
-        tvSelectedCategory.setVisibility(View.VISIBLE);
         tvPreview.setVisibility(View.GONE);
 
         // 如果是编辑模式，预填充数据
@@ -177,98 +165,58 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
             }
         });
 
-        // 获取分类列表
-        List<String> expenseCategories = CategoryManager.getExpenseCategories(this);
-        List<String> incomeCategories = CategoryManager.getIncomeCategories(this);
+        List<String> expenseCategories = new ArrayList<>(CategoryManager.getExpenseCategories(this));
+        List<String> incomeCategories = new ArrayList<>(CategoryManager.getIncomeCategories(this));
+        expenseCategories.remove(CategoryManager.CUSTOM_CATEGORY);
+        incomeCategories.remove(CategoryManager.CUSTOM_CATEGORY);
 
-        // 默认选择支出分类
-        final boolean[] isExpense = {existingRule == null || existingRule.getType() == 0};
-        final String[] selectedCategory = {
-            existingRule != null ? existingRule.getCategory() : 
-            (isExpense[0] ? 
-                (expenseCategories.isEmpty() ? "" : expenseCategories.get(0)) :
-                (incomeCategories.isEmpty() ? "" : incomeCategories.get(0)))
-        };
-        final String[] selectedSubCategory = {
-            existingRule != null ? existingRule.getSubCategory() : ""
-        };
-
-        // 设置RadioButton初始状态
-        if (isExpense[0]) {
-            rbExpense.setChecked(true);
-        } else {
-            rbIncome.setChecked(true);
-        }
-
-        // 设置布局管理器
-        boolean isDetailed = CategoryManager.isDetailedCategoryEnabled(this);
-        if (isDetailed) {
-            com.google.android.flexbox.FlexboxLayoutManager flexboxLayoutManager = 
-                new com.google.android.flexbox.FlexboxLayoutManager(this);
-            flexboxLayoutManager.setFlexWrap(com.google.android.flexbox.FlexWrap.WRAP);
-            flexboxLayoutManager.setFlexDirection(com.google.android.flexbox.FlexDirection.ROW);
-            flexboxLayoutManager.setJustifyContent(com.google.android.flexbox.JustifyContent.FLEX_START);
-            rvCategory.setLayoutManager(flexboxLayoutManager);
-        } else {
-            rvCategory.setLayoutManager(new GridLayoutManager(this, 5));
-        }
-
-        // 初始化CategoryAdapter
+        boolean[] isExpense = {existingRule == null || existingRule.getType() == 0};
         List<String> currentCategories = isExpense[0] ? expenseCategories : incomeCategories;
-        CategoryAdapter categoryAdapter = new CategoryAdapter(this, currentCategories, selectedCategory[0], category -> {
+        if (existingRule != null && !android.text.TextUtils.isEmpty(existingRule.getCategory())
+                && !currentCategories.contains(existingRule.getCategory())) {
+            currentCategories.add(existingRule.getCategory());
+        }
+        String[] selectedCategory = {existingRule != null ? existingRule.getCategory() : firstCategory(currentCategories)};
+        String[] selectedSubCategory = {existingRule != null ? existingRule.getSubCategory() : ""};
+        Runnable updateSubCategory = () -> {
+            String child = selectedSubCategory[0];
+            boolean hasSelection = child != null && !child.isEmpty();
+            tvSubCategory.setVisibility(hasSelection ? View.VISIBLE : View.GONE);
+            if (hasSelection) tvSubCategory.setText(selectedCategory[0] + " / " + child);
+        };
+
+        rgType.check(isExpense[0] ? rbExpense.getId() : rbIncome.getId());
+        rvCategory.setLayoutManager(new GridLayoutManager(this, 5));
+        rvCategory.setItemAnimator(null);
+        CategoryAdapter categoryAdapter = new CategoryAdapter(this, currentCategories, selectedCategory[0], isExpense[0], category -> {
             selectedCategory[0] = category;
             selectedSubCategory[0] = "";
-            updateSelectedCategoryText(tvSelectedCategory, selectedCategory[0], selectedSubCategory[0], isExpense[0]);
+            updateSubCategory.run();
         });
-
-        // 设置长按监听器（选择子分类）
         categoryAdapter.setOnCategoryLongClickListener(category -> {
-            if (CategoryManager.isSubCategoryEnabled(this)) {
-                // 如果长按的不是当前选中的分类，先选中它
-                if (!category.equals(selectedCategory[0])) {
-                    categoryAdapter.setSelectedCategory(category);
-                    selectedCategory[0] = category;
-                    selectedSubCategory[0] = "";
-                    updateSelectedCategoryText(tvSelectedCategory, selectedCategory[0], selectedSubCategory[0], isExpense[0]);
-                }
-
-                // 显示子分类选择对话框
-                showSubCategoryDialog(category, selectedSubCategory, () -> {
-                    updateSelectedCategoryText(tvSelectedCategory, selectedCategory[0], selectedSubCategory[0], isExpense[0]);
-                });
-                return true;
+            if (!Objects.equals(category, selectedCategory[0])) {
+                categoryAdapter.setSelectedCategory(category);
+                selectedCategory[0] = category;
+                selectedSubCategory[0] = "";
+                updateSubCategory.run();
             }
-            return false;
+            showSubCategoryDialog(category, selectedSubCategory, updateSubCategory);
+            return true;
         });
-
         rvCategory.setAdapter(categoryAdapter);
+        int initialPosition = currentCategories.indexOf(selectedCategory[0]);
+        if (initialPosition >= 0) rvCategory.scrollToPosition(initialPosition);
+        updateSubCategory.run();
 
-        // RadioGroup切换监听
         rgType.setOnCheckedChangeListener((group, checkedId) -> {
-            // 触发震动反馈
-            group.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
-            
-            isExpense[0] = (checkedId == R.id.rb_expense);
-            
-            // 切换分类列表
-            List<String> newCategories = isExpense[0] ? expenseCategories : incomeCategories;
-            categoryAdapter.updateData(newCategories);
-            
-            // 重置选中的分类和子分类
-            if (!newCategories.isEmpty()) {
-                selectedCategory[0] = newCategories.get(0);
-                categoryAdapter.setSelectedCategory(selectedCategory[0]);
-            } else {
-                selectedCategory[0] = "";
-            }
+            isExpense[0] = checkedId == R.id.rb_expense;
+            List<String> categories = isExpense[0] ? expenseCategories : incomeCategories;
+            selectedCategory[0] = firstCategory(categories);
             selectedSubCategory[0] = "";
-            
-            // 更新已选择提示
-            updateSelectedCategoryText(tvSelectedCategory, selectedCategory[0], selectedSubCategory[0], isExpense[0]);
+            categoryAdapter.setCategories(categories, selectedCategory[0], isExpense[0]);
+            rvCategory.scrollToPosition(0);
+            updateSubCategory.run();
         });
-
-        // 更新已选择提示
-        updateSelectedCategoryText(tvSelectedCategory, selectedCategory[0], selectedSubCategory[0], isExpense[0]);
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         
@@ -287,19 +235,16 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
                 return;
             }
             
-            // 处理重复关键字
-            if (!validation.duplicateKeywords.isEmpty()) {
-                showDuplicateWarningDialog(validation, selectedCategory[0], 
-                    selectedSubCategory[0], isExpense[0], position, dialog);
-                return;
-            }
-            
-            // 选择分类验证
             if (selectedCategory[0] == null || selectedCategory[0].isEmpty()) {
                 Toast.makeText(this, "请选择分类", Toast.LENGTH_SHORT).show();
                 return;
             }
-            
+            if (!validation.duplicateKeywords.isEmpty()) {
+                showDuplicateWarningDialog(validation, selectedCategory[0],
+                        selectedSubCategory[0], isExpense[0], position, dialog);
+                return;
+            }
+
             // 创建规则
             int type = isExpense[0] ? 0 : 1;
             List<CategoryRule> rules = new ArrayList<>();
@@ -334,13 +279,8 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    private void updateSelectedCategoryText(TextView tvSelectedCategory, String category, String subCategory, boolean isExpense) {
-        String typeStr = isExpense ? "支出" : "收入";
-        if (subCategory != null && !subCategory.isEmpty()) {
-            tvSelectedCategory.setText("已选择：" + typeStr + " - " + category + " > " + subCategory);
-        } else {
-            tvSelectedCategory.setText("已选择：" + typeStr + " - " + category);
-        }
+    private String firstCategory(List<String> categories) {
+        return categories.isEmpty() ? null : categories.get(0);
     }
 
     private void showSubCategoryDialog(String category, String[] selectedSubCategory, Runnable onUpdate) {
@@ -568,7 +508,7 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             CategoryRule rule = ruleList.get(position);
-            holder.tvKeyword.setText(rule.getKeyword());
+            holder.tvKeyword.setText((position + 1) + ". " + rule.getKeyword());
             
             String typeStr = rule.getType() == 0 ? "支出" : "收入";
             String categoryText;
@@ -579,12 +519,29 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
             }
             holder.tvCategory.setText(categoryText);
 
-            holder.ivEdit.setOnClickListener(v -> showEditRuleDialog(rule, position));
+            holder.ivEdit.setOnClickListener(v -> {
+                int current = holder.getBindingAdapterPosition();
+                if (current != RecyclerView.NO_POSITION) showEditRuleDialog(ruleList.get(current), current);
+            });
+            holder.up.setEnabled(position > 0);
+            holder.down.setEnabled(position < ruleList.size() - 1);
+            holder.up.setAlpha(position > 0 ? 1f : 0.3f);
+            holder.down.setAlpha(position < ruleList.size() - 1 ? 1f : 0.3f);
+            holder.up.setOnClickListener(v -> move(holder, -1));
+            holder.down.setOnClickListener(v -> move(holder, 1));
             
             holder.itemView.setOnLongClickListener(v -> {
-                showDeleteConfirmDialog(rule, position);
+                int current = holder.getBindingAdapterPosition();
+                if (current != RecyclerView.NO_POSITION) showDeleteConfirmDialog(ruleList.get(current), current);
                 return true;
             });
+        }
+
+        private void move(ViewHolder holder, int delta) {
+            int position = holder.getBindingAdapterPosition();
+            if (position == RecyclerView.NO_POSITION) return;
+            AiCategoryRuleManager.moveRule(AiCategoryRuleActivity.this, position, position + delta);
+            loadRules();
         }
 
         @Override
@@ -594,13 +551,15 @@ public class AiCategoryRuleActivity extends AppCompatActivity {
 
         class ViewHolder extends RecyclerView.ViewHolder {
             TextView tvKeyword, tvCategory;
-            View ivEdit;
+            View ivEdit, up, down;
 
             ViewHolder(View itemView) {
                 super(itemView);
                 tvKeyword = itemView.findViewById(R.id.tv_keyword);
                 tvCategory = itemView.findViewById(R.id.tv_category);
                 ivEdit = itemView.findViewById(R.id.iv_edit);
+                up = itemView.findViewById(R.id.btn_rule_up);
+                down = itemView.findViewById(R.id.btn_rule_down);
             }
         }
     }

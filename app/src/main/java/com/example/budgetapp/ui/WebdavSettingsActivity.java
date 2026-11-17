@@ -8,10 +8,7 @@ import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.example.budgetapp.BackupManager;
 import com.example.budgetapp.R;
@@ -48,11 +45,7 @@ public class WebdavSettingsActivity extends AppCompatActivity {
 
         // 根据屏幕实际的系统栏宽高来动态赋予边距
         View rootView = findViewById(R.id.root_view);
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         etUrl = findViewById(R.id.et_webdav_url);
         etUsername = findViewById(R.id.et_webdav_username);
@@ -66,6 +59,15 @@ public class WebdavSettingsActivity extends AppCompatActivity {
 
         // 加载已保存的配置
         loadWebdavConfig();
+        switchAutoSync.setOnCheckedChangeListener((button, checked) -> {
+            if (checked && !validateConfig()) {
+                button.setChecked(false);
+                return;
+            }
+            // This switch takes effect immediately; a separate Save step is unnecessary.
+            if (checked) persistWebdavConfig();
+            else getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit().putBoolean(KEY_AUTO_SYNC, false).apply();
+        });
         
         // 更新上次备份时间显示
         updateLastBackupTime();
@@ -75,10 +77,8 @@ public class WebdavSettingsActivity extends AppCompatActivity {
 
         // 2. 上传数据 (去掉了重复的 Button 定义)
         btnUpload.setOnClickListener(v -> {
-            if (isConfigEmpty()) {
-                Toast.makeText(this, "请先填写并保存 WebDAV 配置", Toast.LENGTH_SHORT).show();
-                return;
-            }
+            if (!validateConfig()) return;
+            persistWebdavConfig();
 
             // 锁定按钮防止重复点击
             btnUpload.setEnabled(false);
@@ -108,7 +108,7 @@ public class WebdavSettingsActivity extends AppCompatActivity {
                         saveLastBackupTime();
                         Toast.makeText(this, "✅ 备份数据已成功上传至 WebDAV！", Toast.LENGTH_LONG).show();
                         btnUpload.setEnabled(true);
-                        btnUpload.setText("上传数据");
+                        btnUpload.setText("立即备份");
                     });
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -116,7 +116,7 @@ public class WebdavSettingsActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         Toast.makeText(this, "❌ 上传失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
                         btnUpload.setEnabled(true);
-                        btnUpload.setText("上传数据");
+                        btnUpload.setText("立即备份");
                     });
                 }
             }).start();
@@ -124,16 +124,14 @@ public class WebdavSettingsActivity extends AppCompatActivity {
 
         // 3. 同步数据
         btnSync.setOnClickListener(v -> {
-            if (isConfigEmpty()) {
-                Toast.makeText(this, "请先填写并保存 WebDAV 配置", Toast.LENGTH_SHORT).show();
-                return;
-            }
+            if (!validateConfig()) return;
 
             // 弹出二次确认框，防止用户误触导致本地数据被覆盖
             new android.app.AlertDialog.Builder(this)
-                    .setTitle("同步数据确认")
+                    .setTitle("恢复云端备份？")
                     .setMessage("从 WebDAV 同步数据将会覆盖本地现有的所有账单、资产和分类设置，是否继续？")
-                    .setPositiveButton("确认同步", (dialog, which) -> {
+                    .setPositiveButton("恢复备份", (dialog, which) -> {
+                        persistWebdavConfig();
                         btnSync.setEnabled(false);
                         btnSync.setText("下载同步中...");
 
@@ -183,7 +181,7 @@ public class WebdavSettingsActivity extends AppCompatActivity {
                                 runOnUiThread(() -> {
                                     Toast.makeText(this, "✅ 数据同步成功！请重新启动应用使设置生效。", Toast.LENGTH_LONG).show();
                                     btnSync.setEnabled(true);
-                                    btnSync.setText("同步数据");
+                                    btnSync.setText("恢复备份");
                                 });
                             } catch (Exception e) {
                                 e.printStackTrace();
@@ -191,7 +189,7 @@ public class WebdavSettingsActivity extends AppCompatActivity {
                                 runOnUiThread(() -> {
                                     Toast.makeText(this, "❌ 同步失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
                                     btnSync.setEnabled(true);
-                                    btnSync.setText("同步数据");
+                                    btnSync.setText("恢复备份");
                                 });
                             }
                         }).start();
@@ -217,6 +215,33 @@ public class WebdavSettingsActivity extends AppCompatActivity {
     }
 
     private void saveWebdavConfig() {
+        if (!validateConfig()) return;
+        persistWebdavConfig();
+        Toast.makeText(this, "云备份设置已保存", Toast.LENGTH_SHORT).show();
+    }
+
+    private boolean validateConfig() {
+        etUrl.setError(null);
+        etUsername.setError(null);
+        etPassword.setError(null);
+        String url = etUrl.getText().toString().trim();
+        android.net.Uri uri = android.net.Uri.parse(url);
+        if (!("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
+                || android.text.TextUtils.isEmpty(uri.getHost())) {
+            etUrl.setError("请输入完整的 http 或 https 地址");
+            etUrl.requestFocus();
+            return false;
+        }
+        if (etUsername.getText().toString().trim().isEmpty()) {
+            etUsername.setError("请输入用户名"); etUsername.requestFocus(); return false;
+        }
+        if (etPassword.getText().toString().trim().isEmpty()) {
+            etPassword.setError("请输入密码或授权码"); etPassword.requestFocus(); return false;
+        }
+        return true;
+    }
+
+    private void persistWebdavConfig() {
         String url = etUrl.getText() != null ? etUrl.getText().toString().trim() : "";
         String username = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
         String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
@@ -234,7 +259,6 @@ public class WebdavSettingsActivity extends AppCompatActivity {
                 .putBoolean(KEY_AUTO_SYNC, switchAutoSync.isChecked())
                 .apply();
 
-        Toast.makeText(this, "WebDAV 配置已保存", Toast.LENGTH_SHORT).show();
         // 移除了 finish()，允许用户保存后停留在当前页面继续点击"上传"或"同步"
     }
 

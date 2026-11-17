@@ -1,48 +1,41 @@
-<?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-
     <LinearLayout
         android:id="@+id/ai_chat_root"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:background="@color/bar_background">
-
-        <!-- 顶部导航 -->
         <LinearLayout
             android:id="@+id/layout_top_nav"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="64dp"
             android:background="@color/white"
             android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="12dp">
-
+            android:orientation="horizontal">
+            <com.example.budgetapp.ui.BackButton android:layout_width="48dp" android:layout_height="48dp" />
             <TextView
                 android:id="@+id/tv_title"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="12dp"
                 android:text="AI 记账助手"
-                android:textColor="?android:attr/textColorPrimary"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
+                android:textColor="@color/text_primary"
+                android:textSize="22sp"
+                android:fontFamily="sans-serif-medium" />
             <ImageButton
                 android:id="@+id/btn_ai_settings"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="@android:color/transparent"
                 android:src="@drawable/ic_settings"
                 android:scaleType="centerInside"
-                android:padding="6dp"
+                android:padding="12dp"
                 android:contentDescription="AI 设置" />
         </LinearLayout>
-
-        <!-- 聊天列表 -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rv_chat"
             android:layout_width="match_parent"
@@ -54,8 +47,6 @@
             android:paddingTop="8dp"
             android:paddingBottom="12dp"
             android:overScrollMode="never" />
-
-        <!-- 底部输入区 -->
         <LinearLayout
             android:id="@+id/layout_bottom_input"
             android:layout_width="match_parent"
@@ -66,8 +57,6 @@
             android:paddingHorizontal="12dp"
             android:paddingTop="8dp"
             android:paddingBottom="8dp">
-
-            <!-- 语音 -->
             <ImageButton
                 android:id="@+id/btn_voice_input"
                 android:layout_width="40dp"
@@ -77,8 +66,6 @@
                 android:contentDescription="语音记账"
                 android:padding="8dp"
                 android:src="@drawable/ic_quick_voice" />
-
-            <!-- 图片 -->
             <ImageButton
                 android:id="@+id/btn_image_input"
                 android:layout_width="40dp"
@@ -88,8 +75,6 @@
                 android:contentDescription="截图记账"
                 android:padding="8dp"
                 android:src="@drawable/ic_image" />
-
-            <!-- 输入框 -->
             <com.example.budgetapp.ui.CustomHighlightEditText
                 android:id="@+id/et_chat_input"
                 android:layout_width="0dp"
@@ -103,8 +88,6 @@
                 android:paddingVertical="8dp"
                 android:textSize="14sp"
                 android:gravity="center_vertical" />
-
-            <!-- 发送 -->
             <ImageButton
                 android:id="@+id/btn_send"
                 android:layout_width="40dp"
@@ -115,10 +98,7 @@
                 android:padding="8dp"
                 android:src="@drawable/ic_quick_ai" />
         </LinearLayout>
-
     </LinearLayout>
-
-    <!-- 语音录制遮罩层 -->
     <FrameLayout
         android:id="@+id/voice_recording_overlay"
         android:layout_width="match_parent"
@@ -126,7 +106,6 @@
         android:background="#DD000000"
         android:visibility="gone"
         android:clickable="true">
-
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -136,14 +115,12 @@
             android:background="@drawable/bg_bottom_sheet_rounded"
             android:backgroundTint="#EE222222"
             android:padding="40dp">
-
             <ImageView
                 android:id="@+id/iv_recording_icon"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:src="@drawable/ic_quick_voice"
                 android:tint="@color/app_blue" />
-
             <TextView
                 android:id="@+id/tv_recording_hint"
                 android:layout_width="wrap_content"
@@ -152,7 +129,6 @@
                 android:text="松开发送，上滑取消"
                 android:textColor="@color/white"
                 android:textSize="15sp" />
-
             <TextView
                 android:id="@+id/tv_cancel_hint"
                 android:layout_width="wrap_content"
@@ -165,5 +141,4 @@
                 android:visibility="gone" />
         </LinearLayout>
     </FrameLayout>
-
 </FrameLayout>

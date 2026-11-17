@@ -29,9 +29,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.cardview.widget.CardView;
 import androidx.core.content.ContextCompat;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -44,12 +42,12 @@ import com.example.budgetapp.database.RecurringRule;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.util.RecurringTransactionManager;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
-import com.google.android.flexbox.FlexboxLayoutManager;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.text.SimpleDateFormat;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -122,16 +120,7 @@ public class RecurringTransactionActivity extends AppCompatActivity {
         setContentView(R.layout.activity_recurring_transaction);
 
         View rootView = findViewById(R.id.recurring_root);
-        final int originalPaddingLeft = rootView.getPaddingLeft();
-        final int originalPaddingTop = rootView.getPaddingTop();
-        final int originalPaddingRight = rootView.getPaddingRight();
-        final int originalPaddingBottom = rootView.getPaddingBottom();
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(originalPaddingLeft + insets.left, originalPaddingTop + insets.top,
-                    originalPaddingRight + insets.right, originalPaddingBottom + insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         recyclerView = findViewById(R.id.recycler_recurring_rules);
         layoutEmptyState = findViewById(R.id.layout_empty_state);
@@ -592,21 +581,12 @@ public class RecurringTransactionActivity extends AppCompatActivity {
                 ? CategoryManager.getExpenseCategories(this)
                 : CategoryManager.getIncomeCategories(this);
 
-        boolean isDetailed = CategoryManager.isDetailedCategoryEnabled(this);
-        if (isDetailed) {
-            FlexboxLayoutManager flexboxLayoutManager = new FlexboxLayoutManager(this);
-            flexboxLayoutManager.setFlexWrap(com.google.android.flexbox.FlexWrap.WRAP);
-            flexboxLayoutManager.setFlexDirection(com.google.android.flexbox.FlexDirection.ROW);
-            flexboxLayoutManager.setJustifyContent(com.google.android.flexbox.JustifyContent.FLEX_START);
-            rvCategory.setLayoutManager(flexboxLayoutManager);
-        } else {
-            rvCategory.setLayoutManager(new GridLayoutManager(this, 5));
-        }
+        rvCategory.setLayoutManager(new GridLayoutManager(this, 5));
 
         final String[] selectedCat = {currentCategory != null ? currentCategory : (categories.isEmpty() ? "" : categories.get(0))};
         final String[] selectedSub = {currentSubCategory != null ? currentSubCategory : ""};
 
-        CategoryAdapter categoryAdapter = new CategoryAdapter(this, categories, selectedCat[0], cat -> {
+        CategoryAdapter categoryAdapter = new CategoryAdapter(this, categories, selectedCat[0], transactionType == 0, cat -> {
             selectedCat[0] = cat;
             selectedSub[0] = "";
             if (listener != null) {
@@ -733,15 +713,11 @@ public class RecurringTransactionActivity extends AppCompatActivity {
         calendar.setTimeInMillis(dateMillis[0]);
 
         try {
-            View dateView = LayoutInflater.from(this).inflate(R.layout.dialog_bottom_date_picker, null);
-            AlertDialog dateDialog = new AlertDialog.Builder(this).setView(dateView).create();
-            if (dateDialog.getWindow() != null) {
-                dateDialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-            }
+            LedgerPickerDialog dateDialog = new LedgerPickerDialog(this, R.layout.dialog_bottom_date_picker);
 
-            NumberPicker npYear = dateView.findViewById(R.id.np_year);
-            NumberPicker npMonth = dateView.findViewById(R.id.np_month);
-            NumberPicker npDay = dateView.findViewById(R.id.np_day);
+            NumberPicker npYear = dateDialog.findViewById(R.id.np_year);
+            NumberPicker npMonth = dateDialog.findViewById(R.id.np_month);
+            NumberPicker npDay = dateDialog.findViewById(R.id.np_day);
 
             int currentYear = calendar.get(Calendar.YEAR);
             int currentMonth = calendar.get(Calendar.MONTH) + 1;
@@ -755,19 +731,26 @@ public class RecurringTransactionActivity extends AppCompatActivity {
             npMonth.setMaxValue(12);
             npMonth.setValue(currentMonth);
 
-            Calendar tempCal = Calendar.getInstance();
-            tempCal.set(currentYear, currentMonth - 1, 1);
             npDay.setMinValue(1);
-            npDay.setMaxValue(tempCal.getActualMaximum(Calendar.DAY_OF_MONTH));
+            npDay.setMaxValue(YearMonth.of(currentYear, currentMonth).lengthOfMonth());
             npDay.setValue(currentDay);
 
-            npMonth.setOnValueChangedListener((picker, oldVal, newVal) -> {
-                tempCal.set(npYear.getValue(), newVal - 1, 1);
-                npDay.setMaxValue(tempCal.getActualMaximum(Calendar.DAY_OF_MONTH));
-            });
+            TextView preview = dateDialog.findViewById(R.id.tv_date_preview);
+            Runnable refreshPreview = () -> {
+                int year = npYear.getValue();
+                int month = npMonth.getValue();
+                npDay.setMaxValue(YearMonth.of(year, month).lengthOfMonth());
+                java.time.LocalDate date = java.time.LocalDate.of(year, month, npDay.getValue());
+                preview.setText(date.format(java.time.format.DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE", Locale.CHINA)));
+            };
+            NumberPicker.OnValueChangeListener dateChange = (picker, oldValue, newValue) -> refreshPreview.run();
+            npYear.setOnValueChangedListener(dateChange);
+            npMonth.setOnValueChangedListener(dateChange);
+            npDay.setOnValueChangedListener(dateChange);
+            refreshPreview.run();
 
-            dateView.findViewById(R.id.btn_cancel).setOnClickListener(v -> dateDialog.dismiss());
-            dateView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            dateDialog.findViewById(R.id.btn_cancel).setOnClickListener(v -> dateDialog.dismiss());
+            dateDialog.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
                 calendar.set(npYear.getValue(), npMonth.getValue() - 1, npDay.getValue(), 0, 0, 0);
                 calendar.set(Calendar.MILLISECOND, 0);
                 dateMillis[0] = calendar.getTimeInMillis();
@@ -801,14 +784,10 @@ public class RecurringTransactionActivity extends AppCompatActivity {
         }
 
         try {
-            View timeView = LayoutInflater.from(this).inflate(R.layout.dialog_bottom_time_picker, null);
-            AlertDialog timeDialog = new AlertDialog.Builder(this).setView(timeView).create();
-            if (timeDialog.getWindow() != null) {
-                timeDialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-            }
+            LedgerPickerDialog timeDialog = new LedgerPickerDialog(this, R.layout.dialog_bottom_time_picker);
 
-            NumberPicker npHour = timeView.findViewById(R.id.np_hour);
-            NumberPicker npMinute = timeView.findViewById(R.id.np_minute);
+            NumberPicker npHour = timeDialog.findViewById(R.id.np_hour);
+            NumberPicker npMinute = timeDialog.findViewById(R.id.np_minute);
 
             npHour.setMinValue(0);
             npHour.setMaxValue(23);
@@ -818,8 +797,15 @@ public class RecurringTransactionActivity extends AppCompatActivity {
             npMinute.setMaxValue(59);
             npMinute.setValue(initMinute);
 
-            timeView.findViewById(R.id.btn_cancel).setOnClickListener(v -> timeDialog.dismiss());
-            timeView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            TextView preview = timeDialog.findViewById(R.id.tv_time_preview);
+            Runnable refreshTime = () -> preview.setText(String.format(Locale.CHINA, "%02d:%02d", npHour.getValue(), npMinute.getValue()));
+            NumberPicker.OnValueChangeListener timeChange = (picker, oldValue, newValue) -> refreshTime.run();
+            npHour.setOnValueChangedListener(timeChange);
+            npMinute.setOnValueChangedListener(timeChange);
+            refreshTime.run();
+
+            timeDialog.findViewById(R.id.btn_cancel).setOnClickListener(v -> timeDialog.dismiss());
+            timeDialog.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
                 String timeStr = String.format(Locale.getDefault(), "%02d:%02d", npHour.getValue(), npMinute.getValue());
                 textView.setText(timeStr);
                 timeDialog.dismiss();

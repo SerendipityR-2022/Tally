@@ -8,9 +8,7 @@ import android.view.View;
 import android.widget.TextView; // 新增导入
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import com.example.budgetapp.R;
 
 public class UserNoticeActivity extends AppCompatActivity {
@@ -24,15 +22,7 @@ public class UserNoticeActivity extends AppCompatActivity {
 
         // 处理系统栏遮挡，增加内边距（保留原有的 Padding）
         View rootView = findViewById(R.id.notice_root);
-        final int originalPaddingLeft = rootView.getPaddingLeft();
-        final int originalPaddingTop = rootView.getPaddingTop();
-        final int originalPaddingRight = rootView.getPaddingRight();
-        final int originalPaddingBottom = rootView.getPaddingBottom();
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(originalPaddingLeft + insets.left, originalPaddingTop + insets.top, originalPaddingRight + insets.right, originalPaddingBottom + insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         // Github 链接复制逻辑
         findViewById(R.id.btn_copy_github).setOnClickListener(v -> {

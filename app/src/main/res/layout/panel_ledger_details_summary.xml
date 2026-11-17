@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.example.budgetapp.ui.LedgerSummaryCard xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/ledger_details_summary" style="@style/TallySummaryCard">
+    <LinearLayout style="@style/TallySummaryContent">
+        <LinearLayout style="@style/TallySummaryPrimary">
+            <TextView style="@style/TallySummaryPrimaryLabel" android:id="@+id/ledger_details_focus_label" android:text="今日支出" />
+            <TextView android:id="@+id/ledger_details_focus_amount" style="@style/TallySummaryPrimaryValue" android:text="0.00" />
+        </LinearLayout>
+        <View android:id="@+id/ledger_summary_divider" style="@style/TallySummaryDivider" />
+        <LinearLayout style="@style/TallySummaryMetrics">
+            <LinearLayout style="@style/TallySummaryMetric">
+                <TextView style="@style/TallySummaryMetricLabel" android:id="@+id/ledger_details_expense_label" android:text="本月支出" />
+                <TextView android:id="@+id/ledger_details_expense" style="@style/TallySummaryMetricValue" android:text="0.00" android:textColor="@color/expense_green" />
+            </LinearLayout>
+            <LinearLayout style="@style/TallySummaryMetric">
+                <TextView style="@style/TallySummaryMetricLabel" android:id="@+id/ledger_details_income_label" android:text="本月收入" />
+                <TextView android:id="@+id/ledger_details_income" style="@style/TallySummaryMetricValue" android:text="0.00" android:textColor="@color/income_red" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</com.example.budgetapp.ui.LedgerSummaryCard>

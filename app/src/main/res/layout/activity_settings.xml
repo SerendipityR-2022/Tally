@@ -1,401 +1,286 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/settings_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:importantForAccessibility="noHideDescendants"
     android:orientation="vertical"
-    android:background="@color/bar_background"
-    android:padding="16dp">
-
+    android:background="@color/app_background">
+    <LinearLayout
+        android:id="@+id/settings_toolbar"
+        style="@style/TallySettingsToolbar">
+        <com.example.budgetapp.ui.BackButton
+            android:id="@+id/btn_settings_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp" />
+        <TextView
+            style="@style/TallySettingsTitle"
+            android:text="设置" />
+    </LinearLayout>
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="52dp"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginBottom="4dp"
         android:gravity="center_vertical"
-        android:paddingBottom="16dp"
-        android:paddingTop="8dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="设置"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary"/>
+        android:background="@drawable/bg_input_field">
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="16dp"
+            android:src="@drawable/ic_search_outline"
+            android:importantForAccessibility="no" />
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/et_settings_search"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:paddingHorizontal="12dp"
+            android:hint="@string/settings_search"
+            android:textSize="16sp"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_secondary"
+            android:singleLine="true"
+            android:inputType="text"
+            android:imeOptions="actionSearch"
+            android:background="@null"
+            android:saveEnabled="true" />
+        <ImageButton
+            android:id="@+id/btn_clear_settings_search"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="14dp"
+            android:src="@drawable/ic_close"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings_clear_search"
+            android:visibility="gone" />
     </LinearLayout>
-
-    <androidx.cardview.widget.CardView
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/settings_scroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="@color/white">
-
-        <ScrollView
+        android:fillViewport="true"
+        android:scrollbars="none">
+        <LinearLayout
+            android:id="@+id/settings_sections"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scrollbars="none"
-            android:overScrollMode="ifContentScrolls">
-
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="20dp"
+            android:paddingBottom="28dp">
             <LinearLayout
+                android:id="@+id/settings_section_0"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/btn_category_setting"
+                <TextView style="@style/TallySection" android:text="记账与分类" />
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="分类预设设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_backup_restore"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="数据备份与恢复"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_webdav_backup"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="WebDAV备份"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_ai_setting"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="AI记账配置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_auto_asset"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="资产设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_default_page"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="应用默认页面设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_toggle_night_mode"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="主题设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_assistant_setting"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="记账助手设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_budget_management"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="预算管理设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_default_record_display"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="设置记账界面默认显示"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_overtime_setting"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="设置加班薪资标准"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:id="@+id/divider_currency"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_currency_setting"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="货币单位设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:id="@+id/divider_donate"
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_photo_backup_setting"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="照片备注设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_auto_renewal_setting"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="自动续费设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_recurring_transaction"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="周期记账设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_quick_record_setting"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="快捷按钮设置"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_security_settings"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="密码与生物识别"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-
-                <TextView
-                    android:id="@+id/btn_auto_track_log"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="自动记账适配日志"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#1F888888"
-                    android:layout_marginHorizontal="20dp"/>
-
-                <TextView
-                    android:id="@+id/btn_about"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:text="关于"
-                    android:textSize="16sp"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:textColor="?android:attr/textColorPrimary"/>
-
+                    android:orientation="vertical"
+                    android:background="@drawable/assets_field">
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_category_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="分类预设管理"
+                        android:tag="预设 收入 支出 二级分类" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_auto_category_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="自动分类与学习"
+                        android:tag="AI分类 模型识别超时 优先级 关键词 确认学习 学习规则" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_quick_record_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="快捷记账"
+                        android:tag="按钮 手动 AI 今日账单" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_auto_asset"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="资产设置"
+                        android:tag="资产账户 自动关联账户 自动资产 支付方式 银行卡 资产分类" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_currency_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="货币"
+                        android:tag="单位 币种 汇率" />
+                </LinearLayout>
             </LinearLayout>
-        </ScrollView>
-    </androidx.cardview.widget.CardView>
-
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="@color/white"
-        android:layout_marginTop="16dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="20dp">
-
             <LinearLayout
-                android:layout_width="0dp"
+                android:id="@+id/settings_section_1"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:orientation="vertical">
-                <TextView
-                    android:layout_width="wrap_content"
+                <TextView style="@style/TallySection" android:text="自动记账" />
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="极简模式"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="?android:attr/textColorPrimary"/>
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="开启后隐藏菜单按钮，长按'统计'进入设置"
-                    android:textSize="12sp"
-                    android:textColor="#888888"
-                    android:layout_marginTop="4dp"/>
+                    android:orientation="vertical"
+                    android:background="@drawable/assets_field">
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_assistant_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="记账助手"
+                        android:tag="屏幕自动记账 无障碍 Shizuku 实验模式 保活 直接入账 无需手动确认 自动记账日志 历史 调试 转账红包关键词" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_ai_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="AI 记账"
+                        android:tag="模型 接口 API 提示词" />
+                </LinearLayout>
             </LinearLayout>
-
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/switch_minimalist"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/settings_section_2"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:thumb="@drawable/switch_thumb_custom"
-                app:track="@drawable/switch_track_custom"
-                app:showText="false"
-                app:thumbTint="@null"
-                app:trackTint="@null"
-                android:background="@null"/>
+                android:orientation="vertical">
+                <TextView style="@style/TallySection" android:text="计划与提醒" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/assets_field">
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_budget_management"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="预算管理"
+                        android:tag="预算开关 月预算 分类预算" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_recurring_transaction"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="周期记账"
+                        android:tag="定期 重复" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_auto_renewal_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="订阅提醒"
+                        android:tag="自动续费" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_overtime_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="加班工资"
+                        android:tag="时薪 工时 基本工资" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/settings_section_3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView style="@style/TallySection" android:text="外观与导航" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/assets_field">
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_toggle_night_mode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="主题"
+                        android:tag="深色 浅色 夜间 日间 系统 背景" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_display_options"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_pages"
+                        android:tag="启动页面 页面显示 底部导航 资产功能 明细功能 账单卡片 明细模块快捷按钮 日历显示 精简日历 极简模式" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/settings_section_4"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView style="@style/TallySection" android:text="备份与迁移" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/assets_field">
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_webdav_backup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="云备份"
+                        android:tag="WebDAV 自动同步 恢复" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_backup_restore"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="导入与导出"
+                        android:tag="本地 备份 恢复 ZIP CSV Excel 一木 蜜蜂 飞鸭 支付宝 微信" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_photo_backup_setting"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="照片备注"
+                        android:tag="照片备份 路径" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/settings_section_5"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView style="@style/TallySection" android:text="安全与关于" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/assets_field">
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_security_settings"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="应用锁"
+                        android:tag="密码 指纹 生物识别 安全" />
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_hide_in_recents"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="60dp"
+                        android:paddingHorizontal="16dp"
+                        android:saveEnabled="false"
+                        android:text="@string/hide_in_recents"
+                        android:textSize="16sp"
+                        android:textColor="@color/text_primary"
+                        android:tag="在最近任务中隐藏 多任务 最近使用 隐藏"
+                        android:thumb="@drawable/switch_thumb_custom"
+                        app:track="@drawable/switch_track_custom"
+                        app:thumbTint="@null"
+                        app:trackTint="@null" />
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/btn_about"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="关于 Tally"
+                        android:tag="版本 更新 隐私 协议 捐赠" />
+                </LinearLayout>
+            </LinearLayout>
+            <TextView
+                android:id="@+id/tv_settings_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="32dp"
+                android:text="@string/settings_no_results"
+                android:textColor="@color/text_secondary"
+                android:textSize="16sp"
+                android:gravity="center"
+                android:visibility="gone" />
         </LinearLayout>
-    </androidx.cardview.widget.CardView>
-
+    </androidx.core.widget.NestedScrollView>
 </LinearLayout>

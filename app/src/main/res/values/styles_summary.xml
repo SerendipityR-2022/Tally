@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="ledger_summary_corner">12dp</dimen>
+    <style name="TallySummaryCard">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginHorizontal">20dp</item>
+        <item name="android:layout_marginBottom">12dp</item>
+        <item name="cardBackgroundColor">@color/white</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+    <style name="TallySummaryContent">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">184dp</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingHorizontal">20dp</item>
+        <item name="android:paddingVertical">16dp</item>
+    </style>
+    <style name="TallySummaryPrimary">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+    <style name="TallySummaryPrimaryLabel">
+        <item name="android:gravity">center</item>
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">20sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fallbackLineSpacing">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+    <style name="TallySummaryPrimaryValue">
+        <item name="android:gravity">center</item>
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">48sp</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">36sp</item>
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">20sp</item>
+        <item name="android:autoSizeMaxTextSize">36sp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:fallbackLineSpacing">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+    <style name="TallySummaryDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:layout_marginVertical">10dp</item>
+        <item name="android:background">@color/divider</item>
+    </style>
+    <style name="TallySummaryMetrics">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:baselineAligned">false</item>
+    </style>
+    <style name="TallySummaryMetric">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:paddingHorizontal">4dp</item>
+    </style>
+    <style name="TallySummaryMetricLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">18sp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:fallbackLineSpacing">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+    <style name="TallySummaryMetricValue">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">26sp</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:fallbackLineSpacing">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+    <style name="TallyStatsMetric" parent="TallySummaryMetric">
+        <item name="android:paddingVertical">5dp</item>
+    </style>
+    <style name="TallyStatsMetricLabel" parent="TallySummaryMetricLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">24dp</item>
+        <item name="android:textColor">@color/ledger_muted</item>
+        <item name="android:drawableTint">@color/ledger_muted</item>
+        <item name="android:drawablePadding">6dp</item>
+    </style>
+    <style name="TallyStatsMetricValue" parent="TallySummaryMetricValue">
+        <item name="android:layout_height">28sp</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:textColor">@color/ledger_text</item>
+        <item name="android:textSize">21sp</item>
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">10sp</item>
+        <item name="android:autoSizeMaxTextSize">21sp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+    </style>
+    <style name="TallySummarySectionHeading">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingHorizontal">24dp</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:accessibilityHeading">true</item>
+    </style>
+    <style name="TextAppearance.Tally.SummaryTab" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+</resources>

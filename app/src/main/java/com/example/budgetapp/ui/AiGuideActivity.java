@@ -19,9 +19,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.example.budgetapp.R;
 
@@ -38,21 +36,7 @@ public class AiGuideActivity extends AppCompatActivity {
         // 处理系统栏 Insets
         View rootView = findViewById(R.id.ai_guide_root);
         if (rootView != null) {
-            final int originalPaddingLeft = rootView.getPaddingLeft();
-            final int originalPaddingTop = rootView.getPaddingTop();
-            final int originalPaddingRight = rootView.getPaddingRight();
-            final int originalPaddingBottom = rootView.getPaddingBottom();
-
-            ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(
-                        originalPaddingLeft + insets.left,
-                        originalPaddingTop + insets.top,
-                        originalPaddingRight + insets.right,
-                        originalPaddingBottom + insets.bottom
-                );
-                return WindowInsetsCompat.CONSUMED;
-            });
+            SettingsPage.applyInsets(rootView);
         }
 
         // 应用自定义背景（如果启用）

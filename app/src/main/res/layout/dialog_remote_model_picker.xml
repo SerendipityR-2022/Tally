@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="20dp">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/ai_models_capability_notice" android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary" android:layout_marginBottom="8dp" />
+    <androidx.appcompat.widget.AppCompatEditText android:id="@+id/et_model_search"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp"
+        android:singleLine="true" android:inputType="text|textNoSuggestions" android:hint="@string/ai_models_search" />
+    <TextView android:id="@+id/tv_model_search_empty" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:paddingVertical="16dp" android:text="@string/ai_models_no_match" android:visibility="gone" />
+    <ListView android:id="@+id/list_remote_models" android:layout_width="match_parent" android:layout_height="260dp"
+        android:choiceMode="singleChoice" android:dividerHeight="0dp" />
+</LinearLayout>

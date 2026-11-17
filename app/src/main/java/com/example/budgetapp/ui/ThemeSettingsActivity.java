@@ -62,21 +62,8 @@ public class ThemeSettingsActivity extends AppCompatActivity {
 
         // 🌟 【新增 2】：处理沉浸式带来的遮挡，动态增加 Padding
         View rootView = findViewById(R.id.theme_settings_root);
-        final int originalPaddingLeft = rootView.getPaddingLeft();
-        final int originalPaddingTop = rootView.getPaddingTop();
-        final int originalPaddingRight = rootView.getPaddingRight();
-        final int originalPaddingBottom = rootView.getPaddingBottom();
 
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
-            v.setPadding(
-                    originalPaddingLeft + insets.left,
-                    originalPaddingTop + insets.top,
-                    originalPaddingRight + insets.right,
-                    originalPaddingBottom + insets.bottom
-            );
-            return androidx.core.view.WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         // ================= 下面是你原本的逻辑 =================
         prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);

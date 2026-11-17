@@ -2,10 +2,6 @@ package com.example.budgetapp.ai;
 
 import com.example.budgetapp.database.Transaction;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-
 public class TransactionDraft {
     public int type;
     public double amount;
@@ -34,16 +30,7 @@ public class TransactionDraft {
         transaction.category = category;
         transaction.subCategory = subCategory;
 
-        // 1. 格式化当前时间为 "MM-dd HH:mm " (注意末尾有一个空格)
-        SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm ", Locale.getDefault());
-        String timePrefix = sdf.format(new Date(date));
-
-        // 2. 将“时间前缀”与“AI提取的备注”拼接，存入“记录标识”(note 字段)
-        String parsedNote = note == null ? "" : note.trim();
-        transaction.note = timePrefix + parsedNote;
-
-        // 3. remark 字段留空
-        transaction.remark = "";
+        transaction.remark = note == null ? "" : note.trim();
 
         transaction.assetId = assetId;
         transaction.currencySymbol = currencySymbol;

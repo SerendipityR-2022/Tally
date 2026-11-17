@@ -6,6 +6,8 @@ import android.content.SharedPreferences;
 import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.util.AssistantConfig;
+import com.example.budgetapp.util.AutoCategoryClassifier;
+import com.example.budgetapp.util.AutoCategoryManager;
 import com.example.budgetapp.util.CategoryManager;
 
 import org.json.JSONObject;
@@ -109,15 +111,27 @@ public class TransactionDraftMapper {
                     object.optString("destinationAsset", "")
             );
 
-            normalizeCategories(context, draft, rawCategory, rawSubCategory);
+            // When AI classification is opted in, use the same catalog validation as screen accounting.
+            AutoCategoryClassifier.Result modelCategory = AutoCategoryManager.isAiEnabled(context)
+                    ? AutoCategoryClassifier.validateAi(AutoCategoryManager.getCatalog(context, draft.type),
+                            rawCategory, rawSubCategory,
+                            CategoryManager.isSubCategoryEnabled(context))
+                    : null;
+            if (modelCategory != null) {
+                draft.category = modelCategory.category;
+                draft.subCategory = modelCategory.subCategory;
+            } else {
+                normalizeCategories(context, draft, rawCategory, rawSubCategory);
+            }
             draft.assetId = resolveAssetId(context, rawAsset, draft.note);
 
             if (draft.note.isEmpty()) {
                 draft.note = firstNonEmpty(rawSubCategory, rawCategory, rawAsset);
             }
             
-            // 应用AI分类关键字规则
-            com.example.budgetapp.util.AiCategoryRuleManager.applyRules(context, draft);
+            if (modelCategory == null) {
+                com.example.budgetapp.util.AiCategoryRuleManager.applyRules(context, draft);
+            }
         }
         
         return draft;

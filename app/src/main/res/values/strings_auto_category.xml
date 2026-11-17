@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="auto_category_title">自动分类与学习</string>
+    <string name="auto_category_local_description">所有支付页面共用分类器。根据当前分类名称、二级分类和常见消费语义匹配，新增分类即时生效。复杂的新名称可配置关键词，或开启 AI 理解；本地识别不联网。</string>
+    <string name="auto_category_priority_title">分类优先级（从高到低）</string>
+    <string name="auto_category_priority">启用 AI 时优先采用有效的模型结果。拖动把手调整本地回退顺序。</string>
+    <string name="auto_category_rules">管理分类关键词规则</string>
+    <string name="auto_category_rules_description">与 AI 记账共用规则；屏幕记账只匹配相同收支类型，不改动金额、时间或收支类型。</string>
+    <string name="auto_category_learning">确认窗口反向学习</string>
+    <string name="auto_category_learning_description">修改分类后成功保存，才记住该应用、收支类型和商户描述的选择；取消或直接保存原建议不会学习。关闭后不保存也不使用学习记录。删除或重命名的分类、二级分类不再命中旧记录。</string>
+    <string name="auto_category_learning_count">已保存 %1$d 条学习记录（最多 %2$d 条）</string>
+    <string name="auto_category_clear">清除学习记录</string>
+    <string name="auto_category_clear_message">仅清除自动分类的学习记录，不删除账单、分类预设或关键词规则。此操作不可撤销。</string>
+    <string name="auto_category_cleared">学习记录已清除</string>
+    <string name="auto_category_ai">使用 AI 识别分类</string>
+    <string name="auto_category_ai_description">默认关闭，复用已启用的 AI 文本模型。仅发送提取后的商户／商品／收款方描述、收支类型、业务提示和可用分类，不发送整屏内容，也不附带金额、时间或资产字段。模型不可用、超时或返回无效分类时，改用本地规则。</string>
+    <string name="auto_category_ai_confirm">启用后，商户／商品／收款方描述将发送到你配置的 AI 服务，可能产生 API 费用。启用后优先采用有效的 AI 分类；失败时按本地顺序回退。是否启用？</string>
+    <string name="auto_category_ai_ready">文本模型已就绪，AI 仅负责分类</string>
+    <string name="auto_category_ai_unavailable">文本模型未启用或未配置：当前自动回退本地识别</string>
+    <string name="auto_category_ai_disabled">当前仅在本地识别，不向 AI 服务发送数据</string>
+    <string name="auto_category_ai_config">前往 AI 记账配置</string>
+    <string name="auto_category_sub_enabled">二级分类已启用，自动选择当前预设中的二级分类</string>
+    <string name="auto_category_sub_disabled">二级分类未启用，当前只识别一级分类</string>
+    <string name="auto_category_sub_toggle">自动使用二级分类</string>
+    <string name="category_rules_priority_help">屏幕自动记账与 AI 记账共用。多条规则命中时，靠上的优先；用上下箭头调整顺序。点击编辑，长按删除。</string>
+    <string name="category_rule_move_up">提高规则优先级</string>
+    <string name="category_rule_move_down">降低规则优先级</string>
+    <string name="auto_category_priority_reset">恢复默认顺序</string>
+    <string name="auto_category_priority_warning">本地匹配命中后停止。关键词规则的内部顺序在规则页调整。</string>
+    <string name="auto_category_strategy_rule">关键词规则</string>
+    <string name="auto_category_strategy_learned">确认学习</string>
+    <string name="auto_category_strategy_ai">AI 分类</string>
+    <string name="auto_category_strategy_local">分类名称与本地语义</string>
+    <string name="auto_category_strategy_hint">页面业务提示</string>
+    <string name="auto_category_strategy_fallback">其他（固定兜底）</string>
+    <string name="auto_category_strategy_off">%1$s（已关闭）</string>
+    <string name="auto_category_strategy_drag">拖拽排序：%1$s</string>
+    <string name="auto_category_strategy_up">提高%1$s的优先级</string>
+    <string name="auto_category_strategy_down">降低%1$s的优先级</string>
+    <string name="auto_category_ai_timeout">模型识别超时</string>
+    <string name="auto_category_ai_timeout_value">%1$d 秒</string>
+</resources>

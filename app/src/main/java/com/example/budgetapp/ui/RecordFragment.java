@@ -54,13 +54,14 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
+import com.example.budgetapp.BackupManager;
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.TransactionRemarks;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.text.SimpleDateFormat;
@@ -91,8 +92,11 @@ public class RecordFragment extends Fragment {
     private TextView tvIncome, tvExpense, tvBalance, tvOvertime;
     private LinearLayout layoutIncome, layoutExpense, layoutBalance, layoutOvertime;
 
-    // 提取全局 RecyclerView 以便执行动画
     private RecyclerView calendarRecycler;
+    private View calendarSpace;
+    private YearMonth renderedMonth;
+    private int calendarWeekCount;
+    private final Runnable resizeCalendar = this::updateCalendarRowHeight;
 
     private List<AssetAccount> cachedAssets = new ArrayList<>();
     private TransactionListAdapter currentDetailAdapter;
@@ -247,7 +251,7 @@ public class RecordFragment extends Fragment {
 
     private void fetchDataForCurrentMonth() {
         LocalDate firstDay = currentMonth.atDay(1);
-        int offset = firstDay.getDayOfWeek().getValue() - 1;
+        int offset = firstDay.getDayOfWeek().getValue() % 7;
         LocalDate startOfGrid = firstDay.minusDays(offset);
         LocalDate endOfGrid = currentMonth.atEndOfMonth().plusDays(14); // 留点缓冲天数
 
@@ -299,9 +303,7 @@ public class RecordFragment extends Fragment {
                 Intent intent = new Intent(requireContext(), SettingsActivity.class);
                 startActivity(intent);
             });
-            SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-            boolean isMinimalist = prefs.getBoolean("minimalist_mode", false);
-            btnSettings.setVisibility(isMinimalist ? View.GONE : View.VISIBLE);
+            btnSettings.setVisibility(View.VISIBLE);
         }
 
         tvMonthTitle = view.findViewById(R.id.tv_month_title);
@@ -335,7 +337,7 @@ public class RecordFragment extends Fragment {
             btnQuickRecord.setOnClickListener(v -> {
                 v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
                 SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-                int quickMode = prefs.getInt("quick_record_mode", 0);
+                int quickMode = prefs.getInt("quick_record_mode", 1);
                 if (quickMode == 1) {
                     showAddOrEditDialog(null, LocalDate.now());
                 } else if (quickMode == 2) {
@@ -358,21 +360,22 @@ public class RecordFragment extends Fragment {
             if (config.isEnabledAndReady()) {
                 // 移除显式振动调用，使用系统默认的长按振动反馈（与统计标签长按一致）
                 startActivity(new Intent(requireContext(), AiChatActivity.class));
-                return true;
             } else {
                 Toast.makeText(requireContext(), "请先在设置中启用 AI 记账，并至少填写 Base URL、API Key、文本模型。", Toast.LENGTH_LONG).show();
-                return false;
             }
+            return true;
         });
         // 👆 新增结束 👆
 
+        calendarSpace = view.findViewById(R.id.calendar_space);
         calendarRecycler = view.findViewById(R.id.calendar_recycler);
-        GridLayoutManager layoutManager = new GridLayoutManager(getContext(), 7) {
-            @Override
-            public boolean canScrollVertically() { return false; }
-        };
-        calendarRecycler.setLayoutManager(layoutManager);
-        calendarRecycler.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        renderedMonth = null;
+        calendarRecycler.setLayoutManager(new GridLayoutManager(requireContext(), 7));
+        calendarRecycler.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        calendarSpace.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> scheduleCalendarResize());
+        calendarRecycler.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
+            if (t != oldT) scheduleCalendarResize();
+        });
 
         // 🌟 新增 1：关闭日历刷新时的自带闪烁动画
         calendarRecycler.setItemAnimator(null);
@@ -454,10 +457,10 @@ public class RecordFragment extends Fragment {
 
         // 🌟 替换：使用物理动画引擎来切换年份
         view.findViewById(R.id.btn_prev_month).setOnClickListener(v -> {
-            changeCalendarPage(-1, 0); // 往左滑出，减 1 年
+            changeCalendarPage(0, -1);
         });
         view.findViewById(R.id.btn_next_month).setOnClickListener(v -> {
-            changeCalendarPage(1, 0);  // 往右滑出，加 1 年
+            changeCalendarPage(0, 1);
         });
 
         // 【优化】不再全量观察，只观察当前月份按需请求的数据
@@ -799,10 +802,13 @@ public class RecordFragment extends Fragment {
         if (view != null) {
             ImageButton btnSettings = view.findViewById(R.id.btn_settings_menu);
             if (btnSettings != null) {
-                SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-                boolean isMinimalist = prefs.getBoolean("minimalist_mode", false);
-                btnSettings.setVisibility(isMinimalist ? View.GONE : View.VISIBLE);
+                btnSettings.setVisibility(View.VISIBLE);
             }
+            FloatingActionButton quick = view.findViewById(R.id.btn_quick_record);
+            int mode = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE).getInt("quick_record_mode", 1);
+            quick.setContentDescription(getString(mode == 0 ? R.string.record_today_bills_action
+                    : mode == 2 ? R.string.record_ai_action : R.string.record_action));
+            adapter.notifyDataSetChanged();
         }
         checkAutoRenewalDeduction();
 
@@ -820,18 +826,20 @@ public class RecordFragment extends Fragment {
 
         View topBar = view.findViewById(R.id.layout_top_bar);
         View monthLabel = view.findViewById(R.id.tv_month_label);
-        View weekHeader = view.findViewById(R.id.layout_week_header);
+        CardView calendarPanel = view.findViewById(R.id.calendar_panel);
+        int calendarSurface = ContextCompat.getColor(requireContext(), isCustomBg ? R.color.ledger_panel : R.color.ledger_canvas);
+        calendarPanel.setCardBackgroundColor(isCustomBg
+                ? androidx.core.graphics.ColorUtils.setAlphaComponent(calendarSurface, 230) : calendarSurface);
 
         // 获取需要调整质感的卡片和按钮
         androidx.cardview.widget.CardView cardStats = view.findViewById(R.id.card_stats); // 收入支出结余卡片
-        com.google.android.material.floatingactionbutton.FloatingActionButton btnQuickRecord = view.findViewById(R.id.btn_quick_record);
+        FloatingActionButton btnQuickRecord = view.findViewById(R.id.btn_quick_record);
 
         if (isCustomBg) {
             // 1. 顶部基础框架全透明，让底层的图片完全透出来
             view.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             if (topBar != null) topBar.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             if (monthLabel != null) monthLabel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-            if (weekHeader != null) weekHeader.setBackgroundColor(android.graphics.Color.TRANSPARENT);
 
             // 2. 今日预算卡片：80%透明度 (204) + 去除阴影
             if (cardBudgetStatus != null) {
@@ -870,15 +878,14 @@ public class RecordFragment extends Fragment {
                 int fabColor = ContextCompat.getColor(requireContext(), R.color.app_blue);
                 int translucentFab = androidx.core.graphics.ColorUtils.setAlphaComponent(fabColor, 230);
                 btnQuickRecord.setBackgroundTintList(ColorStateList.valueOf(translucentFab));
-                btnQuickRecord.setCompatElevation(0f);
+                btnQuickRecord.setElevation(0f);
             }
 
         } else {
             // ================= 恢复普通系统/日间/夜间模式 =================
-            view.setBackgroundResource(R.color.bar_background);
-            if (topBar != null) topBar.setBackgroundResource(R.color.bar_background);
-            if (monthLabel != null) monthLabel.setBackgroundResource(R.color.bar_background);
-            if (weekHeader != null) weekHeader.setBackgroundResource(R.color.bar_background);
+            view.setBackgroundResource(R.color.ledger_canvas);
+            if (topBar != null) topBar.setBackgroundResource(R.color.ledger_canvas);
+            if (monthLabel != null) monthLabel.setBackgroundResource(R.color.ledger_canvas);
 
             if (cardBudgetStatus != null) {
                 int surfaceColor = ContextCompat.getColor(requireContext(), R.color.white);
@@ -911,7 +918,7 @@ public class RecordFragment extends Fragment {
                 int fabColor = ContextCompat.getColor(requireContext(), R.color.app_blue);
                 btnQuickRecord.setBackgroundTintList(ColorStateList.valueOf(fabColor));
                 // 【修改】：恢复为 0f，去掉普通模式下的按钮阴影
-                btnQuickRecord.setCompatElevation(0f);
+                btnQuickRecord.setElevation(0f);
             }
         }
     }
@@ -972,16 +979,7 @@ public class RecordFragment extends Fragment {
     private void showCustomDatePicker() {
         if (getContext() == null) return;
 
-        final BottomSheetDialog dialog = new BottomSheetDialog(getContext());
-        dialog.setContentView(R.layout.dialog_bottom_date_picker);
-
-        dialog.setOnShowListener(dialogInterface -> {
-            BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) dialogInterface;
-            View bottomSheet = bottomSheetDialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) {
-                bottomSheet.setBackgroundResource(android.R.color.transparent);
-            }
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_date_picker);
 
         LocalDate baseDate = selectedDate != null ? selectedDate : LocalDate.now();
         int curYear = baseDate.getYear();
@@ -1040,8 +1038,8 @@ public class RecordFragment extends Fragment {
             currentMonth = YearMonth.of(year, month);
             selectedDate = LocalDate.of(year, month, day);
             updateCalendar(0);
-
-            adapter.setSelectedDate(selectedDate);
+            int position = currentMonth.atDay(1).getDayOfWeek().getValue() - 1 + day - 1;
+            calendarRecycler.scrollToPosition(position);
             dialog.dismiss();
         });
 
@@ -1111,12 +1109,10 @@ public class RecordFragment extends Fragment {
 
         List<LocalDate> days = new ArrayList<>();
         LocalDate firstDay = currentMonth.atDay(1);
-        int dayOfWeek = firstDay.getDayOfWeek().getValue();
-        int offset = dayOfWeek - 1;
+        int offset = firstDay.getDayOfWeek().getValue() % 7;
 
-        LocalDate startOfGrid = firstDay.minusDays(offset);
         for (int i = 0; i < offset; i++) {
-            days.add(startOfGrid.plusDays(i));
+            days.add(null);
         }
 
         int length = currentMonth.lengthOfMonth();
@@ -1128,18 +1124,12 @@ public class RecordFragment extends Fragment {
         List<Transaction> allList = viewModel.getRangeTransactions().getValue();
         List<Transaction> currentList = allList != null ? allList : new ArrayList<>();
 
-        // 强制清空缓存池，防止上一页末尾带有选中状态的 View 被 LIFO 倒序复用到本页开头
-        if (calendarRecycler != null) {
-            calendarRecycler.getRecycledViewPool().clear();
-        }
-
-        adapter.setRenewalItems(assistantConfig.getRenewalList());
-        adapter.setCurrentMonth(currentMonth);
-        adapter.updateData(days, currentList);
-
-        if (selectedDate != null && YearMonth.from(selectedDate).equals(currentMonth)) {
-            adapter.setSelectedDate(selectedDate);
-        }
+        boolean monthChanged = !currentMonth.equals(renderedMonth);
+        renderedMonth = currentMonth;
+        calendarWeekCount = (days.size() + 6) / 7;
+        adapter.updateData(currentMonth, days, currentList, assistantConfig.getRenewalList(), selectedDate);
+        if (monthChanged) calendarRecycler.scrollToPosition(0);
+        scheduleCalendarResize();
 
         calculateMonthTotals(currentList);
 
@@ -1152,6 +1142,31 @@ public class RecordFragment extends Fragment {
                 calendarRecycler.startAnimation(anim);
             }
         }
+    }
+
+    private void scheduleCalendarResize() {
+        calendarSpace.removeCallbacks(resizeCalendar);
+        calendarSpace.post(resizeCalendar);
+    }
+
+    private void updateCalendarRowHeight() {
+        if (calendarSpace == null || calendarSpace.getHeight() == 0 || calendarWeekCount == 0) return;
+
+        int minRowHeight = getResources().getDimensionPixelSize(R.dimen.record_calendar_min_row_height);
+        int maxRowHeight = getResources().getDimensionPixelSize(R.dimen.record_calendar_max_row_height);
+        // The calendar list starts below the weekday labels and separator inside the panel.
+        int availableHeight = calendarSpace.getHeight() - calendarRecycler.getTop()
+                - calendarRecycler.getPaddingTop() - calendarRecycler.getPaddingBottom();
+        adapter.setRowHeight(Math.max(minRowHeight, Math.min(maxRowHeight, availableHeight / calendarWeekCount)));
+    }
+
+    @Override
+    public void onDestroyView() {
+        calendarSpace.removeCallbacks(resizeCalendar);
+        calendarRecycler.animate().cancel();
+        calendarSpace = null;
+        calendarRecycler = null;
+        super.onDestroyView();
     }
 
     private void calculateMonthTotals(List<Transaction> transactions) {
@@ -1469,7 +1484,7 @@ public class RecordFragment extends Fragment {
         AlertDialog dialog = builder.create();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
 
-        TextView tvDate = dialogView.findViewById(R.id.tv_dialog_date);
+        LedgerEntrySheet sheet = new LedgerEntrySheet(dialog, dialogView);
         RadioGroup rgType = dialogView.findViewById(R.id.rg_type);
         RecyclerView rvCategory = dialogView.findViewById(R.id.rv_category);
         EditText etAmount = dialogView.findViewById(R.id.et_amount);
@@ -1477,7 +1492,6 @@ public class RecordFragment extends Fragment {
 
         EditText etCustomCategory = dialogView.findViewById(R.id.et_custom_category);
         EditText etRemark = dialogView.findViewById(R.id.et_remark);
-        EditText etNote = dialogView.findViewById(R.id.et_note);
         Spinner spAsset = dialogView.findViewById(R.id.sp_asset);
 
         // 【新增】绑定对象输入框
@@ -1629,30 +1643,21 @@ public class RecordFragment extends Fragment {
             });
 
         } else {
-            btnTakePhoto.setVisibility(View.GONE);
+            btnTakePhoto.setContentDescription("照片设置");
+            btnTakePhoto.setOnClickListener(v -> startActivity(new Intent(requireContext(), PhotoBackupSettingsActivity.class)));
             btnViewPhoto.setVisibility(View.GONE);
         }
 
         List<String> expenseCategories = CategoryManager.getExpenseCategories(getContext());
         List<String> incomeCategories = CategoryManager.getIncomeCategories(getContext());
 
-        boolean isDetailed = com.example.budgetapp.util.CategoryManager.isDetailedCategoryEnabled(getContext());
-        if (isDetailed) {
-            com.google.android.flexbox.FlexboxLayoutManager flexboxLayoutManager = new com.google.android.flexbox.FlexboxLayoutManager(getContext());
-            flexboxLayoutManager.setFlexWrap(com.google.android.flexbox.FlexWrap.WRAP);
-            flexboxLayoutManager.setFlexDirection(com.google.android.flexbox.FlexDirection.ROW);
-            flexboxLayoutManager.setJustifyContent(com.google.android.flexbox.JustifyContent.FLEX_START);
-
-            rvCategory.setLayoutManager(flexboxLayoutManager);
-        } else {
-            rvCategory.setLayoutManager(new GridLayoutManager(getContext(), 5));
-        }
+        rvCategory.setLayoutManager(new GridLayoutManager(requireContext(), LedgerCategoryGrid.COLUMNS));
 
         final boolean[] isExpense = {true};
         final String[] selectedCategory = {expenseCategories.isEmpty() ? "自定义" : expenseCategories.get(0)};
         final String[] selectedSubCategory = {""};
 
-        CategoryAdapter categoryAdapter = new CategoryAdapter(getContext(), expenseCategories, selectedCategory[0], category -> {
+        CategoryAdapter categoryAdapter = new CategoryAdapter(getContext(), expenseCategories, selectedCategory[0], true, category -> {
             selectedCategory[0] = category;
             selectedSubCategory[0] = "";
             if ("自定义".equals(category)) {
@@ -1744,6 +1749,7 @@ public class RecordFragment extends Fragment {
             return false;
         });
 
+        categoryAdapter.enableAdding();
         rvCategory.setAdapter(categoryAdapter);
 
         if (existingTransaction != null && existingTransaction.subCategory != null) {
@@ -1812,16 +1818,11 @@ public class RecordFragment extends Fragment {
             calendar.set(java.util.Calendar.DAY_OF_MONTH, date.getDayOfMonth());
         }
 
-        Runnable updateDateDisplay = () -> {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.CHINA);
-            tvDate.setText(sdf.format(calendar.getTime()));
-        };
+        Runnable updateDateDisplay = () -> sheet.updateDate(calendar);
         updateDateDisplay.run();
-
-        // 点击日期可修改
-        tvDate.setClickable(true);
-        tvDate.setFocusable(true);
-        tvDate.setOnClickListener(v -> showTransactionDateTimePicker(calendar, updateDateDisplay));
+        sheet.bindDateActions(() -> showTransactionDateTimePicker(calendar, updateDateDisplay),
+                () -> showTransactionTimePickerDialog(calendar, updateDateDisplay));
+        if (existingTransaction == null) sheet.bindAccountActions(categoryAdapter, viewModel, calendar, assetList);
 
         // 【修改】RadioGroup 切换监听逻辑，加入震动反馈与动态显示隐藏
         rgType.setOnCheckedChangeListener((g, id) -> {
@@ -1849,10 +1850,11 @@ public class RecordFragment extends Fragment {
 
                 boolean switchToExpense = (id == R.id.rb_expense);
                 isExpense[0] = switchToExpense;
-                List<String> targetCategories = switchToExpense ? expenseCategories : incomeCategories;
+                List<String> targetCategories = switchToExpense ? CategoryManager.getExpenseCategories(requireContext())
+                        : CategoryManager.getIncomeCategories(requireContext());
                 String defaultCat = targetCategories.isEmpty() ? "自定义" : targetCategories.get(0);
-                categoryAdapter.updateData(targetCategories);
-                categoryAdapter.setSelectedCategory(defaultCat);
+                categoryAdapter.setCategories(targetCategories, defaultCat, switchToExpense);
+                rvCategory.scrollToPosition(0);
                 selectedCategory[0] = defaultCat;
                 if ("自定义".equals(defaultCat)) {
                     etCustomCategory.setVisibility(View.VISIBLE);
@@ -1865,14 +1867,12 @@ public class RecordFragment extends Fragment {
         if (existingTransaction != null) {
             btnSave.setText("保存修改");
             etAmount.setText(String.valueOf(existingTransaction.amount));
-            if (existingTransaction.remark != null) etRemark.setText(existingTransaction.remark);
-            if (existingTransaction.note != null) etNote.setText(existingTransaction.note);
+            etRemark.setText(TransactionRemarks.display(existingTransaction));
 
             // 【完全修复：合并类型判断，防止后续代码覆盖“负债/借出”的选中状态和输入框内容】
             if (existingTransaction.type == 1) {
                 rgType.check(R.id.rb_income);
                 isExpense[0] = false;
-                categoryAdapter.updateData(incomeCategories);
                 String currentCat = existingTransaction.category;
                 if (incomeCategories.contains(currentCat)) {
                     categoryAdapter.setSelectedCategory(currentCat);
@@ -1899,7 +1899,6 @@ public class RecordFragment extends Fragment {
             } else {
                 rgType.check(R.id.rb_expense);
                 isExpense[0] = true;
-                categoryAdapter.updateData(expenseCategories);
                 String currentCat = existingTransaction.category;
                 if (expenseCategories.contains(currentCat)) {
                     categoryAdapter.setSelectedCategory(currentCat);
@@ -1978,15 +1977,12 @@ public class RecordFragment extends Fragment {
                 showRevokeDialog(tempTx, dialog);
             });
         } else {
-            btnSave.setText("保 存");
+            btnSave.setText("保存");
             btnDelete.setVisibility(View.GONE);
             tvRevoke.setVisibility(View.GONE);
-            SimpleDateFormat noteSdf = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA);
-            etNote.setText(noteSdf.format(calendar.getTime()));
         }
 
-        btnSave.setOnClickListener(v -> {
-            v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
+        sheet.bindSave(existingTransaction == null, keepRecording -> {
 
             String amountStr = etAmount.getText().toString();
             if (!amountStr.isEmpty()) {
@@ -2022,7 +2018,6 @@ public class RecordFragment extends Fragment {
                 }
 
                 String userRemark = etRemark.getText().toString().trim();
-                String noteContent = etNote.getText().toString().trim();
                 long ts = calendar.getTimeInMillis();
 
                 int selectedAssetId = 0;
@@ -2036,7 +2031,7 @@ public class RecordFragment extends Fragment {
 
                 // ================== 新增/保存逻辑 ==================
                 if (existingTransaction == null) {
-                    Transaction t = new Transaction(ts, type, category, amount, noteContent, userRemark);
+                    Transaction t = new Transaction(ts, type, category, amount, "", userRemark);
                     t.assetId = selectedAssetId;
                     t.currencySymbol = currencySymbol;
                     t.subCategory = selectedSubCategory[0];
@@ -2050,9 +2045,10 @@ public class RecordFragment extends Fragment {
                     final int finalAssetId = selectedAssetId;
                     final String finalTargetObj = targetObj;
                     final int finalType = type;
+                    Context application = requireContext().getApplicationContext();
 
                     AppDatabase.databaseWriteExecutor.execute(() -> {
-                        AppDatabase db = AppDatabase.getDatabase(getContext());
+                        AppDatabase db = AppDatabase.getDatabase(application);
                         db.runInTransaction(() -> {
                             // a. 插入流水
                             db.transactionDao().insert(t);
@@ -2131,6 +2127,8 @@ public class RecordFragment extends Fragment {
                             }
                         });
 
+                        BackupManager.triggerAutoUploadIfEnabled(application);
+
                         // 通知ViewModel刷新UI
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
@@ -2147,7 +2145,8 @@ public class RecordFragment extends Fragment {
 
                 } else {
                     // [修改模式原有逻辑]
-                    Transaction updateT = new Transaction(ts, type, category, amount, noteContent, userRemark);
+                    Transaction updateT = new Transaction(ts, type, category, amount, "", userRemark);
+                    TransactionRemarks.applyEdit(existingTransaction, updateT, userRemark);
                     updateT.id = existingTransaction.id;
                     updateT.assetId = selectedAssetId;
                     updateT.currencySymbol = currencySymbol;
@@ -2161,6 +2160,10 @@ public class RecordFragment extends Fragment {
                     viewModel.updateTransactionWithAssetSync(existingTransaction, updateT);
                 }
                 dialog.dismiss();
+                if (keepRecording && existingTransaction == null) {
+                    showAddOrEditDialog(null, java.time.Instant.ofEpochMilli(calendar.getTimeInMillis())
+                            .atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+                }
             }
         });
 
@@ -2173,7 +2176,7 @@ public class RecordFragment extends Fragment {
             }
         });
 
-        dialog.show();
+        sheet.show();
     }
 
     private void showPhotoDialog(String uriStr) {
@@ -2197,13 +2200,7 @@ public class RecordFragment extends Fragment {
     private void showTransactionDateTimePicker(java.util.Calendar calendar, Runnable updateDisplay) {
         if (getContext() == null) return;
 
-        final com.google.android.material.bottomsheet.BottomSheetDialog dialog = new com.google.android.material.bottomsheet.BottomSheetDialog(getContext());
-        dialog.setContentView(R.layout.dialog_bottom_date_picker);
-
-        dialog.setOnShowListener(dialogInterface -> {
-            View bottomSheet = ((com.google.android.material.bottomsheet.BottomSheetDialog) dialogInterface).findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) bottomSheet.setBackgroundResource(android.R.color.transparent);
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_date_picker);
 
         NumberPicker npYear = dialog.findViewById(R.id.np_year);
         NumberPicker npMonth = dialog.findViewById(R.id.np_month);
@@ -2267,7 +2264,7 @@ public class RecordFragment extends Fragment {
             calendar.set(java.util.Calendar.MONTH, npMonth.getValue() - 1);
             calendar.set(java.util.Calendar.DAY_OF_MONTH, npDay.getValue());
             dialog.dismiss();
-            showTransactionTimePickerDialog(calendar, updateDisplay);
+
         });
 
         dialog.show();
@@ -2279,13 +2276,7 @@ public class RecordFragment extends Fragment {
     private void showTransactionTimePickerDialog(java.util.Calendar calendar, Runnable updateDisplay) {
         if (getContext() == null) return;
 
-        final com.google.android.material.bottomsheet.BottomSheetDialog dialog = new com.google.android.material.bottomsheet.BottomSheetDialog(getContext());
-        dialog.setContentView(R.layout.dialog_bottom_time_picker);
-
-        dialog.setOnShowListener(dialogInterface -> {
-            View bottomSheet = ((com.google.android.material.bottomsheet.BottomSheetDialog) dialogInterface).findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) bottomSheet.setBackgroundResource(android.R.color.transparent);
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_time_picker);
 
         NumberPicker npHour = dialog.findViewById(R.id.np_hour);
         NumberPicker npMinute = dialog.findViewById(R.id.np_minute);

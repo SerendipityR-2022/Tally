@@ -17,9 +17,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.cardview.widget.CardView;
 import androidx.core.content.ContextCompat;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.GridLayoutManager; // 引入 Grid 布局
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -82,21 +80,8 @@ public class CurrencySettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_currency_settings);
 
         View rootView = findViewById(R.id.currency_settings_root);
-        final int originalPaddingLeft = rootView.getPaddingLeft();
-        final int originalPaddingTop = rootView.getPaddingTop();
-        final int originalPaddingRight = rootView.getPaddingRight();
-        final int originalPaddingBottom = rootView.getPaddingBottom();
 
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(
-                    originalPaddingLeft + insets.left,
-                    originalPaddingTop + insets.top,
-                    originalPaddingRight + insets.right,
-                    originalPaddingBottom + insets.bottom
-            );
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
 

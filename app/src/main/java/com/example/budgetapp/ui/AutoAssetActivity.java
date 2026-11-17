@@ -18,10 +18,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -70,19 +67,7 @@ public class AutoAssetActivity extends AppCompatActivity {
         // 2. 适配内边距
         View rootLayout = findViewById(R.id.root_layout);
         if (rootLayout != null) {
-            final int originalPaddingTop = rootLayout.getPaddingTop();
-            final int originalPaddingBottom = rootLayout.getPaddingBottom();
-
-            ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
-                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(
-                        v.getPaddingLeft(),
-                        originalPaddingTop + insets.top,
-                        v.getPaddingRight(),
-                        originalPaddingBottom + insets.bottom
-                );
-                return WindowInsetsCompat.CONSUMED;
-            });
+            SettingsPage.applyInsets(rootLayout);
         }
 
         initViews();
@@ -173,12 +158,12 @@ public class AutoAssetActivity extends AppCompatActivity {
         Button btnSave = view.findViewById(R.id.btn_save);
 
         // 1. 设置 App Spinner
-        ArrayAdapter<AppItem> appAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, cachedApps);
-        appAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
+        ArrayAdapter<AppItem> appAdapter = new ArrayAdapter<>(this, R.layout.item_form_spinner_value, cachedApps);
+        appAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
         spApp.setAdapter(appAdapter);
 
         // 2. 设置 Asset Spinner
-        ArrayAdapter<AssetAccount> assetAdapter = new ArrayAdapter<AssetAccount>(this, R.layout.item_spinner_dropdown) {
+        ArrayAdapter<AssetAccount> assetAdapter = new ArrayAdapter<AssetAccount>(this, R.layout.item_form_spinner_value) {
             @NonNull @Override
             public View getView(int position, View convertView, @NonNull ViewGroup parent) {
                 View view = super.getView(position, convertView, parent);
@@ -224,7 +209,7 @@ public class AutoAssetActivity extends AppCompatActivity {
             }
         };
         assetAdapter.addAll(cachedAssets);
-        assetAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
+        assetAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
         spAsset.setAdapter(assetAdapter);
         // 3. 回显旧数据
         if (oldRule != null) {

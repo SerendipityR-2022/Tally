@@ -482,6 +482,11 @@ public class FinanceViewModel extends AndroidViewModel {
      * 资产转移：处理余额增减（包含优惠逻辑和货币转换），并生成一条转账记录
      */
     public void transferAsset(AssetAccount fromAccount, AssetAccount toAccount, double amount, double discount, String note) {
+        transferAsset(fromAccount, toAccount, amount, discount, note, System.currentTimeMillis(), false);
+    }
+
+    public void transferAsset(AssetAccount fromAccount, AssetAccount toAccount, double amount, double discount,
+                              String note, long date, boolean repayment) {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             // 实际扣款金额 = 设定转账金额 - 优惠金额
             double actualDeduct = amount - discount;
@@ -537,15 +542,15 @@ public class FinanceViewModel extends AndroidViewModel {
                     Transaction transaction = new Transaction();
                     transaction.amount = actualDeduct; // 账单记录实际支出的金额（转出币种）
                     transaction.type = 2; // 转账
-                    transaction.category = "资产互转";
+                    transaction.category = repayment ? "还款" : "资产互转";
 
                     String noteContent = fromAccount.name + "(" + fromCurrencySymbol + String.format("%.2f", amount) + ") -> " 
                                        + toAccount.name + "(" + toCurrencySymbol + String.format("%.2f", convertedAmount) + ")";
                     if (discount > 0) {
                         noteContent += " (优惠:" + discount + ")";
                     }
-                    transaction.note = noteContent + (note.isEmpty() ? "" : " | 备注: " + note);
-                    transaction.date = System.currentTimeMillis();
+                    transaction.remark = noteContent + (note == null || note.isEmpty() ? "" : " | 备注: " + note);
+                    transaction.date = date;
                     transaction.assetId = fromAccount.id;
 
                     transactionDao.insert(transaction);
@@ -582,15 +587,15 @@ public class FinanceViewModel extends AndroidViewModel {
             Transaction transaction = new Transaction();
             transaction.amount = actualDeduct; // 账单记录实际支出的金额
             transaction.type = 2; // 转账
-            transaction.category = "资产互转";
+            transaction.category = repayment ? "还款" : "资产互转";
 
             String noteContent = fromAccount.name + " -> " + toAccount.name;
             // 如果存在优惠，在备注里标明原单金额和优惠
             if (discount > 0) {
                 noteContent += " (账单:" + amount + " 优惠:" + discount + ")";
             }
-            transaction.note = noteContent + (note.isEmpty() ? "" : " | 备注: " + note);
-            transaction.date = System.currentTimeMillis();
+            transaction.remark = noteContent + (note == null || note.isEmpty() ? "" : " | 备注: " + note);
+            transaction.date = date;
             transaction.assetId = fromAccount.id; // 关联转出账户
 
             transactionDao.insert(transaction);

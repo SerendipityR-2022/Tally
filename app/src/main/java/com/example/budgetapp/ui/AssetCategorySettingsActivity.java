@@ -13,10 +13,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.AppDatabase;
@@ -43,11 +40,7 @@ public class AssetCategorySettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_asset_category_settings);
 
         View rootView = findViewById(R.id.root_view);
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         initViews();
         loadData();
@@ -81,6 +74,9 @@ public class AssetCategorySettingsActivity extends AppCompatActivity {
 
     private void refreshChips() {
         chipGroupAssetCategory.removeAllViews();
+        int categoryVisibility = assetCategories.isEmpty() ? View.GONE : View.VISIBLE;
+        chipGroupAssetCategory.setVisibility(categoryVisibility);
+        tvHint.setVisibility(categoryVisibility);
         for (String category : assetCategories) {
             Chip chip = new Chip(this);
             chip.setText(category);

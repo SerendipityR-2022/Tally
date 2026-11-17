@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_pages">页面与导航</string>
+    <string name="settings_page_navigation">导航</string>
+    <string name="settings_page_ledger">记账与明细</string>
+    <string name="settings_page_calendar">日历</string>
+    <string name="settings_start_page">启动页面</string>
+    <string name="settings_switch_details">在底部导航显示明细</string>
+    <string name="settings_switch_assets">在底部导航显示资产</string>
+    <string name="settings_show_quick_button">明细页显示「记一笔」按钮</string>
+    <string name="settings_show_bill_card">记账页显示账单卡片</string>
+    <string name="settings_calendar_display">日历默认显示</string>
+    <string name="settings_calendar_minimal">精简日历</string>
+    <string name="settings_screen_debug_description">采集页面节点，验证自动记账规则</string>
+    <string name="settings_automatic_history">自动记账日志</string>
+    <string name="settings_automatic_history_description">按应用查看识别日志</string>
+    <string-array name="settings_start_page_choices">
+        <item>记账</item><item>明细</item><item>预算</item><item>资产</item><item>统计</item>
+    </string-array>
+    <string-array name="settings_calendar_display_choices">
+        <item>结余</item><item>收入</item><item>支出</item><item>加班工资</item><item>加班工时</item>
+    </string-array>
+</resources>

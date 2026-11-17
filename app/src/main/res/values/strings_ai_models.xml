@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_models_choose">从服务选择模型</string>
+    <string name="ai_models_choose_count">选择模型（%1$d）</string>
+    <string name="ai_models_refresh">刷新</string>
+    <string name="ai_models_hint">填写有效的地址和 API Key 后自动获取模型；也可直接手填模型 ID。</string>
+    <string name="ai_models_loading">正在获取当前服务的模型列表…</string>
+    <string name="ai_models_loaded">已获取 %1$d 个模型，不会自动更改当前模型。仅请求模型列表，不运行记账推理。</string>
+    <string name="ai_models_capability_notice">列表由当前服务返回，不代表模型支持文本、图片或音频。选择后请使用“测试连接”确认；未列出的模型仍可手填。</string>
+    <string name="ai_models_search">搜索模型 ID</string>
+    <string name="ai_models_no_match">没有匹配项，仍可返回手动填写模型 ID。</string>
+    <string name="ai_models_config_error">请检查地址和 API Key；仍可手填模型 ID。</string>
+    <string name="ai_models_auth_error">认证失败（401/403），请检查 API Key 与权限；仍可手填。</string>
+    <string name="ai_models_unsupported">服务不支持模型列表（404/405）；请手填模型 ID。</string>
+    <string name="ai_models_rate_limit">请求过于频繁（429），请稍后刷新；仍可手填。</string>
+    <string name="ai_models_server_error">服务暂时无法返回模型列表，请稍后刷新或手填。</string>
+    <string name="ai_models_redirect">为保护 API Key，未跟随接口重定向；请填入服务的最终地址或手填模型 ID。</string>
+    <string name="ai_models_invalid_response">返回格式不是兼容的模型列表；请手填模型 ID。</string>
+    <string name="ai_models_empty">服务未返回可选择的模型；请检查权限或手填模型 ID。</string>
+    <string name="ai_models_network_error">获取失败或网络超时，请检查连接后刷新；仍可手填。</string>
+    <string name="ai_models_too_large">模型列表超出安全大小限制；请手填模型 ID。</string>
+</resources>

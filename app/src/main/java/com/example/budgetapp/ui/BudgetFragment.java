@@ -51,6 +51,7 @@ public class BudgetFragment extends Fragment {
     private GoalAdapter goalAdapter;
     private DetailedBudgetAdapter detailedAdapter;
     private boolean isDetailedEnabled = false;
+    private TabLayoutMediator budgetTabs;
 
     private double currentMonthSurplus = 0;
     
@@ -74,6 +75,8 @@ public class BudgetFragment extends Fragment {
 
         view.findViewById(R.id.layout_monthly_budget).setOnClickListener(v -> showSetMonthBudgetDialog());
         view.findViewById(R.id.btn_add_goal).setOnClickListener(v -> showAddGoalDialog());
+        view.findViewById(R.id.btn_goal_empty).setOnClickListener(v -> showAddGoalDialog());
+        view.findViewById(R.id.btn_budget_setup).setOnClickListener(v -> startActivity(new Intent(requireContext(), BudgetManagementActivity.class)));
         view.findViewById(R.id.btn_budget_history).setOnClickListener(v -> startActivity(new Intent(getContext(), BudgetHistoryActivity.class)));
 
         // 初始化 FAB 容器
@@ -106,9 +109,10 @@ public class BudgetFragment extends Fragment {
             tabLayout.setVisibility(View.VISIBLE);
             tvGoalsTitle.setVisibility(View.GONE);
 
-            new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
-                tab.setText(position == 0 ? "详细预算" : "存储目标");
-            }).attach();
+            budgetTabs = new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
+                tab.setText(position == 0 ? "分类预算" : "储蓄目标");
+            });
+            budgetTabs.attach();
 
             int lastTab = prefs.getInt("last_budget_tab", 0);
             viewPager.setCurrentItem(lastTab, false);
@@ -116,16 +120,6 @@ public class BudgetFragment extends Fragment {
             // 更新按钮初始状态
             updateActionButtonsVisibility(lastTab, btnAddGoal, btnHistory);
 
-            viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-                @Override
-                public void onPageSelected(int position) {
-                    prefs.edit().putInt("last_budget_tab", position).apply();
-                    // 核心逻辑：切换页面时更新按钮可见性
-                    updateActionButtonsVisibility(position, btnAddGoal, btnHistory);
-                    // 切换页面时重新附加滚动监听器
-                    attachScrollListeners(position);
-                }
-            });
         } else {
             tabLayout.setVisibility(View.GONE);
             tvGoalsTitle.setVisibility(View.VISIBLE);
@@ -137,6 +131,19 @@ public class BudgetFragment extends Fragment {
             viewPager.post(() -> attachScrollListeners(0));
         }
 
+        viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override public void onPageSelected(int position) {
+                if (isDetailedEnabled) {
+                    prefs.edit().putInt("last_budget_tab", position).apply();
+                    updateActionButtonsVisibility(position, btnAddGoal, btnHistory);
+                } else {
+                    btnAddGoal.setVisibility(View.VISIBLE);
+                    btnHistory.setVisibility(View.VISIBLE);
+                }
+                attachScrollListeners(position);
+            }
+        });
+
         viewModel.getAllTransactions().observe(getViewLifecycleOwner(), transactions -> {
             calculateMonthHeader(transactions);
             goalAdapter.setTransactions(transactions);
@@ -145,6 +152,8 @@ public class BudgetFragment extends Fragment {
 
         viewModel.getAllGoals().observe(getViewLifecycleOwner(), goals -> {
             if (goals != null) goalAdapter.setGoals(goals);
+            view.findViewById(R.id.btn_goal_empty).setVisibility(
+                    !isDetailedEnabled && (goals == null || goals.isEmpty()) ? View.VISIBLE : View.GONE);
         });
 
         return view;
@@ -459,6 +468,7 @@ public class BudgetFragment extends Fragment {
         if (monthlyBudget <= 0) {
             currentMonthSurplus = 0;
             tvTotalSurplus.setText("未设置预算");
+            tvTotalSurplus.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
             tvHeaderDailyAvailable.setText("0.00");
             return;
         }
@@ -485,7 +495,7 @@ public class BudgetFragment extends Fragment {
         String sign = monthRemaining >= 0 ? "+" : ""; // 按照原逻辑保留加号
         tvTotalSurplus.setText(String.format("%s%.2f", sign, monthRemaining));
         tvTotalSurplus.setTextColor(ContextCompat.getColor(requireContext(),
-                monthRemaining >= 0 ? R.color.app_blue : R.color.budget_progress_exceed));
+                monthRemaining >= 0 ? R.color.text_primary : R.color.budget_progress_exceed));
 
         // 【修复2】更合理的“今日可用”计算：推荐采用“剩余平摊法”
         int remainingDays = today.lengthOfMonth() - today.getDayOfMonth() + 1;
@@ -799,6 +809,26 @@ public class BudgetFragment extends Fragment {
         SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
         boolean isCustomBg = prefs.getInt("theme_mode", -1) == 3;
         updateFragmentTransparency(isCustomBg);
+
+        boolean detailed = prefs.getBoolean("is_detailed_budget_enabled", false);
+        if (detailed != isDetailedEnabled && viewPager != null) {
+            isDetailedEnabled = detailed;
+            if (budgetTabs != null) { budgetTabs.detach(); budgetTabs = null; }
+            viewPager.setAdapter(new BudgetPagerAdapter(detailed));
+            tabLayout.setVisibility(detailed ? View.VISIBLE : View.GONE);
+            getView().findViewById(R.id.tv_goals_title).setVisibility(detailed ? View.GONE : View.VISIBLE);
+            getView().findViewById(R.id.btn_goal_empty).setVisibility(!detailed && goalAdapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
+            if (detailed) {
+                budgetTabs = new TabLayoutMediator(tabLayout, viewPager,
+                        (tab, position) -> tab.setText(position == 0 ? "分类预算" : "储蓄目标"));
+                budgetTabs.attach();
+            }
+        }
+        if (viewModel != null) {
+            List<Transaction> transactions = viewModel.getAllTransactions().getValue();
+            calculateMonthHeader(transactions);
+            if (detailed && transactions != null) calculateDetailedBudgets(transactions);
+        }
         
         // 重置 FAB 按钮状态
         if (fabContainer != null) {
@@ -812,6 +842,12 @@ public class BudgetFragment extends Fragment {
         // 重新附加滚动监听器
         if (viewPager != null) {
             int currentPosition = viewPager.getCurrentItem();
+            if (isDetailedEnabled) {
+                updateActionButtonsVisibility(currentPosition, getView().findViewById(R.id.btn_add_goal), getView().findViewById(R.id.btn_budget_history));
+            } else {
+                getView().findViewById(R.id.btn_add_goal).setVisibility(View.VISIBLE);
+                getView().findViewById(R.id.btn_budget_history).setVisibility(View.VISIBLE);
+            }
             viewPager.post(() -> attachScrollListeners(currentPosition));
         }
     }
@@ -820,6 +856,7 @@ public class BudgetFragment extends Fragment {
     public void onDestroyView() {
         // 移除监听器，防止内存泄漏
         detachScrollListeners();
+        if (budgetTabs != null) { budgetTabs.detach(); budgetTabs = null; }
         fabScrollListener = null;
         fabGestureListener = null;
         fabContainer = null;
@@ -835,7 +872,8 @@ public class BudgetFragment extends Fragment {
         TabLayout tabLayout = view.findViewById(R.id.tab_layout_budget);
 
         // 获取我们需要改质感的卡片和按钮
-        androidx.cardview.widget.CardView cardMonthSummary = view.findViewById(R.id.card_month_summary);
+        LedgerSummaryCard cardMonthSummary = view.findViewById(R.id.card_month_summary);
+        cardMonthSummary.applyBackground(isCustomBg);
         com.google.android.material.floatingactionbutton.FloatingActionButton btnAddGoal = view.findViewById(R.id.btn_add_goal);
         com.google.android.material.floatingactionbutton.FloatingActionButton btnHistory = view.findViewById(R.id.btn_budget_history);
 
@@ -844,13 +882,6 @@ public class BudgetFragment extends Fragment {
             view.setBackgroundColor(Color.TRANSPARENT);
             if (tvTopTitle != null) tvTopTitle.setBackgroundColor(Color.TRANSPARENT);
             if (tabLayout != null) tabLayout.setBackgroundColor(Color.TRANSPARENT);
-
-            // 2. 顶部总计卡片：90%透明度 (230)
-            if (cardMonthSummary != null) {
-                int surfaceColor = ContextCompat.getColor(requireContext(), R.color.white);
-                int translucentSurface = androidx.core.graphics.ColorUtils.setAlphaComponent(surfaceColor, 230);
-                cardMonthSummary.setCardBackgroundColor(translucentSurface);
-            }
 
             // 3. 添加按钮 (黄底白字)：90%透明度
             if (btnAddGoal != null) {
@@ -872,9 +903,6 @@ public class BudgetFragment extends Fragment {
             if (tvTopTitle != null) tvTopTitle.setBackgroundResource(R.color.bar_background);
             if (tabLayout != null) tabLayout.setBackgroundResource(R.color.bar_background);
 
-            if (cardMonthSummary != null) {
-                cardMonthSummary.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.white));
-            }
             if (btnAddGoal != null) {
                 btnAddGoal.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.app_blue)));
             }

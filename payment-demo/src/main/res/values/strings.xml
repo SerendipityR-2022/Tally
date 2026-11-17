@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">模拟支付 DEMO</string>
+    <string name="demo_title">模拟收银台</string>
+    <string name="demo_caption">测试页面 · 无真实支付</string>
+    <string name="demo_pay">模拟支付成功</string>
+    <string name="demo_pay_split">模拟成功（标题和金额分开）</string>
+    <string name="demo_success">支付成功</string>
+    <string name="demo_success_combined">支付成功 ¥18.60</string>
+    <string name="demo_paid">实付 ¥18.60</string>
+    <string name="demo_method">支付方式</string>
+    <string name="demo_account">演示账户</string>
+    <string name="demo_return">返回</string>
+    <item type="id" name="pay_combined" />
+    <item type="id" name="pay_split" />
+    <item type="id" name="payment_status" />
+    <item type="id" name="payment_amount" />
+    <item type="id" name="return_button" />
+</resources>

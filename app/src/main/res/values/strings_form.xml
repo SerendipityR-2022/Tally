@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tally_cancel">取消</string>
+    <string name="tally_confirm">确定</string>
+    <string name="tally_select_date">选择日期</string>
+    <string name="tally_select_time">选择时间</string>
+    <string name="tally_picker_year">年</string>
+    <string name="tally_picker_month">月</string>
+    <string name="tally_picker_day">日</string>
+    <string name="tally_picker_hour">时</string>
+    <string name="tally_picker_minute">分</string>
+</resources>

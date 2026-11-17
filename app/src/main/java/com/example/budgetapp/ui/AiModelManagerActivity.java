@@ -14,13 +14,12 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.example.budgetapp.R;
 import com.example.budgetapp.ai.AiModelProfile;
+import com.example.budgetapp.ai.AiModelCatalog;
+import com.example.budgetapp.ai.AiConfig;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.List;
@@ -46,11 +45,7 @@ public class AiModelManagerActivity extends AppCompatActivity {
         if (modelType == null) modelType = "text";
         
         View rootView = findViewById(R.id.ai_model_manager_root);
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
         
         initViews();
         loadProfiles();
@@ -117,6 +112,16 @@ public class AiModelManagerActivity extends AppCompatActivity {
         btnDelete.setOnClickListener(v -> showDeleteDialog(profile));
     }
     
+    private final java.util.List<AiModelPickerBinding> modelPickers = new java.util.ArrayList<>();
+    private AlertDialog editingDialog;
+
+    @Override protected void onDestroy() {
+        if (editingDialog != null) editingDialog.dismiss();
+        for (AiModelPickerBinding binding : new java.util.ArrayList<>(modelPickers)) binding.close();
+        modelPickers.clear();
+        super.onDestroy();
+    }
+
     private void showEditDialog(AiModelProfile profile) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_edit_ai_model_profile, null);
@@ -141,6 +146,30 @@ public class AiModelManagerActivity extends AppCompatActivity {
             etApiKey.setText(profile.apiKey);
         }
         
+        AiModelPickerBinding picker = new AiModelPickerBinding(this, view.findViewById(R.id.profile_model_picker),
+                etModelName, () -> {
+            AiConfig config = AiConfig.load(this);
+            String url = etBaseUrl.getText().toString().trim();
+            String key = etApiKey.getText().toString().trim();
+            if ("vision".equals(modelType)) {
+                config.visionBaseUrl = url; config.visionApiKey = key;
+                return new AiModelPickerBinding.Connection(config.getEffectiveVisionBaseUrl(), config.getEffectiveVisionApiKey());
+            }
+            if ("audio".equals(modelType)) {
+                config.audioBaseUrl = url; config.audioApiKey = key;
+                return new AiModelPickerBinding.Connection(config.getEffectiveAudioBaseUrl(), config.getEffectiveAudioApiKey());
+            }
+            config.textBaseUrl = url; config.textApiKey = key;
+            return new AiModelPickerBinding.Connection(config.getEffectiveTextBaseUrl(), config.getEffectiveTextApiKey());
+        }, new AiModelCatalog());
+        picker.observe(etBaseUrl, etApiKey);
+        modelPickers.add(picker);
+        editingDialog = dialog;
+        dialog.setOnDismissListener(ignored -> {
+            picker.close();
+            modelPickers.remove(picker);
+            if (editingDialog == dialog) editingDialog = null;
+        });
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         
         btnSave.setOnClickListener(v -> {

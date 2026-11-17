@@ -7,11 +7,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 
 import com.example.budgetapp.service.AccessibilityGuardWorker;
 import com.example.budgetapp.ui.AuthActivity;
+import com.example.budgetapp.util.RecentTaskSettings;
 import com.example.budgetapp.util.ShizukuManager;
 
 import rikka.shizuku.Shizuku;
@@ -21,22 +21,8 @@ public class MyApplication extends Application {
     // 全局静态变量，记录当前是否已经解锁过
     public static boolean isUnlocked = false;
 
-    private final Shizuku.OnBinderReceivedListener binderReceivedListener = () -> {
-        // Shizuku Binder 连接成功，如果已有权限则立即做一次自愈加固
-        if (ShizukuManager.hasShizukuPermission()) {
-            ShizukuManager.grantBackgroundKeepAlive(this);
-            if (!ShizukuManager.isAccessibilityRunning(this)) {
-                ShizukuManager.enableAccessibilityService(this);
-            }
-        }
-    };
-
-    private final Shizuku.OnRequestPermissionResultListener permissionResultListener = (requestCode, grantResult) -> {
-        if (grantResult == PackageManager.PERMISSION_GRANTED) {
-            ShizukuManager.grantBackgroundKeepAlive(this);
-            ShizukuManager.enableAccessibilityService(this);
-        }
-    };
+    private final Shizuku.OnBinderReceivedListener binderReceivedListener = () ->
+            ShizukuManager.restoreKeepAliveAsync(this);
 
     @Override
     public void onCreate() {
@@ -44,7 +30,6 @@ public class MyApplication extends Application {
 
         // 1. 注册 Shizuku 事件监听
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener);
-        Shizuku.addRequestPermissionResultListener(permissionResultListener);
 
         // 2. 启动守护 Worker
         AccessibilityGuardWorker.startPeriodicWork(this);
@@ -69,6 +54,7 @@ public class MyApplication extends Application {
 
             @Override
             public void onActivityResumed(Activity activity) {
+                RecentTaskSettings.apply(activity);
                 // 如果当前进入的页面不是验证页本身，检查是否需要拦截
                 if (!(activity instanceof AuthActivity)) {
                     SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);

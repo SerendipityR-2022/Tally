@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="navigate_back">返回</string>
+    <string name="settings_search">搜索设置</string>
+    <string name="settings_no_results">没有匹配的设置</string>
+    <string name="settings_clear_search">清除搜索</string>
+    <string name="record_action">记一笔</string>
+    <string name="record_today_bills_action">今日账单</string>
+    <string name="record_ai_action">AI 记账</string>
+    <string name="stats_empty">这段时间还没有账单</string>
+    <string name="details_empty">没有找到符合条件的账单</string>
+    <string name="assets_empty">添加第一个账户</string>
+    <string name="goals_empty">添加一个储蓄目标</string>
+    <string name="calendar_day_today_description">，今天</string>
+    <string name="calendar_day_renewal_description">，有续费提醒</string>
+    <string name="calendar_day_over_budget_description">，超出预算</string>
+</resources>

@@ -34,7 +34,9 @@ public class MaxHeightScrollView extends ScrollView {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        if (maxHeight > 0) {
+        int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+        int availableHeight = MeasureSpec.getSize(heightMeasureSpec);
+        if (maxHeight > 0 && (heightMode == MeasureSpec.UNSPECIFIED || availableHeight > maxHeight)) {
             heightMeasureSpec = MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST);
         }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);

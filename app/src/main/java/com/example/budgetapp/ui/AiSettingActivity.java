@@ -14,14 +14,13 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.example.budgetapp.R;
 import com.example.budgetapp.ai.AiAccountingClient;
 import com.example.budgetapp.ai.AiConfig;
+import com.example.budgetapp.ai.AiModelCatalog;
 import com.example.budgetapp.util.ScreenshotAutoSaveManager;
 
 import java.util.ArrayList;
@@ -50,6 +49,7 @@ public class AiSettingActivity extends AppCompatActivity {
     private TextView tvVisionStatus;
     private TextView tvAudioStatus;
     private AiAccountingClient aiClient;
+    private final List<AiModelPickerBinding> modelPickers = new ArrayList<>();
     
     // 截图自动保存相关
     private SwitchCompat switchScreenshotAutoSave;
@@ -73,13 +73,27 @@ public class AiSettingActivity extends AppCompatActivity {
         screenshotAutoSaveManager = new ScreenshotAutoSaveManager(this);
 
         View rootView = findViewById(R.id.ai_setting_root);
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
 
         initView();
+        View advanced = findViewById(R.id.ai_advanced_content);
+        com.google.android.material.button.MaterialButton toggle = findViewById(R.id.btn_ai_advanced);
+        boolean expanded = savedInstanceState != null && savedInstanceState.getBoolean("advanced_expanded", false);
+        setAdvancedExpanded(toggle, advanced, expanded);
+        toggle.setOnClickListener(v -> setAdvancedExpanded(toggle, advanced, advanced.getVisibility() != View.VISIBLE));
+    }
+
+    private void setAdvancedExpanded(com.google.android.material.button.MaterialButton toggle, View content, boolean expanded) {
+        content.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        toggle.setText(expanded ? "收起更多选项" : "更多选项");
+        toggle.setIconResource(expanded ? R.drawable.ic_arrow_left : R.drawable.ic_arrow_right);
+        androidx.core.view.ViewCompat.setStateDescription(toggle, expanded ? "已展开" : "已收起");
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle state) {
+        state.putBoolean("advanced_expanded", findViewById(R.id.ai_advanced_content).getVisibility() == View.VISIBLE);
+        super.onSaveInstanceState(state);
     }
     
     @Override
@@ -130,6 +144,7 @@ public class AiSettingActivity extends AppCompatActivity {
         etAudioApiKey.setText(config.audioApiKey);
         
         showCachedCapabilities(config);
+        initModelDiscovery();
         
         // 初始化截图自动保存开关
         initScreenshotAutoSaveSwitch();
@@ -192,9 +207,37 @@ public class AiSettingActivity extends AppCompatActivity {
             }
 
             newConfig.save(this);
+            com.example.budgetapp.BackupManager.triggerAutoUploadIfEnabled(this);
             Toast.makeText(this, "AI 配置已保存。", Toast.LENGTH_SHORT).show();
             finish();
         });
+    }
+
+    private void initModelDiscovery() {
+        AiModelCatalog catalog = new AiModelCatalog();
+        bindModelPicker(R.id.text_model_picker, etTextModel, "text", catalog);
+        bindModelPicker(R.id.vision_model_picker, etVisionModel, "vision", catalog);
+        bindModelPicker(R.id.audio_model_picker, etAudioModel, "audio", catalog);
+    }
+
+    private void bindModelPicker(int viewId, EditText target, String type, AiModelCatalog catalog) {
+        AiModelPickerBinding binding = new AiModelPickerBinding(this, findViewById(viewId), target, () -> {
+            AiConfig config = buildConfigFromInput();
+            if ("vision".equals(type)) return new AiModelPickerBinding.Connection(
+                    config.getEffectiveVisionBaseUrl(), config.getEffectiveVisionApiKey());
+            if ("audio".equals(type)) return new AiModelPickerBinding.Connection(
+                    config.getEffectiveAudioBaseUrl(), config.getEffectiveAudioApiKey());
+            return new AiModelPickerBinding.Connection(config.getEffectiveTextBaseUrl(), config.getEffectiveTextApiKey());
+        }, catalog);
+        binding.observe(etBaseUrl, etApiKey, etTextBaseUrl, etTextApiKey,
+                etVisionBaseUrl, etVisionApiKey, etAudioBaseUrl, etAudioApiKey);
+        modelPickers.add(binding);
+    }
+
+    @Override protected void onDestroy() {
+        for (AiModelPickerBinding binding : modelPickers) binding.close();
+        modelPickers.clear();
+        super.onDestroy();
     }
 
     private void showCachedCapabilities(AiConfig config) {

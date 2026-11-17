@@ -16,4 +16,43 @@
         <item>借出</item>
         <item>分期</item>
     </string-array>
+    <string name="hide_in_recents">在最近任务中隐藏</string>
+    <string name="silent_accounting_title">无需手动确认</string>
+    <string name="silent_accounting_description">识别结果直接入账，不弹出确认窗</string>
+    <string name="accessibility_source">普通模式使用无障碍，也可在下方改用 Shizuku</string>
+    <string name="accessibility_permission_message">普通模式需要开启「记账屏幕同步助手」。也可在记账助手启用实验模式，授权 Shizuku 后无需无障碍权限。</string>
+    <string name="experimental_title">Shizuku 实验模式</string>
+    <string name="experimental_source">通过 Shizuku 识别，无需无障碍权限</string>
+    <string name="experimental_off">授权 Shizuku 后，无需无障碍权限</string>
+    <string name="experimental_consent">仅在亮屏解锁时读取受支持应用的前台界面。不截图，不保存界面节点。授权 Shizuku 后无需无障碍权限；是否直接入账由「无需手动确认」开关决定。Shizuku 权限范围比无障碍更广，可通过通知随时停止。</string>
+    <string name="experimental_continue">继续</string>
+    <string name="experimental_go_to_settings">前往设置</string>
+    <string name="experimental_overlay_required">使用确认窗时，请允许 Tally 在其他应用上层显示。开启「无需手动确认」直接入账时，不需要此权限。</string>
+    <string name="experimental_notifications_required">请允许 Tally 通知，以便查看实验模式状态并随时停止。</string>
+    <string name="experimental_auth_denied">未授予 Shizuku 权限</string>
+    <string name="experimental_authorize_in_shizuku">请在 Shizuku 的已授权应用中允许 Tally。</string>
+    <string name="experimental_shizuku_version">Shizuku 版本不支持此功能，请更新后重试。</string>
+    <string name="experimental_notification_channel">实验性屏幕记账</string>
+    <string name="experimental_notification_text">仅识别受支持应用的前台页面</string>
+    <string name="experimental_stop">停止</string>
+    <string name="experimental_status_stopped">已暂停，打开屏幕自动记账可恢复</string>
+    <string name="experimental_status_connecting">正在连接 Shizuku…</string>
+    <string name="experimental_status_ready">已就绪，等待受支持的应用</string>
+    <string name="experimental_status_active">正在识别受支持的前台应用</string>
+    <string name="experimental_status_screen_locked">屏幕关闭或锁定，已暂停读取</string>
+    <string name="experimental_status_auth_lost">已暂停：Shizuku 未运行或未授权</string>
+    <string name="experimental_status_overlay_required">已暂停：显示确认窗需要悬浮窗权限</string>
+    <string name="experimental_status_notification_required">已暂停：需要通知权限</string>
+    <string name="experimental_status_connection_failed">未能连接 Shizuku 读取服务，请重试</string>
+    <string name="experimental_status_unavailable">此设备无法稳定读取屏幕，实验模式已暂停</string>
+    <string name="experimental_status_unreadable">当前页面无法读取，未记账</string>
+    <string name="shizuku_keep_alive">Shizuku 智能保活</string>
+    <string name="shizuku_not_running">Shizuku 未运行</string>
+    <string name="shizuku_not_authorized">Shizuku 已运行，尚未授权</string>
+    <string name="shizuku_authorized">已获授权，尚未开启保活</string>
+    <string name="shizuku_experimental_keep_alive">保活已开启，可恢复实验模式自动记账</string>
+    <string name="shizuku_keep_alive_ready">保活已开启，自动记账未开启</string>
+    <string name="shizuku_accessibility_active">保活已开启，无障碍已连接</string>
+    <string name="shizuku_accessibility_waiting">保活已开启，等待无障碍连接</string>
+    <string name="shizuku_start_guide">请先在 Shizuku 中通过无线调试、ADB 或 Root 启动服务，再返回授权。</string>
 </resources>

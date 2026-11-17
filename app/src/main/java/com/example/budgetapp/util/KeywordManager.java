@@ -2,6 +2,7 @@ package com.example.budgetapp.util;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -10,6 +11,8 @@ import java.util.Set;
 public class KeywordManager {
 
     private static final String PREF_NAME = "app_specific_keywords_prefs";
+    private static final String CUSTOM_PACKAGES = "experimental_custom_keyword_packages";
+    public static final int MAX_CUSTOM_PACKAGES = 32;
 
     // 定义支持的包名常量
     public static final String PKG_WECHAT = "com.tencent.mm";
@@ -38,9 +41,51 @@ public class KeywordManager {
         apps.put(PKG_PINDUODUO, "拼多多");
         apps.put(PKG_DOUYIN, "抖音");
         apps.put(PKG_MEITUAN, "美团");
+        apps.put("com.sankuai.meituan.takeoutnew", "美团外卖");
+        apps.put("com.sankuai.meituan.tuan", "美团团购");
+        apps.put("com.aliyun.tongyi", "通义千问");
         apps.put(PKG_UNIONPAY, "云闪付");
         apps.put("com.ss.android.ugc.lifeservices", "抖省省");
         return apps;
+    }
+
+    public static SharedPreferences rulePreferences(Context context) {
+        return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+    }
+
+    public static Map<String, String> getRuleApps(Context context) {
+        Map<String, String> apps = getSupportedApps();
+        for (String pkg : getCustomScreenPackages(context)) apps.putIfAbsent(pkg, pkg);
+        return apps;
+    }
+
+    public static String[] getCustomScreenPackages(Context context) {
+        Set<String> configured = rulePreferences(context).getStringSet(CUSTOM_PACKAGES, new HashSet<>());
+        String[] packages = configured.stream()
+                .filter(pkg -> ScreenCapturePolicy.canInspect(pkg, context.getPackageName())
+                        && !ScreenCapturePolicy.isTargetPackage(pkg) && !ScreenCapturePolicy.PAYMENT_DEMO.equals(pkg)
+                        && (!getKeywords(context, pkg, TYPE_EXPENSE).isEmpty() || !getKeywords(context, pkg, TYPE_INCOME).isEmpty()))
+                .limit(MAX_CUSTOM_PACKAGES).toArray(String[]::new);
+        Arrays.sort(packages);
+        return packages;
+    }
+
+    /** Explicit publish action. Capturing or replaying by itself never changes production scope. */
+    public static boolean publishVerifiedKeyword(Context context, String pkg, int type, String keyword) {
+        if (!ScreenCapturePolicy.canInspect(pkg, context.getPackageName()) || ScreenCapturePolicy.PAYMENT_DEMO.equals(pkg)
+                || (type != TYPE_EXPENSE && type != TYPE_INCOME) || keyword == null || keyword.trim().isEmpty()) return false;
+        SharedPreferences prefs = rulePreferences(context);
+        Set<String> words = new HashSet<>(getKeywords(context, pkg, type));
+        words.add(keyword.trim());
+        SharedPreferences.Editor edit = prefs.edit().putStringSet("keywords_" + pkg + "_" + type, words);
+        if (!ScreenCapturePolicy.isTargetPackage(pkg)) {
+            Set<String> custom = new HashSet<>(Arrays.asList(getCustomScreenPackages(context)));
+            if (custom.size() >= MAX_CUSTOM_PACKAGES && !custom.contains(pkg)) return false;
+            custom.add(pkg);
+            edit.putStringSet(CUSTOM_PACKAGES, custom);
+        }
+        edit.apply();
+        return true;
     }
 
     /**
@@ -84,7 +129,7 @@ public class KeywordManager {
      */
     public static Map<String, Set<String>> getIncomeKeywords(Context context) {
         Map<String, Set<String>> result = new HashMap<>();
-        for (String pkg : getSupportedApps().keySet()) {
+        for (String pkg : getRuleApps(context).keySet()) {
             Set<String> keywords = getKeywords(context, pkg, TYPE_INCOME);
             if (!keywords.isEmpty()) {
                 result.put(pkg, keywords);
@@ -99,7 +144,7 @@ public class KeywordManager {
      */
     public static Map<String, Set<String>> getExpenseKeywords(Context context) {
         Map<String, Set<String>> result = new HashMap<>();
-        for (String pkg : getSupportedApps().keySet()) {
+        for (String pkg : getRuleApps(context).keySet()) {
             Set<String> keywords = getKeywords(context, pkg, TYPE_EXPENSE);
             if (!keywords.isEmpty()) {
                 result.put(pkg, keywords);

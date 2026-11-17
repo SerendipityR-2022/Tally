@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ledger_canvas">#101113</color>
+    <color name="ledger_panel">#212225</color>
+    <color name="ledger_control">#2C2E33</color>
+    <color name="ledger_rule">#36383D</color>
+    <color name="ledger_text">#F3F1ED</color>
+    <color name="ledger_muted">#B0B0B6</color>
+    <color name="ledger_calendar_selection">#2C2E33</color>
+    <color name="ledger_calendar_today">#F68182</color>
+    <color name="ledger_chart_blue">#87A5FF</color>
+    <color name="ledger_keypad">#2C2D31</color>
+    <color name="ledger_category_selected">#303E5D</color>
+    <color name="ledger_income">#FFA0A5</color>
+</resources>

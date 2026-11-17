@@ -2,4 +2,10 @@
 <resources>
     <!-- FAB (Floating Action Button) margins -->
     <dimen name="fab_margin">20dp</dimen>
+    <dimen name="record_calendar_margin">12dp</dimen>
+    <dimen name="record_calendar_min_row_height">58dp</dimen>
+    <dimen name="record_calendar_max_row_height">92dp</dimen>
+    <dimen name="record_calendar_amount_min_size">9sp</dimen>
+    <dimen name="record_calendar_caption_size">11sp</dimen>
+    <dimen name="confirmation_field_inset">18dp</dimen>
 </resources>

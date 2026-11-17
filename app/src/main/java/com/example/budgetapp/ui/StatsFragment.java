@@ -43,12 +43,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.TransactionRemarks;
 import com.example.budgetapp.util.AssistantConfig;
+import com.example.budgetapp.util.CategoryIcon;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
 import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.charts.PieChart;
-import com.github.mikephil.charting.components.Legend;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
@@ -90,14 +91,11 @@ public class StatsFragment extends Fragment {
     private LineChart lineChart;
     private PieChart expensePieChart;
     private PieChart incomePieChart;
-    private TextView tvIncomeTitle;
     private LinearLayout layoutTrend;
     private LinearLayout layoutExpense;
-    private LinearLayout layoutSummary;
+    private TextView emptyState;
     private RadioGroup rgTimeScope;
     private TextView tvDateRange;
-    private TextView tvSummaryTitle;
-    private TextView tvSummaryContent;
     private View dividerOvertime;
     private TextView tvOvertimeContent;
     private ScrollView scrollView;
@@ -106,12 +104,13 @@ public class StatsFragment extends Fragment {
     private boolean isDirectionLocked = false;
     private boolean isHorizontalSwipe = false;
     private int touchSlop;
-    private int currentMode = 2; // 0=Year, 1=Month, 2=Week
+    private int currentMode = 1; // 0=Year, 1=Month, 2=Week
+    private int trendMode;
+    private View dashboard;
     private LocalDate selectedDate = LocalDate.now();
     private List<Transaction> allTransactions = new ArrayList<>();
     private List<AssetAccount> assetList = new ArrayList<>();
     private CustomMarkerView markerView;
-    private LinearLayout cardSummary;
 
     // 新增状态变量，用于记录当前打开的弹窗
     private AlertDialog currentCategoryDetailDialog;
@@ -124,9 +123,6 @@ public class StatsFragment extends Fragment {
 
     // --- 新增：用于显示分类/二级分类的汇总金额 ---
     private TextView currentDetailSummaryTextView;
-    private View dividerIncome;
-    private TextView tvIncomeSummaryTitle;
-    private TextView tvIncomeSummaryContent;
 
     @Nullable
     @Override
@@ -136,10 +132,15 @@ public class StatsFragment extends Fragment {
         setupGestures();
         setupLineChart();
         setupPieCharts();
+        RadioGroup trend = view.findViewById(R.id.ledger_trend_toggle);
+        trend.check(trendMode == 1 ? R.id.ledger_trend_income : trendMode == 2 ? R.id.ledger_trend_net : R.id.ledger_trend_expense);
+        trend.setOnCheckedChangeListener((group, id) -> {
+            trendMode = id == R.id.ledger_trend_income ? 1 : id == R.id.ledger_trend_net ? 2 : 0;
+            refreshData();
+        });
         viewModel = new ViewModelProvider(requireActivity()).get(FinanceViewModel.class);
         viewModel.getAllTransactions().observe(getViewLifecycleOwner(), list -> {
-            this.allTransactions = list;
-            refreshData();
+            renderTransactions(list);
             // 新增：如果详细分类列表弹窗正在显示，即时刷新它
             if (currentCategoryDetailDialog != null && currentCategoryDetailDialog.isShowing()) {
                 updateCategoryDetailDialogData();
@@ -154,27 +155,21 @@ public class StatsFragment extends Fragment {
     }
 
     private void initViews(View view) {
+        dashboard = view;
         layoutTrend = view.findViewById(R.id.layout_trend_section);
         layoutExpense = view.findViewById(R.id.layout_expense_section);
-        layoutSummary = view.findViewById(R.id.layout_summary_section);
+        emptyState = view.findViewById(R.id.tv_empty_state);
         lineChart = view.findViewById(R.id.chart_line);
         expensePieChart = view.findViewById(R.id.chart_pie);
         incomePieChart = view.findViewById(R.id.chart_pie_income);
-        tvIncomeTitle = view.findViewById(R.id.tv_income_title);
         rgTimeScope = view.findViewById(R.id.rg_time_scope);
         tvDateRange = view.findViewById(R.id.tv_current_date_range);
-        tvSummaryTitle = view.findViewById(R.id.tv_summary_title);
-        tvSummaryContent = view.findViewById(R.id.tv_summary_content);
         dividerOvertime = view.findViewById(R.id.divider_overtime);
         tvOvertimeContent = view.findViewById(R.id.tv_overtime_content);
         scrollView = view.findViewById(R.id.scroll_view_stats);
         touchSlop = ViewConfiguration.get(requireContext()).getScaledTouchSlop();
 
-        dividerIncome = view.findViewById(R.id.divider_income);
-        tvIncomeSummaryTitle = view.findViewById(R.id.tv_income_summary_title);
-        tvIncomeSummaryContent = view.findViewById(R.id.tv_income_summary_content);
 
-        cardSummary = view.findViewById(R.id.card_summary);
     }
 
     // 【修改】showCategoryDetailDialog 方法
@@ -277,39 +272,12 @@ public class StatsFragment extends Fragment {
             endMillis = endOfWeek.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
         }
 
-        Map<String, Double> categorySums = new HashMap<>();
-        double totalScopeAmount = 0;
-        for (Transaction t : allTransactions) {
-            if (t.date >= startMillis && t.date < endMillis && t.type == currentDetailType) {
-                if (currentDetailType == 1 && "加班".equals(t.category)) continue;
-                categorySums.put(t.category, categorySums.getOrDefault(t.category, 0.0) + t.amount);
-                totalScopeAmount += t.amount;
-            }
-        }
-        double threshold = totalScopeAmount * 0.05;
-
         List<Transaction> baseList = new ArrayList<>();
         for (Transaction t : allTransactions) {
-            if (t.date >= startMillis && t.date < endMillis && t.type == currentDetailType) {
-                if (currentDetailType == 1 && "加班".equals(t.category)) continue;
-
-                boolean isMatch = false;
-                if ("其他".equals(currentDetailCategory)) {
-                    Double catSum = categorySums.get(t.category);
-                    if (catSum != null && catSum < threshold) {
-                        isMatch = true;
-                    } else if ("其他".equals(t.category)) {
-                        isMatch = true;
-                    }
-                } else {
-                    if (t.category.equals(currentDetailCategory)) {
-                        isMatch = true;
-                    }
-                }
-
-                if (isMatch) {
-                    baseList.add(t);
-                }
+            String category = android.text.TextUtils.isEmpty(t.category) ? "未分类" : t.category;
+            if (t.isSettled && t.date >= startMillis && t.date < endMillis && t.type == currentDetailType
+                    && !"资产互转".equals(category) && category.equals(currentDetailCategory)) {
+                baseList.add(t);
             }
         }
 
@@ -539,13 +507,12 @@ public class StatsFragment extends Fragment {
         AlertDialog dialog = builder.create();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
 
-        TextView tvDate = dialogView.findViewById(R.id.tv_dialog_date);
+        LedgerEntrySheet sheet = new LedgerEntrySheet(dialog, dialogView);
         RadioGroup rgType = dialogView.findViewById(R.id.rg_type);
         RecyclerView rvCategory = dialogView.findViewById(R.id.rv_category);
         EditText etAmount = dialogView.findViewById(R.id.et_amount);
         EditText etCustomCategory = dialogView.findViewById(R.id.et_custom_category);
         EditText etRemark = dialogView.findViewById(R.id.et_remark);
-        EditText etNote = dialogView.findViewById(R.id.et_note);
         Spinner spAsset = dialogView.findViewById(R.id.sp_asset);
 
         Button btnSave = dialogView.findViewById(R.id.btn_save);
@@ -558,26 +525,13 @@ public class StatsFragment extends Fragment {
         List<String> incomeCategories = CategoryManager.getIncomeCategories(getContext());
 
         // 动态判断：如果是详细分类，则使用弹性流式布局；否则恢复 5 列网格布局
-        boolean isDetailed = com.example.budgetapp.util.CategoryManager.isDetailedCategoryEnabled(getContext());
-        if (isDetailed) {
-            com.google.android.flexbox.FlexboxLayoutManager flexboxLayoutManager = new com.google.android.flexbox.FlexboxLayoutManager(getContext());
-            // 设置自然换行
-            flexboxLayoutManager.setFlexWrap(com.google.android.flexbox.FlexWrap.WRAP);
-            // 设置主轴方向为水平
-            flexboxLayoutManager.setFlexDirection(com.google.android.flexbox.FlexDirection.ROW);
-            // 设置左对齐
-            flexboxLayoutManager.setJustifyContent(com.google.android.flexbox.JustifyContent.FLEX_START);
-
-            rvCategory.setLayoutManager(flexboxLayoutManager);
-        } else {
-            rvCategory.setLayoutManager(new GridLayoutManager(getContext(), 5));
-        }
+        rvCategory.setLayoutManager(new GridLayoutManager(requireContext(), LedgerCategoryGrid.COLUMNS));
 
         final boolean[] isExpense = {true}; // 默认支出
         final String[] selectedCategory = {expenseCategories.isEmpty() ? "自定义" : expenseCategories.get(0)};
         final String[] selectedSubCategory = {""}; // 【新增】保存选中的二级分类
 
-        CategoryAdapter categoryAdapter = new CategoryAdapter(getContext(), expenseCategories, selectedCategory[0], category -> {
+        CategoryAdapter categoryAdapter = new CategoryAdapter(getContext(), expenseCategories, selectedCategory[0], true, category -> {
             selectedCategory[0] = category;
             selectedSubCategory[0] = ""; // 【新增】切换主分类时清空二级分类
             if ("自定义".equals(category)) {
@@ -672,6 +626,7 @@ public class StatsFragment extends Fragment {
             return false;
         });
 
+        categoryAdapter.enableAdding();
         rvCategory.setAdapter(categoryAdapter);
 
         // === 资产配置 ===
@@ -741,24 +696,34 @@ public class StatsFragment extends Fragment {
             calendar.set(java.util.Calendar.DAY_OF_MONTH, date.getDayOfMonth());
         }
 
-        Runnable updateDateDisplay = () -> {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA);
-            tvDate.setText(sdf.format(calendar.getTime()));
-        };
+        Runnable updateDateDisplay = () -> sheet.updateDate(calendar);
         updateDateDisplay.run();
-
-        tvDate.setClickable(false);
-        tvDate.setFocusable(false);
+        sheet.bindDateActions(() -> new android.app.DatePickerDialog(requireContext(), (picker, year, month, day) -> {
+                    calendar.set(year, month, day);
+                    updateDateDisplay.run();
+                }, calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH),
+                calendar.get(java.util.Calendar.DAY_OF_MONTH)).show(),
+                () -> new android.app.TimePickerDialog(requireContext(), (picker, hour, minute) -> {
+                    calendar.set(java.util.Calendar.HOUR_OF_DAY, hour);
+                    calendar.set(java.util.Calendar.MINUTE, minute);
+                    updateDateDisplay.run();
+                }, calendar.get(java.util.Calendar.HOUR_OF_DAY), calendar.get(java.util.Calendar.MINUTE),
+                android.text.format.DateFormat.is24HourFormat(requireContext())).show());
+        dialogView.findViewById(R.id.btn_currency).setClickable(false);
+        dialogView.findViewById(R.id.btn_take_photo).setVisibility(View.GONE);
+        dialogView.findViewById(R.id.rb_liability).setVisibility(View.GONE);
+        dialogView.findViewById(R.id.rb_lend).setVisibility(View.GONE);
 
         rgType.setOnCheckedChangeListener((g, id) -> {
             boolean switchToExpense = (id == R.id.rb_expense);
             isExpense[0] = switchToExpense;
 
-            List<String> targetCategories = switchToExpense ? expenseCategories : incomeCategories;
+            List<String> targetCategories = switchToExpense ? CategoryManager.getExpenseCategories(requireContext())
+                    : CategoryManager.getIncomeCategories(requireContext());
             String defaultCat = targetCategories.isEmpty() ? "自定义" : targetCategories.get(0);
 
-            categoryAdapter.updateData(targetCategories);
-            categoryAdapter.setSelectedCategory(defaultCat);
+            categoryAdapter.setCategories(targetCategories, defaultCat, switchToExpense);
+            rvCategory.scrollToPosition(0);
             selectedCategory[0] = defaultCat;
 
             if ("自定义".equals(defaultCat)) {
@@ -771,8 +736,7 @@ public class StatsFragment extends Fragment {
         if (existingTransaction != null) {
             btnSave.setText("保存修改");
             etAmount.setText(String.valueOf(existingTransaction.amount));
-            if (existingTransaction.remark != null) etRemark.setText(existingTransaction.remark);
-            if (existingTransaction.note != null) etNote.setText(existingTransaction.note);
+            etRemark.setText(TransactionRemarks.display(existingTransaction));
 
             // 【新增】回显二级分类
             if (existingTransaction.subCategory != null) {
@@ -782,11 +746,9 @@ public class StatsFragment extends Fragment {
             if (existingTransaction.type == 1) {
                 rgType.check(R.id.rb_income);
                 isExpense[0] = false;
-                categoryAdapter.updateData(incomeCategories);
             } else {
                 rgType.check(R.id.rb_expense);
                 isExpense[0] = true;
-                categoryAdapter.updateData(expenseCategories);
             }
 
             String currentCat = existingTransaction.category;
@@ -808,7 +770,7 @@ public class StatsFragment extends Fragment {
                 new AlertDialog.Builder(getContext()).setTitle("确认删除").setMessage("确定要删除这条记录吗？").setPositiveButton("删除", (d, w) -> {
                     viewModel.deleteTransaction(existingTransaction);
                     dialog.dismiss();
-                }).setNegativeButton("取 消", null).show();
+                }).setNegativeButton("取消", null).show();
             });
 
             tvRevoke.setVisibility(View.VISIBLE);
@@ -817,14 +779,12 @@ public class StatsFragment extends Fragment {
             });
 
         } else {
-            btnSave.setText("保 存");
+            btnSave.setText("保存");
             btnDelete.setVisibility(View.GONE);
             tvRevoke.setVisibility(View.GONE);
-            SimpleDateFormat noteSdf = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA);
-            etNote.setText(noteSdf.format(calendar.getTime()) + " manual");
         }
 
-        btnSave.setOnClickListener(v -> {
+        sheet.bindSave(existingTransaction == null, keepRecording -> {
             String amountStr = etAmount.getText().toString();
             if (!amountStr.isEmpty()) {
                 double amount = Double.parseDouble(amountStr);
@@ -840,7 +800,6 @@ public class StatsFragment extends Fragment {
                 }
 
                 String userRemark = etRemark.getText().toString().trim();
-                String noteContent = etNote.getText().toString().trim();
                 long ts = calendar.getTimeInMillis();
 
                 int selectedAssetId = 0;
@@ -853,20 +812,32 @@ public class StatsFragment extends Fragment {
 
                 // 【修改】保存时带上二级分类数据
                 if (existingTransaction == null) {
-                    Transaction t = new Transaction(ts, type, category, amount, noteContent, userRemark);
+                    Transaction t = new Transaction(ts, type, category, amount, "", userRemark);
                     t.assetId = selectedAssetId;
                     t.subCategory = selectedSubCategory[0]; // 【新增】保存二级分类
                     // 【修复】使用带资产同步的方法，支持负债/借出还款逻辑
                     viewModel.addTransactionWithAssetSync(t);
                 } else {
-                    Transaction updateT = new Transaction(ts, type, category, amount, noteContent, userRemark);
+                    Transaction updateT = new Transaction(ts, type, category, amount, "", userRemark);
+                    TransactionRemarks.applyEdit(existingTransaction, updateT, userRemark);
                     updateT.id = existingTransaction.id;
+                    updateT.currencySymbol = existingTransaction.currencySymbol;
+                    updateT.photoPath = existingTransaction.photoPath;
+                    updateT.excludeFromBudget = existingTransaction.excludeFromBudget;
+                    updateT.isSettled = existingTransaction.isSettled;
+                    updateT.recurringRuleId = existingTransaction.recurringRuleId;
+                    updateT.scheduledExecuteTime = existingTransaction.scheduledExecuteTime;
+                    updateT.targetObject = existingTransaction.targetObject;
                     updateT.assetId = selectedAssetId;
                     updateT.subCategory = selectedSubCategory[0]; // 【新增】更新二级分类
                     // 【修复】使用带资产同步的方法
                     viewModel.updateTransactionWithAssetSync(existingTransaction, updateT);
                 }
                 dialog.dismiss();
+                if (keepRecording && existingTransaction == null) {
+                    showAddOrEditDialog(null, java.time.Instant.ofEpochMilli(calendar.getTimeInMillis())
+                            .atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+                }
             }
         });
 
@@ -882,7 +853,7 @@ public class StatsFragment extends Fragment {
         });
         // ===================================================
 
-        dialog.show();
+        sheet.show();
     }
 
     private void showRevokeDialog(Transaction transaction, AlertDialog parentDialog) {
@@ -1057,6 +1028,7 @@ public class StatsFragment extends Fragment {
         ImageButton btnPrev = view.findViewById(R.id.btn_prev);
         ImageButton btnNext = view.findViewById(R.id.btn_next);
 
+        rgTimeScope.check(currentMode == 0 ? R.id.rb_year : currentMode == 2 ? R.id.rb_week : R.id.rb_month);
         rgTimeScope.setOnCheckedChangeListener((group, checkedId) -> {
             if (checkedId == R.id.rb_year) currentMode = 0;
             else if (checkedId == R.id.rb_month) currentMode = 1;
@@ -1083,8 +1055,10 @@ public class StatsFragment extends Fragment {
     }
 
     private void changeDate(int offset) {
-        // 👇 修改这里：将作用目标改为外层包含标题的 layout，并带上散装的收入标题和收入饼图
-        View[] animateViews = {layoutTrend, layoutExpense, tvIncomeTitle, incomePieChart, layoutSummary};
+        if (dashboard == null) return;
+        View[] animateViews = {dashboard.findViewById(R.id.ledger_stats_metrics), layoutTrend, layoutExpense,
+                dashboard.findViewById(R.id.ledger_income_section), dashboard.findViewById(R.id.ledger_month_compare),
+                dashboard.findViewById(R.id.ledger_ranking)};
 
         float screenWidth = scrollView.getWidth();
         if (screenWidth == 0) screenWidth = 1080;
@@ -1093,10 +1067,8 @@ public class StatsFragment extends Fragment {
         float targetX = (offset > 0) ? -screenWidth : screenWidth;
 
         // 1. 第一阶段：旧数据整体滑出并淡出 (时长 150ms)
-        int visibleCount = 0;
         for (View v : animateViews) {
             if (v != null && v.getVisibility() == View.VISIBLE) {
-                visibleCount++;
                 v.animate()
                         .translationX(targetX)
                         .alpha(0f)
@@ -1108,6 +1080,7 @@ public class StatsFragment extends Fragment {
         // 2. 第二阶段：在数据滑出后的回调中更新内容
         if (scrollView != null) {
             scrollView.postDelayed(() -> {
+                if (dashboard == null) return;
                 // 更新日期逻辑，顶部的 tvDateRange 会立即变化
                 if (currentMode == 0) selectedDate = selectedDate.plusYears(offset);
                 else if (currentMode == 1) selectedDate = selectedDate.plusMonths(offset);
@@ -1118,7 +1091,9 @@ public class StatsFragment extends Fragment {
 
                 // 3. 第三阶段：将新数据整体瞬移到反方向，然后减速滑入 (时长 300ms)
                 for (View v : animateViews) {
-                    if (v != null && v.getVisibility() == View.VISIBLE) {
+                    v.setAlpha(1f);
+                    v.setTranslationX(0f);
+                    if (v.getVisibility() == View.VISIBLE) {
                         v.setTranslationX(-targetX * 0.5f); // 预位移
                         v.animate()
                                 .translationX(0f)
@@ -1183,13 +1158,7 @@ public class StatsFragment extends Fragment {
 
     private void showCustomDatePicker() {
         if (getContext() == null) return;
-        final BottomSheetDialog dialog = new BottomSheetDialog(getContext());
-        dialog.setContentView(R.layout.dialog_bottom_date_picker);
-        dialog.setOnShowListener(dialogInterface -> {
-            BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) dialogInterface;
-            View bottomSheet = bottomSheetDialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) bottomSheet.setBackgroundResource(android.R.color.transparent);
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_date_picker);
         int curYear = selectedDate.getYear();
         int curMonth = selectedDate.getMonthValue();
         int curDay = selectedDate.getDayOfMonth();
@@ -1252,6 +1221,11 @@ public class StatsFragment extends Fragment {
         }
     }
 
+    void renderTransactions(List<Transaction> list) {
+        allTransactions = list != null ? list : Collections.emptyList();
+        refreshData();
+    }
+
     private void refreshData() {
         if (allTransactions == null) return;
         if (currentMode == 0) processYearlyData();
@@ -1292,394 +1266,298 @@ public class StatsFragment extends Fragment {
     interface IndexExtractor { int getIndex(Transaction t); }
 
     private void aggregateData(IndexExtractor extractor, int maxX, String suffix, String[] customLabels) {
-        Map<Integer, Double> incomeMap = new HashMap<>();
-        Map<Integer, Double> expenseMap = new HashMap<>();
-        Map<String, Double> expensePieCats = new HashMap<>();
-        Map<String, Double> incomePieCats = new HashMap<>();
-
-        for (Transaction t : allTransactions) {
-            int index = extractor.getIndex(t);
-            if (index != -1) {
-                if (t.type == 1) { // 收入
-                    if (!"加班".equals(t.category)) {
-                        incomeMap.put(index, incomeMap.getOrDefault(index, 0.0) + t.amount);
-                        incomePieCats.put(t.category, incomePieCats.getOrDefault(t.category, 0.0) + t.amount);
-                    }
-                } else if (t.type == 0) { // 🌟 严格限制只有 type == 0 才是支出，完美隔离 type == 2
-                    expenseMap.put(index, expenseMap.getOrDefault(index, 0.0) + t.amount);
-                    expensePieCats.put(t.category, expensePieCats.getOrDefault(t.category, 0.0) + t.amount);
-                }
+        if (dashboard == null) return;
+        Map<Integer, Double> income = new HashMap<>(), expense = new HashMap<>();
+        Map<String, Double> expenseByCategory = new HashMap<>(), incomeByCategory = new HashMap<>();
+        Map<String, Integer> expenseCounts = new HashMap<>(), incomeCounts = new HashMap<>();
+        Map<YearMonth, Double> monthly = new HashMap<>();
+        List<Transaction> spending = new ArrayList<>();
+        LocalDate start = periodStart(selectedDate);
+        LocalDate end = nextPeriod(start).minusDays(1);
+        LocalDate previousStart = periodStart(start.minusDays(1));
+        LocalDate today = LocalDate.now();
+        boolean currentPeriod = !today.isBefore(start) && !today.isAfter(end);
+        YearMonth anchorMonth = YearMonth.from(selectedDate);
+        YearMonth comparisonStart = anchorMonth.minusMonths(4);
+        double previousExpense = 0, totalExpense = 0, totalIncome = 0;
+        int lastBucket = 0;
+        for (Transaction tx : allTransactions) {
+            if (!tx.isSettled || "资产互转".equals(tx.category) || (tx.type != 0 && tx.type != 1)) continue;
+            LocalDate day = Instant.ofEpochMilli(tx.date).atZone(ZoneId.systemDefault()).toLocalDate();
+            if (tx.type == 0) {
+                YearMonth month = YearMonth.from(day);
+                if (!month.isBefore(comparisonStart) && !month.isAfter(anchorMonth)) monthly.merge(month, tx.amount, Double::sum);
+                if (!day.isBefore(previousStart) && day.isBefore(start)) previousExpense += tx.amount;
             }
-        }
-        updateCharts(incomeMap, expenseMap, expensePieCats, incomePieCats, maxX, suffix, customLabels);
-    }
-
-    private void updateCharts(Map<Integer, Double> incomeMap, Map<Integer, Double> expenseMap,
-                              Map<String, Double> expensePieMap, Map<String, Double> incomePieMap,
-                              int maxX, String suffix, String[] customLabels) {
-
-        boolean hasTrendData = !incomeMap.isEmpty() || !expenseMap.isEmpty();
-        if (layoutTrend != null) {
-            layoutTrend.setVisibility(hasTrendData ? View.VISIBLE : View.GONE);
-        }
-
-        if (hasTrendData) {
-            List<Entry> inEntries = new ArrayList<>();
-            List<Entry> outEntries = new ArrayList<>();
-            List<Entry> netEntries = new ArrayList<>();
-
-            for (int i = 1; i <= maxX; i++) {
-                double in = incomeMap.getOrDefault(i, 0.0);
-                double out = expenseMap.getOrDefault(i, 0.0);
-
-                if (incomeMap.containsKey(i)) inEntries.add(new Entry(i, (float) in));
-                if (expenseMap.containsKey(i)) outEntries.add(new Entry(i, (float) out));
-                if (incomeMap.containsKey(i) || expenseMap.containsKey(i)) {
-                    netEntries.add(new Entry(i, (float) (in - out)));
-                }
-            }
-
-            LineDataSet setIn = createLineDataSet(inEntries, "收入", R.color.income_red);
-            LineDataSet setOut = createLineDataSet(outEntries, "支出", R.color.expense_green);
-            LineDataSet setNet = createLineDataSet(netEntries, "净收支", R.color.app_blue);
-            setNet.enableDashedLine(10f, 5f, 0f);
-
-            LineData lineData = new LineData(setIn, setOut, setNet);
-            lineChart.setData(lineData);
-
-            XAxis xAxis = lineChart.getXAxis();
-            xAxis.setAxisMinimum(1f);
-            xAxis.setAxisMaximum((float) maxX);
-
-            if (maxX <= 12) xAxis.setLabelCount(maxX);
-            else xAxis.setLabelCount(6);
-
-            xAxis.setValueFormatter(new ValueFormatter() {
-                @Override
-                public String getFormattedValue(float value) {
-                    int index = (int) value;
-                    if (index < 1 || index > maxX) return "";
-                    if (customLabels != null) {
-                        if (index >= 1 && index < customLabels.length) return customLabels[index];
-                        return "";
-                    }
-                    return index + suffix;
-                }
-            });
-
-            if (markerView != null) {
-                markerView.setSourceData(incomeMap, expenseMap, customLabels != null ? "" : suffix, customLabels);
-            }
-
-            lineChart.animateX(600);
-            lineChart.invalidate();
-        }
-
-        boolean hasExpenseData = !expensePieMap.isEmpty();
-        if (layoutExpense != null) {
-            layoutExpense.setVisibility(hasExpenseData ? View.VISIBLE : View.GONE);
-        }
-        if (hasExpenseData) {
-            updateSinglePieChart(expensePieChart, expensePieMap);
-        }
-
-        double totalIncome = 0;
-        for (Double val : incomePieMap.values()) totalIncome += val;
-
-        if (totalIncome > 0) {
-            tvIncomeTitle.setVisibility(View.VISIBLE);
-            incomePieChart.setVisibility(View.VISIBLE);
-            updateSinglePieChart(incomePieChart, incomePieMap);
-        } else {
-            tvIncomeTitle.setVisibility(View.GONE);
-            incomePieChart.setVisibility(View.GONE);
-        }
-
-        double totalExpense = 0;
-        for (Double val : expensePieMap.values()) totalExpense += val;
-        updateSummarySection(expensePieMap, totalExpense, incomePieMap, totalIncome); // 新调用，把收入数据也传进去
-    }
-
-    private void updateSinglePieChart(PieChart chart, Map<String, Double> pieMap) {
-        List<PieEntry> finalEntries = new ArrayList<>();
-        List<Integer> finalColors = new ArrayList<>();
-
-        double totalAmount = 0;
-        for (Double val : pieMap.values()) totalAmount += val;
-
-        double threshold = totalAmount * 0.05;
-        double otherAmount = 0;
-
-        List<Map.Entry<String, Double>> largeEntries = new ArrayList<>();
-        for (Map.Entry<String, Double> entry : pieMap.entrySet()) {
-            if (entry.getValue() >= threshold) {
-                largeEntries.add(entry);
+            int index = extractor.getIndex(tx);
+            if (index < 0) continue;
+            lastBucket = Math.max(lastBucket, index);
+            String category = android.text.TextUtils.isEmpty(tx.category) ? "未分类" : tx.category;
+            if (tx.type == 0) {
+                totalExpense += tx.amount;
+                spending.add(tx);
+                expense.merge(index, tx.amount, Double::sum);
+                expenseByCategory.merge(category, tx.amount, Double::sum);
+                expenseCounts.merge(category, 1, Integer::sum);
             } else {
-                otherAmount += entry.getValue();
+                totalIncome += tx.amount;
+                income.merge(index, tx.amount, Double::sum);
+                incomeByCategory.merge(category, tx.amount, Double::sum);
+                incomeCounts.merge(category, 1, Integer::sum);
             }
         }
+        int elapsedBucket = currentMode == 0 ? today.getMonthValue() : currentMode == 1 ? today.getDayOfMonth() : today.getDayOfWeek().getValue();
+        renderTrend(income, expense, maxX, currentPeriod ? Math.max(lastBucket, elapsedBucket) : maxX, suffix, customLabels);
+        renderComposition(expensePieChart, R.id.layout_expense_section, R.id.ledger_expense_categories,
+                expenseByCategory, expenseCounts, totalExpense, 0);
+        renderComposition(incomePieChart, R.id.ledger_income_section, R.id.ledger_income_categories,
+                incomeByCategory, incomeCounts, totalIncome, 1);
+        renderMonthlyComparison(anchorMonth, monthly);
+        renderRanking(spending);
+        boolean hasData = !expense.isEmpty() || !income.isEmpty();
+        emptyState.setVisibility(hasData || !monthly.isEmpty() ? View.GONE : View.VISIBLE);
 
-        List<Integer> generatedColors = generateThemeColors(largeEntries.size());
+        String unit = currentMode == 0 ? "年" : currentMode == 1 ? "月" : "周";
+        label(R.id.ledger_metric_expense_label, (currentPeriod ? "本" + unit : "当期") + "支出");
+        label(R.id.ledger_metric_comparison_label, "较上" + unit);
+        label(R.id.ledger_metric_expense, LedgerTransactionRow.money(totalExpense));
+        long days = Math.max(1, ChronoUnit.DAYS.between(start, currentPeriod ? today : end) + 1);
+        label(R.id.ledger_metric_daily, LedgerTransactionRow.money(totalExpense / days));
+        label(R.id.ledger_metric_balance, LedgerTransactionRow.money(totalIncome - totalExpense));
+        double difference = totalExpense - previousExpense;
+        label(R.id.ledger_metric_comparison, (difference >= 0.005 ? "+" : "") + LedgerTransactionRow.money(difference));
+        dividerOvertime.setVisibility(View.GONE);
+        tvOvertimeContent.setVisibility(View.GONE);
+        if (checkHasOvertime(start, end)) calculateAndShowOvertime(start, end, currentPeriod ? "本" + unit : "当期");
+    }
 
-        for (int i = 0; i < largeEntries.size(); i++) {
-            Map.Entry<String, Double> entry = largeEntries.get(i);
-            finalEntries.add(new PieEntry(entry.getValue().floatValue(), entry.getKey()));
-            finalColors.add(generatedColors.get(i));
+    private LocalDate periodStart(LocalDate date) {
+        if (currentMode == 0) return date.withDayOfYear(1);
+        if (currentMode == 1) return date.withDayOfMonth(1);
+        return date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+    }
+
+    private LocalDate nextPeriod(LocalDate date) {
+        if (currentMode == 0) return date.plusYears(1);
+        if (currentMode == 1) return date.plusMonths(1);
+        return date.plusWeeks(1);
+    }
+
+    private void label(int id, CharSequence text) { ((TextView) dashboard.findViewById(id)).setText(text); }
+
+    private void renderTrend(Map<Integer, Double> income, Map<Integer, Double> expense,
+                             int maxX, int buckets, String suffix, String[] customLabels) {
+        boolean hasData = !income.isEmpty() || !expense.isEmpty();
+        layoutTrend.setVisibility(hasData ? View.VISIBLE : View.GONE);
+        if (!hasData) return;
+        String title = trendMode == 1 ? "收入趋势" : trendMode == 2 ? "结余趋势" : "支出趋势";
+        label(R.id.ledger_trend_title, title);
+        List<Entry> points = new ArrayList<>();
+        for (int i = 1; i <= Math.min(buckets, maxX); i++) {
+            double in = income.getOrDefault(i, 0.0), out = expense.getOrDefault(i, 0.0);
+            points.add(new Entry(i, (float) (trendMode == 1 ? in : trendMode == 2 ? in - out : out)));
         }
-
-        if (otherAmount > 0) {
-            finalEntries.add(new PieEntry((float) otherAmount, "其他"));
-            finalColors.add(Color.LTGRAY);
-        }
-
-        PieDataSet pieSet = new PieDataSet(finalEntries, "");
-        pieSet.setColors(finalColors);
-
-        int primaryTextColor = ContextCompat.getColor(requireContext(), R.color.text_primary);
-        int secondaryLineColor = ContextCompat.getColor(requireContext(), R.color.text_secondary);
-
-        pieSet.setYValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
-        pieSet.setXValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
-        pieSet.setValueLineColor(secondaryLineColor);
-        pieSet.setValueLineWidth(1.0f);
-        pieSet.setSliceSpace(2f);
-        pieSet.setValueLinePart1OffsetPercentage(80.f);
-        pieSet.setValueLinePart1Length(0.3f);
-        pieSet.setValueLinePart2Length(0.8f);
-
-        pieSet.setValueTextSize(11f);
-        pieSet.setValueTextColor(primaryTextColor);
-
-        pieSet.setValueFormatter(new ValueFormatter() {
-            @Override
-            public String getFormattedValue(float value) {
-                return String.format("%.1f%%", value);
+        int color = requireContext().getColor(trendMode == 1 ? R.color.ledger_income : R.color.ledger_chart_blue);
+        LineDataSet set = new LineDataSet(points, title);
+        set.setColor(color);
+        set.setCircleColor(color);
+        set.setCircleRadius(maxX > 12 ? 2f : 3f);
+        set.setDrawCircles(true);
+        set.setDrawCircleHole(false);
+        set.setLineWidth(2.25f);
+        set.setDrawValues(false);
+        set.setDrawFilled(trendMode != 2);
+        set.setFillColor(color);
+        set.setFillAlpha(33);
+        set.setHighLightColor(color);
+        set.enableDashedHighlightLine(5f, 3f, 0);
+        set.setDrawHorizontalHighlightIndicator(false);
+        XAxis x = lineChart.getXAxis();
+        x.setAxisMinimum(1f);
+        x.setAxisMaximum(maxX);
+        x.setLabelCount(maxX <= 7 ? maxX : 6);
+        x.setAvoidFirstLastClipping(true);
+        x.setValueFormatter(new ValueFormatter() {
+            @Override public String getFormattedValue(float value) {
+                int index = Math.round(value);
+                if (index < 1 || index > maxX) return "";
+                return customLabels != null && index < customLabels.length ? customLabels[index] : index + suffix;
             }
         });
+        if (trendMode == 2) lineChart.getAxisLeft().resetAxisMinimum(); else lineChart.getAxisLeft().setAxisMinimum(0f);
+        lineChart.setData(new LineData(set));
+        lineChart.highlightValues(null);
+        markerView.setSourceData(income, expense, customLabels != null ? "" : suffix, customLabels);
+        lineChart.setContentDescription(title);
+        lineChart.invalidate();
+    }
 
-        PieData pieData = new PieData(pieSet);
-        pieData.setValueTextSize(11f);
-        pieData.setValueTextColor(primaryTextColor);
-
-        chart.setData(pieData);
-        chart.setUsePercentValues(true);
-        chart.setExtraOffsets(25f, 10f, 25f, 10f);
-        chart.setCenterTextColor(primaryTextColor);
-        chart.getLegend().setTextColor(primaryTextColor);
-
-        chart.animateY(800);
+    private void renderComposition(PieChart chart, int panelId, int rowsId, Map<String, Double> values,
+                                   Map<String, Integer> counts, double total, int type) {
+        View panel = dashboard.findViewById(panelId);
+        panel.setVisibility(total > 0 ? View.VISIBLE : View.GONE);
+        LinearLayout rows = dashboard.findViewById(rowsId);
+        rows.removeAllViews();
+        if (total <= 0) return;
+        List<Map.Entry<String, Double>> sorted = new ArrayList<>(values.entrySet());
+        sorted.sort((a, b) -> {
+            int amount = Double.compare(b.getValue(), a.getValue());
+            return amount == 0 ? a.getKey().compareTo(b.getKey()) : amount;
+        });
+        List<PieEntry> slices = new ArrayList<>();
+        List<Integer> colors = new ArrayList<>();
+        double remaining = 0;
+        for (int i = 0; i < sorted.size(); i++) {
+            Map.Entry<String, Double> item = sorted.get(i);
+            String category = item.getKey();
+            double value = item.getValue();
+            CategoryIcon icon = LedgerCategory.icon(requireContext(), category, type);
+            int color = icon.tint(requireContext());
+            if (i < 7 && value > 0) {
+                slices.add(new PieEntry((float) value, category));
+                colors.add(color);
+            } else if (value > 0) remaining += value;
+            View row = LayoutInflater.from(requireContext()).inflate(R.layout.item_ledger_category_rank, rows, false);
+            LedgerCategory.bind(row.findViewById(R.id.ledger_category_rank_icon), icon);
+            ((TextView) row.findViewById(R.id.ledger_category_rank_index)).setText(String.valueOf(i + 1));
+            ((TextView) row.findViewById(R.id.ledger_category_rank_label)).setText(category + "  ·  " + counts.get(category) + " 笔");
+            ((TextView) row.findViewById(R.id.ledger_category_rank_amount)).setText(LedgerTransactionRow.money(value));
+            android.widget.ProgressBar progress = row.findViewById(R.id.ledger_category_rank_progress);
+            progress.setProgress((int) Math.round(value / total * 100));
+            progress.setProgressTintList(ColorStateList.valueOf(color));
+            row.setOnClickListener(v -> showCategoryDetailDialog(category, type));
+            rows.addView(row);
+        }
+        if (remaining > 0) {
+            slices.add(new PieEntry((float) remaining, "其余分类", Boolean.TRUE));
+            colors.add(requireContext().getColor(R.color.ledger_muted));
+        }
+        PieDataSet data = new PieDataSet(slices, "");
+        data.setColors(colors);
+        data.setSliceSpace(3f);
+        data.setDrawValues(false);
+        data.setSelectionShift(4f);
+        chart.setData(new PieData(data));
+        chart.highlightValues(null);
+        chart.setCenterText(LedgerTransactionRow.money(total) + (type == 0 ? "\n支出" : "\n收入"));
+        chart.setContentDescription((type == 0 ? "支出构成 " : "收入构成 ") + LedgerTransactionRow.money(total));
         chart.invalidate();
     }
 
-    // 更新方法签名，增加 incomePieMap 和 totalIncomeAmount 两个参数
-    private void updateSummarySection(Map<String, Double> pieMap, double totalAmount, Map<String, Double> incomePieMap, double totalIncomeAmount) {
-        String scopeStr;
-        if (currentMode == 0) scopeStr = "本年";
-        else if (currentMode == 1) scopeStr = "本月";
-        else scopeStr = "本周";
-        tvSummaryTitle.setText(scopeStr + "消费");
-
-        LocalDate startOfPeriod;
-        LocalDate endOfPeriod;
-        if (currentMode == 0) {
-            startOfPeriod = selectedDate.with(TemporalAdjusters.firstDayOfYear());
-            endOfPeriod = selectedDate.with(TemporalAdjusters.lastDayOfYear());
-        } else if (currentMode == 1) {
-            startOfPeriod = selectedDate.with(TemporalAdjusters.firstDayOfMonth());
-            endOfPeriod = selectedDate.with(TemporalAdjusters.lastDayOfMonth());
-        } else {
-            startOfPeriod = selectedDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-            endOfPeriod = selectedDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+    private void renderMonthlyComparison(YearMonth anchor, Map<YearMonth, Double> values) {
+        dashboard.findViewById(R.id.ledger_month_compare).setVisibility(values.isEmpty() ? View.GONE : View.VISIBLE);
+        if (values.isEmpty()) return;
+        Context c = requireContext();
+        com.github.mikephil.charting.charts.BarChart chart = dashboard.findViewById(R.id.ledger_month_chart);
+        int muted = c.getColor(R.color.ledger_muted);
+        int active = c.getColor(R.color.ledger_chart_blue);
+        List<com.github.mikephil.charting.data.BarEntry> bars = new ArrayList<>();
+        String[] labels = new String[5];
+        StringBuilder description = new StringBuilder("月支出对比");
+        for (int i = 0; i < 5; i++) {
+            YearMonth period = anchor.minusMonths(4 - i);
+            labels[i] = period.getMonthValue() + "月";
+            double amount = values.getOrDefault(period, 0.0);
+            bars.add(new com.github.mikephil.charting.data.BarEntry(i, (float) amount));
+            description.append("，").append(period).append(" ").append(LedgerTransactionRow.money(amount));
         }
-
-        boolean hasOvertime = checkHasOvertime(startOfPeriod, endOfPeriod);
-        boolean hasExpense = !pieMap.isEmpty() && totalAmount > 0;
-        boolean hasIncome = !incomePieMap.isEmpty() && totalIncomeAmount > 0; // 检查是否有收入
-
-        // 如果三个数据都没有，隐藏整个总结面板
-        if (!hasExpense && !hasOvertime && !hasIncome) {
-            if (layoutSummary != null) layoutSummary.setVisibility(View.GONE);
-            return;
-        }
-
-        if (layoutSummary != null) layoutSummary.setVisibility(View.VISIBLE);
-
-        if (dividerOvertime != null) dividerOvertime.setVisibility(View.GONE);
-        if (tvOvertimeContent != null) tvOvertimeContent.setVisibility(View.GONE);
-
-        // --- 原有的消费展示逻辑（保持不变）---
-        if (!hasExpense) {
-            tvSummaryContent.setText("暂无消费记录");
-        } else {
-            List<Map.Entry<String, Double>> sortedEntries = new ArrayList<>(pieMap.entrySet());
-            Collections.sort(sortedEntries, (e1, e2) -> Double.compare(e2.getValue(), e1.getValue()));
-
-            SpannableStringBuilder ssb = new SpannableStringBuilder();
-            String[] prefixes = {"最多是", "其次是", "然后是"};
-
-            int yellowColor = ContextCompat.getColor(requireContext(), R.color.app_blue);
-            int greenColor = ContextCompat.getColor(requireContext(), R.color.expense_green);
-            int redColor = ContextCompat.getColor(requireContext(), R.color.income_red);
-
-            int count = Math.min(sortedEntries.size(), 3);
-            for (int i = 0; i < count; i++) {
-                if (i > 0) ssb.append("\n");
-
-                Map.Entry<String, Double> e = sortedEntries.get(i);
-                double percent = (e.getValue() / totalAmount) * 100;
-
-                ssb.append(prefixes[i]);
-
-                String category = e.getKey();
-                int startCat = ssb.length();
-                ssb.append(category);
-                ssb.setSpan(new ForegroundColorSpan(yellowColor), startCat, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-                ssb.append(", ");
-                ssb.append("占比");
-
-                String percentStr = String.format(Locale.CHINA, "%.1f%%", percent);
-                int startPer = ssb.length();
-                ssb.append(percentStr);
-                ssb.setSpan(new ForegroundColorSpan(greenColor), startPer, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-                ssb.append(", ");
-                ssb.append("消费");
-
-                String amountStr = String.format(Locale.CHINA, "%.2f", e.getValue());
-                int startAmt = ssb.length();
-                ssb.append(amountStr);
-                ssb.setSpan(new ForegroundColorSpan(redColor), startAmt, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-                ssb.append("元");
+        com.github.mikephil.charting.data.BarDataSet data = new com.github.mikephil.charting.data.BarDataSet(bars, "");
+        int faded = androidx.core.graphics.ColorUtils.setAlphaComponent(active, 112);
+        data.setColors(faded, faded, faded, faded, active);
+        data.setValueTextColor(muted);
+        data.setValueTextSize(10f);
+        data.setValueFormatter(new ValueFormatter() {
+            @Override public String getFormattedValue(float value) {
+                return value == 0 ? "0" : value >= 10000 ? String.format(Locale.CHINA, "%.1f万", value / 10000) : LedgerTransactionRow.money(value);
             }
-
-            ssb.append("\n");
-
-            long days = 1;
-            LocalDate today = LocalDate.now();
-
-            if (!today.isBefore(startOfPeriod) && !today.isAfter(endOfPeriod)) {
-                days = ChronoUnit.DAYS.between(startOfPeriod, today) + 1;
-            } else {
-                days = ChronoUnit.DAYS.between(startOfPeriod, endOfPeriod) + 1;
+        });
+        com.github.mikephil.charting.data.BarData d = new com.github.mikephil.charting.data.BarData(data);
+        d.setBarWidth(0.46f);
+        chart.setData(d);
+        chart.setFitBars(true);
+        chart.setTouchEnabled(false);
+        chart.getAxisRight().setEnabled(false);
+        chart.getAxisLeft().setAxisMinimum(0);
+        chart.getAxisLeft().setEnabled(false);
+        chart.getDescription().setEnabled(false);
+        chart.getLegend().setEnabled(false);
+        chart.setExtraTopOffset(11f);
+        XAxis x = chart.getXAxis();
+        x.setPosition(XAxis.XAxisPosition.BOTTOM);
+        x.setGranularity(1f);
+        x.setDrawGridLines(false);
+        x.setTextColor(muted);
+        x.setLabelCount(5);
+        x.setValueFormatter(new ValueFormatter() {
+            @Override public String getFormattedValue(float value) {
+                int i = Math.round(value);
+                return i >= 0 && i < labels.length ? labels[i] : "";
             }
-            if (days < 1) days = 1;
-            double dailyAvg = totalAmount / days;
-
-            ssb.append("共计消费");
-            String totalStr = String.format(Locale.CHINA, "%.2f", totalAmount);
-            int startTotal = ssb.length();
-            ssb.append(totalStr);
-            ssb.setSpan(new ForegroundColorSpan(redColor), startTotal, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-            ssb.append("元, ");
-            ssb.append("日均消费");
-
-            String avgStr = String.format(Locale.CHINA, "%.2f", dailyAvg);
-            int startAvg = ssb.length();
-            ssb.append(avgStr);
-            ssb.setSpan(new ForegroundColorSpan(redColor), startAvg, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            ssb.append("元");
-
-            tvSummaryContent.setText(ssb);
-        }
-
-        // --- 新增：收入展示逻辑 ---
-        if (hasIncome) {
-            if (dividerIncome != null) dividerIncome.setVisibility(View.VISIBLE);
-            if (tvIncomeSummaryTitle != null) {
-                tvIncomeSummaryTitle.setVisibility(View.VISIBLE);
-                tvIncomeSummaryTitle.setText(scopeStr + "收入");
-            }
-            if (tvIncomeSummaryContent != null) {
-                tvIncomeSummaryContent.setVisibility(View.VISIBLE);
-
-                List<Map.Entry<String, Double>> sortedIncome = new ArrayList<>(incomePieMap.entrySet());
-                Collections.sort(sortedIncome, (e1, e2) -> Double.compare(e2.getValue(), e1.getValue()));
-
-                SpannableStringBuilder incomeSsb = new SpannableStringBuilder();
-                String[] prefixes = {"最多是", "其次是", "然后是"};
-
-                int yellowColor = ContextCompat.getColor(requireContext(), R.color.app_blue);
-                int greenColor = ContextCompat.getColor(requireContext(), R.color.expense_green);
-                int redColor = ContextCompat.getColor(requireContext(), R.color.income_red);
-
-                int count = Math.min(sortedIncome.size(), 3);
-                for (int i = 0; i < count; i++) {
-                    if (i > 0) incomeSsb.append("\n");
-
-                    Map.Entry<String, Double> e = sortedIncome.get(i);
-                    double percent = (e.getValue() / totalIncomeAmount) * 100;
-
-                    incomeSsb.append(prefixes[i]);
-
-                    int startCat = incomeSsb.length();
-                    incomeSsb.append(e.getKey());
-                    incomeSsb.setSpan(new ForegroundColorSpan(yellowColor), startCat, incomeSsb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-                    incomeSsb.append(", 占比");
-
-                    String percentStr = String.format(Locale.CHINA, "%.1f%%", percent);
-                    int startPer = incomeSsb.length();
-                    incomeSsb.append(percentStr);
-                    incomeSsb.setSpan(new ForegroundColorSpan(greenColor), startPer, incomeSsb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-                    incomeSsb.append(", 收入");
-
-                    String amountStr = String.format(Locale.CHINA, "%.2f", e.getValue());
-                    int startAmt = incomeSsb.length();
-                    incomeSsb.append(amountStr);
-                    incomeSsb.setSpan(new ForegroundColorSpan(redColor), startAmt, incomeSsb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-                    incomeSsb.append("元");
-                }
-
-                incomeSsb.append("\n共计收入");
-                String totalIncStr = String.format(Locale.CHINA, "%.2f", totalIncomeAmount);
-                int startTotal = incomeSsb.length();
-                incomeSsb.append(totalIncStr);
-                incomeSsb.setSpan(new ForegroundColorSpan(redColor), startTotal, incomeSsb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                incomeSsb.append("元"); // 结尾直接去掉日均计算
-
-                // ======== 新增：计算并显示本年/本月结余 ========
-                if (currentMode == 0 || currentMode == 1) {
-                    // 结余 = 总收入 - 总支出
-                    double balance = totalIncomeAmount - totalAmount;
-                    String balanceLabel = (currentMode == 0) ? ", 本年结余" : ", 本月结余";
-                    incomeSsb.append(balanceLabel);
-
-                    String balanceStr = String.format(Locale.CHINA, "%.2f", balance);
-                    int startBalance = incomeSsb.length();
-                    incomeSsb.append(balanceStr);
-
-                    // 结余为正用红色（收入色），为负用绿色（支出色），可以根据需要修改颜色
-                    int balanceColor = balance >= 0 ? redColor : greenColor;
-                    incomeSsb.setSpan(new ForegroundColorSpan(balanceColor), startBalance, incomeSsb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-                    incomeSsb.append("元");
-                }
-                // ======== 结束新增 ========
-
-                tvIncomeSummaryContent.setText(incomeSsb);
-            }
-        } else {
-            // 如果没有收入，隐藏相关的视图
-            if (dividerIncome != null) dividerIncome.setVisibility(View.GONE);
-            if (tvIncomeSummaryTitle != null) tvIncomeSummaryTitle.setVisibility(View.GONE);
-            if (tvIncomeSummaryContent != null) tvIncomeSummaryContent.setVisibility(View.GONE);
-        }
-
-        // --- 原有的加班逻辑（保持不变）---
-        if (hasOvertime) {
-            calculateAndShowOvertime(startOfPeriod, endOfPeriod, scopeStr);
-        }
+        });
+        chart.setContentDescription(description.toString());
+        chart.invalidate();
     }
+
+    private void renderRanking(List<Transaction> spending) {
+        dashboard.findViewById(R.id.ledger_ranking).setVisibility(spending.isEmpty() ? View.GONE : View.VISIBLE);
+        LinearLayout rows = dashboard.findViewById(R.id.ledger_ranked_transactions);
+        rows.removeAllViews();
+        spending.sort((a, b) -> a.amount == b.amount ? Long.compare(b.date, a.date) : Double.compare(b.amount, a.amount));
+        int limit = Math.min(10, spending.size());
+        for (int i = 0; i < limit; i++) {
+            View row = LayoutInflater.from(requireContext()).inflate(R.layout.item_ledger_transaction, rows, false);
+            row.setPaddingRelative(0, row.getPaddingTop(), 0, row.getPaddingBottom());
+            bindRankingRow(row, spending.get(i), null);
+            rows.addView(row);
+        }
+        View all = dashboard.findViewById(R.id.ledger_ranking_all);
+        all.setVisibility(spending.size() > limit ? View.VISIBLE : View.GONE);
+        all.setOnClickListener(spending.size() > limit ? v -> showFullRanking(spending) : null);
+    }
+
+    private void bindRankingRow(View row, Transaction transaction, BottomSheetDialog parent) {
+        boolean showCurrency = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE).getBoolean("enable_currency", false);
+        String assetName = null;
+        if (assetList != null) for (AssetAccount asset : assetList) if (asset.id == transaction.assetId) { assetName = asset.name; break; }
+        new LedgerTransactionRow(row).bind(transaction, assetName, showCurrency, true);
+        row.setOnClickListener(v -> {
+            if (parent != null) parent.dismiss();
+            editRankingItem(transaction);
+        });
+    }
+
+    private void editRankingItem(Transaction transaction) {
+        LocalDate day = Instant.ofEpochMilli(transaction.date).atZone(ZoneId.systemDefault()).toLocalDate();
+        showAddOrEditDialog(transaction, day);
+    }
+
+    private void showFullRanking(List<Transaction> transactions) {
+        BottomSheetDialog dialog = new BottomSheetDialog(requireContext());
+        View view = LayoutInflater.from(requireContext()).inflate(R.layout.panel_ledger_full_ranking, null);
+        RecyclerView list = view.findViewById(R.id.ledger_full_rank_list);
+        view.findViewById(R.id.ledger_full_rank_close).setOnClickListener(v -> dialog.dismiss());
+        list.setLayoutManager(new LinearLayoutManager(requireContext()));
+        list.setAdapter(new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            @NonNull @Override public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+                return new RecyclerView.ViewHolder(LayoutInflater.from(parent.getContext())
+                        .inflate(R.layout.item_ledger_transaction, parent, false)) {};
+            }
+            @Override public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int i) {
+                bindRankingRow(holder.itemView, transactions.get(i), dialog);
+            }
+            @Override public int getItemCount() { return transactions.size(); }
+        });
+        dialog.setContentView(view);
+        dialog.getBehavior().setMaxHeight((int) (getResources().getDisplayMetrics().heightPixels * 0.80));
+        dialog.getBehavior().setState(com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED);
+        dialog.show();
+    }
+
     private boolean checkHasOvertime(LocalDate start, LocalDate end) {
         long startMillis = start.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         long endMillis = end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         for (Transaction t : allTransactions) {
-            if (t.date >= startMillis && t.date < endMillis && t.type == 1 && "加班".equals(t.category)) {
+            if (t.isSettled && t.date >= startMillis && t.date < endMillis && t.type == 1 && "加班".equals(t.category)) {
                 return true;
             }
         }
@@ -1698,7 +1576,7 @@ public class StatsFragment extends Fragment {
         Pattern pattern = Pattern.compile("时长:\\s*([0-9.]+)\\s*小时");
 
         for (Transaction t : allTransactions) {
-            if (t.date >= startMillis && t.date < endMillis && t.type == 1 && "加班".equals(t.category)) {
+            if (t.isSettled && t.date >= startMillis && t.date < endMillis && t.type == 1 && "加班".equals(t.category)) {
                 totalOvertimeIncome += t.amount;
 
                 if (t.note != null) {
@@ -1784,60 +1662,28 @@ public class StatsFragment extends Fragment {
         if (tvOvertimeContent != null) tvOvertimeContent.setVisibility(View.VISIBLE);
     }
 
-    private List<Integer> generateThemeColors(int count) {
-        List<Integer> colors = new ArrayList<>();
-        int uiMode = getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
-        boolean isNightMode = uiMode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
-        float goldenRatio = 0.618033988749895f;
-        float currentHue = (float) (Math.random() * 360f);
-        int generated = 0;
-        int iter = 0;
-        while (generated < count && iter < 1000) {
-            float h = (currentHue + (iter * goldenRatio * 360f)) % 360f;
-            iter++;
-            boolean isGreen = (h >= 80f && h < 160f);
-            boolean isCyan = (h >= 160f && h < 200f);
-            boolean isPurple = (h >= 250f && h < 320f);
-            if (isGreen || isCyan || isPurple) { continue; }
-            float s, v;
-            if (isNightMode) { s = 0.40f + (generated % 3) * 0.1f; v = 0.70f + (generated % 2) * 0.15f; } else { s = 0.35f + (generated % 3) * 0.1f; v = 0.80f + (generated % 2) * 0.15f; }
-            colors.add(Color.HSVToColor(new float[]{h, s, v}));
-            generated++;
-        }
-        while (colors.size() < count) { colors.add(Color.LTGRAY); }
-        return colors;
-    }
-
-    private LineDataSet createLineDataSet(List<Entry> entries, String label, int colorResId) {
-        LineDataSet set = new LineDataSet(entries, label);
-        int color = ContextCompat.getColor(requireContext(), colorResId);
-        set.setColor(color);
-        set.setCircleColor(color);
-        set.setLineWidth(2f);
-        set.setDrawValues(false);
-        set.setMode(LineDataSet.Mode.LINEAR);
-        return set;
-    }
-
     private void setupLineChart() {
-        int textColor = ContextCompat.getColor(requireContext(), R.color.text_primary);
+        int muted = requireContext().getColor(R.color.ledger_muted);
+        int rule = requireContext().getColor(R.color.ledger_rule);
         lineChart.getDescription().setEnabled(false);
+        lineChart.getLegend().setEnabled(false);
         lineChart.getAxisRight().setEnabled(false);
-        lineChart.getAxisLeft().setTextColor(textColor);
-        XAxis xAxis = lineChart.getXAxis();
-        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-        xAxis.setGranularity(1f);
-        xAxis.setTextColor(textColor);
-        lineChart.getLegend().setTextColor(textColor);
-        lineChart.setExtraBottomOffset(10f);
-        lineChart.setDragEnabled(true);
+        lineChart.getAxisLeft().setTextColor(muted);
+        lineChart.getAxisLeft().setGridColor(rule);
+        lineChart.getAxisLeft().setDrawAxisLine(false);
+        XAxis x = lineChart.getXAxis();
+        x.setPosition(XAxis.XAxisPosition.BOTTOM);
+        x.setGranularity(1f);
+        x.setTextColor(muted);
+        x.setGridColor(rule);
+        x.setAxisLineColor(rule);
+        lineChart.setExtraOffsets(1f, 6f, 6f, 3f);
+        lineChart.setDragEnabled(false);
         lineChart.setScaleEnabled(false);
         lineChart.setHighlightPerDragEnabled(false);
-        if (getContext() != null) {
-            markerView = new CustomMarkerView(getContext(), R.layout.view_chart_marker);
-            markerView.setChartView(lineChart);
-            lineChart.setMarker(markerView);
-        }
+        markerView = new CustomMarkerView(requireContext(), R.layout.view_chart_marker);
+        markerView.setChartView(lineChart);
+        lineChart.setMarker(markerView);
     }
 
     private void setupPieCharts() {
@@ -1846,31 +1692,22 @@ public class StatsFragment extends Fragment {
     }
 
     private void initPieChartStyle(PieChart chart, int type) {
-        if (chart == null) return;
-        int textColor = ContextCompat.getColor(requireContext(), R.color.text_primary);
-        int holeColor = ContextCompat.getColor(requireContext(), R.color.bar_background);
         chart.getDescription().setEnabled(false);
-        chart.setHoleRadius(40f);
+        chart.getLegend().setEnabled(false);
+        chart.setHoleRadius(61f);
         chart.setTransparentCircleRadius(0);
-        // 【修改这里】：将中心圆洞完全变透明，让底层你新加的半透明卡片色透出来
         chart.setHoleColor(Color.TRANSPARENT);
-        chart.setEntryLabelColor(textColor);
-        chart.setEntryLabelTextSize(10f);
+        chart.setDrawEntryLabels(false);
+        chart.setCenterTextColor(requireContext().getColor(R.color.ledger_text));
+        chart.setCenterTextSize(16f);
         chart.setRotationEnabled(false);
-        Legend l = chart.getLegend();
-        l.setTextColor(textColor);
-        l.setVerticalAlignment(Legend.LegendVerticalAlignment.BOTTOM);
-        l.setHorizontalAlignment(Legend.LegendHorizontalAlignment.CENTER);
-        l.setOrientation(Legend.LegendOrientation.HORIZONTAL);
-        l.setDrawInside(false);
         chart.setOnChartValueSelectedListener(new OnChartValueSelectedListener() {
-            @Override
-            public void onValueSelected(Entry e, Highlight h) {
-                String category = ((PieEntry) e).getLabel();
-                showCategoryDetailDialog(category, type);
+            @Override public void onValueSelected(Entry entry, Highlight highlight) {
+                if (entry instanceof PieEntry && !Boolean.TRUE.equals(entry.getData())) {
+                    showCategoryDetailDialog(((PieEntry) entry).getLabel(), type);
+                }
             }
-            @Override
-            public void onNothingSelected() { }
+            @Override public void onNothingSelected() { }
         });
     }
 
@@ -1883,115 +1720,19 @@ public class StatsFragment extends Fragment {
     }
 
     private void updateFragmentTransparency(boolean isCustomBg) {
-        View view = getView();
-        if (view == null) return;
-
-        TextView tvTopTitle = view.findViewById(R.id.tv_top_title);
-        RadioGroup rgTimeMode = view.findViewById(R.id.rg_time_scope); // 注意你xml里叫 rg_time_scope
-
-        // 【修改】获取三个图表和总结卡片
-        View chartLine = view.findViewById(R.id.chart_line);
-        View chartPie = view.findViewById(R.id.chart_pie);
-        View chartPieIncome = view.findViewById(R.id.chart_pie_income);
-        View cardSummary = view.findViewById(R.id.card_summary);
-
-        if (isCustomBg) {
-            // 1. 基础大背景全透明，完全透出底层自定义图片
-            view.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-            if (tvTopTitle != null) tvTopTitle.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-
-            // 2. 年月日切换栏：外框 90% 透明度，选中块 80% 透明度
-            if (rgTimeMode != null) {
-                if (rgTimeMode.getBackground() != null) {
-                    rgTimeMode.getBackground().mutate().setAlpha(230);
-                }
-                for (int i = 0; i < rgTimeMode.getChildCount(); i++) {
-                    View child = rgTimeMode.getChildAt(i);
-                    if (child.getBackground() != null) {
-                        child.getBackground().mutate().setAlpha(242);
-                    }
-                }
-            }
-        } else {
-            // ================= 恢复系统默认模式 =================
-            view.setBackgroundResource(R.color.bar_background);
-            if (tvTopTitle != null) tvTopTitle.setBackgroundResource(R.color.bar_background);
-
-            if (rgTimeMode != null) {
-                if (rgTimeMode.getBackground() != null) rgTimeMode.getBackground().mutate().setAlpha(255);
-                for (int i = 0; i < rgTimeMode.getChildCount(); i++) {
-                    View child = rgTimeMode.getChildAt(i);
-                    if (child.getBackground() != null) child.getBackground().mutate().setAlpha(255);
-                }
-            }
-        }
-
-        // 3. 将这 4 个区块转化为 90% 透明度的毛玻璃卡片（或恢复默认）
-        // 传入 true，表示在普通模式下不需要背景
-        applyGlassOrSolidBackground(chartLine, isCustomBg, true);
-        applyGlassOrSolidBackground(chartPie, isCustomBg, true);
-        applyGlassOrSolidBackground(chartPieIncome, isCustomBg, true);
-
-        // 传入 false，表示这是"总结"，在普通模式下需要恢复原有的 assets_field 背景
-        applyGlassOrSolidBackground(cardSummary, isCustomBg, false);
-    }
-
-    // 【修改】动态控制卡片背景，并增加内边距 (Padding) 的处理
-    private void applyGlassOrSolidBackground(View targetView, boolean isCustomBg, boolean isChart) {
-        if (targetView == null) return;
-
-        // 将 16dp 转换为像素 (px)
-        int padding16 = (int) android.util.TypedValue.applyDimension(
-                android.util.TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
-
-        if (isCustomBg) {
-            // 生成 16dp 圆角、90%透明度的浅灰背景
-            android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
-            shape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
-            float radius = android.util.TypedValue.applyDimension(
-                    android.util.TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
-            shape.setCornerRadius(radius);
-
-            int lightGray = androidx.core.content.ContextCompat.getColor(requireContext(), R.color.white);
-            shape.setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(lightGray, 230));
-
-            targetView.setBackground(shape);
-
-            // 🌟 【新增】：开启背景时，给图表和总结卡片都加上 16dp 的内边距
-            targetView.setPadding(padding16, padding16, padding16, padding16);
-
-        } else {
-            // ================= 恢复普通模式 =================
-            if (isChart) {
-                // 如果是图表，普通模式下清除背景（保持透明）
-                targetView.setBackground(null);
-
-                // 🌟 【新增】：清除背景的同时移除内边距，让图表恢复原本撑满的尺寸
-                targetView.setPadding(0, 0, 0, 0);
-            } else {
-                // 如果是总结卡片，普通模式下恢复默认的 assets_field
-                targetView.setBackgroundResource(R.drawable.assets_field);
-
-                // 🌟 【新增】：总结卡片在普通模式下原本就需要 16dp 的内边距
-                targetView.setPadding(padding16, padding16, padding16, padding16);
-            }
+        if (dashboard == null) return;
+        if (isCustomBg) dashboard.setBackgroundColor(Color.TRANSPARENT);
+        else dashboard.setBackgroundResource(R.color.ledger_canvas);
+        int alpha = isCustomBg ? 235 : 255;
+        for (int id : new int[]{R.id.rg_time_scope, R.id.ledger_stats_metrics, R.id.layout_trend_section,
+                R.id.layout_expense_section, R.id.ledger_income_section, R.id.ledger_month_compare, R.id.ledger_ranking}) {
+            View panel = dashboard.findViewById(id);
+            if (panel.getBackground() != null) panel.getBackground().mutate().setAlpha(alpha);
         }
     }
 
-    private void applyThemeBackground() {
-        View view = getView();
-        if (view == null) return;
-
-        SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        TextView tvTopTitle = view.findViewById(R.id.tv_top_title);
-
-        if (prefs.getInt("theme_mode", -1) == 3) {
-            view.setBackgroundColor(Color.TRANSPARENT);
-            if (tvTopTitle != null) tvTopTitle.setBackgroundColor(Color.TRANSPARENT);
-        } else {
-            view.setBackgroundResource(R.color.bar_background);
-            if (tvTopTitle != null) tvTopTitle.setBackgroundResource(R.color.bar_background);
-        }
+    @Override public void onDestroyView() {
+        dashboard = null;
+        super.onDestroyView();
     }
-
 }

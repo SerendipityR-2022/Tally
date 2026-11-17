@@ -22,11 +22,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat; // 新增
-import androidx.core.view.WindowInsetsCompat;
 
+import com.example.budgetapp.ui.SettingsPage;
 import com.example.budgetapp.util.KeywordManager;
 
 import java.util.ArrayList;
@@ -70,19 +68,8 @@ public class KeywordSettingActivity extends AppCompatActivity {
         tvCurrentAppHint = findViewById(R.id.tv_current_app_hint);
 
         // 2. 适配内边距
-        final int originalPaddingTop = rootLayout.getPaddingTop();
-        final int originalPaddingBottom = rootLayout.getPaddingBottom();
 
-        ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(
-                    v.getPaddingLeft(),
-                    originalPaddingTop + insets.top,
-                    v.getPaddingRight(),
-                    originalPaddingBottom + insets.bottom
-            );
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootLayout);
 
         KeywordManager.initDefaults(this);
 
@@ -97,7 +84,7 @@ public class KeywordSettingActivity extends AppCompatActivity {
 
     private void setupAppSpinner() {
         appItems = new ArrayList<>();
-        Map<String, String> supportedApps = KeywordManager.getSupportedApps();
+        Map<String, String> supportedApps = KeywordManager.getRuleApps(this);
         for (Map.Entry<String, String> entry : supportedApps.entrySet()) {
             appItems.add(new AppItem(entry.getKey(), entry.getValue()));
         }

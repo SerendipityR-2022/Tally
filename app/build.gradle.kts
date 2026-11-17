@@ -1,5 +1,42 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
+}
+
+// Secrets stay in an ignored, device-local file; Debug builds need no release key.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.isFile) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+val requiredSigningProperties = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val missingSigningProperties = requiredSigningProperties.filter {
+    keystoreProperties.getProperty(it).isNullOrBlank()
+}
+val hasReleaseSigning = keystorePropertiesFile.isFile && missingSigningProperties.isEmpty()
+// GitHub builds the APK without credentials; distribution still requires release signing.
+val unsignedCiBuild = providers.gradleProperty("tallyUnsignedCiBuild").map { it == "true" }.orElse(false)
+
+// Never silently distribute an unsigned Release when the local key is missing.
+val validateReleaseSigningInputs = tasks.register("validateReleaseSigningInputs") {
+    group = "verification"
+    description = "Checks local release signing credentials without printing secrets."
+    doLast {
+        check(keystorePropertiesFile.isFile) {
+            "Release signing requires keystore.properties; see docs/release-signing.md."
+        }
+        check(missingSigningProperties.isEmpty()) {
+            "keystore.properties is missing: ${missingSigningProperties.joinToString()}"
+        }
+        check(rootProject.file(keystoreProperties.getProperty("storeFile")).isFile) {
+            "Release keystore not found; restore the original signing key before building."
+        }
+    }
+}
+tasks.configureEach {
+    if (name == "preReleaseBuild" && !unsignedCiBuild.get()) dependsOn(validateReleaseSigningInputs)
 }
 
 android {
@@ -10,14 +47,29 @@ android {
         applicationId = "com.example.budgetapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 106
-        versionName = "3.8.5"
+        versionCode = 118
+        versionName = "3.8.5-based"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                // storeFile is relative to the project root, not the app module.
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storeType = keystoreProperties.getProperty("storeType", "PKCS12")
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            isDebuggable = false
+            if (hasReleaseSigning && !unsignedCiBuild.get()) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -27,7 +79,9 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         viewBinding = true
+        aidl = true
     }
 
     compileOptions {

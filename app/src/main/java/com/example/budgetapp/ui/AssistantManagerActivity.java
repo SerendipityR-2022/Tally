@@ -1,7 +1,10 @@
 package com.example.budgetapp.ui;
 
 import android.content.Intent;
-import android.content.SharedPreferences;
+import android.Manifest;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -23,10 +26,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -35,7 +35,8 @@ import com.example.budgetapp.R;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.KeywordManager;
 import com.example.budgetapp.util.ShizukuManager;
-import com.google.android.accessibility.selecttospeak.SelectToSpeakService;
+import com.example.budgetapp.service.ExperimentalAccountingService;
+import com.example.budgetapp.util.ScreenCaptureSettings;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,53 +54,54 @@ public class AssistantManagerActivity extends AppCompatActivity {
     private SwitchCompat switchAutoTrack;
 
     //    private SwitchCompat switchRefundMonitor;
-    private SwitchCompat switchAssets;
 
     private RecyclerView rvKeywords;
     private KeywordAdapter adapter;
 
     // 声明变量
-    private SwitchCompat switchDetails;
     private List<KeywordItem> dataList = new ArrayList<>();
 
-    // ===== 新增 Shizuku 相关常量与视图变量 =====
-    private static final int REQUEST_CODE_SHIZUKU = 1001;
-    private static final String PREF_NAME = "assistant_settings";
-    private static final String KEY_SHIZUKU_ENABLED = "shizuku_keep_alive_enabled";
+    private static final int REQUEST_KEEP_ALIVE = 1001;
+    private static final int REQUEST_EXPERIMENTAL = 1002;
+    private static final int REQUEST_OVERLAY = 1003;
+    private static final int REQUEST_NOTIFICATIONS = 1004;
 
+    private ScreenCaptureSettings captureSettings;
     private SwitchCompat switchShizukuKeepAlive;
+    private SwitchCompat switchExperimental;
+    private SwitchCompat switchSilentAccounting;
     private TextView tvShizukuStatus;
-    private SharedPreferences sp;
-
-    // 监听 Shizuku 权限申请结果
-    private final Shizuku.OnRequestPermissionResultListener permissionListener = (requestCode, grantResult) -> {
-        if (requestCode == REQUEST_CODE_SHIZUKU) {
-            runOnUiThread(() -> {
-                if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(this, "Shizuku 授权成功", Toast.LENGTH_SHORT).show();
-                    enableKeepAliveAndAccessibility();
-                } else {
-                    Toast.makeText(this, "用户拒绝了 Shizuku 授权", Toast.LENGTH_SHORT).show();
-                    if (switchShizukuKeepAlive != null) {
-                        switchShizukuKeepAlive.setChecked(false);
-                    }
-                    sp.edit().putBoolean(KEY_SHIZUKU_ENABLED, false).apply();
-                    updateShizukuStatusDisplay();
-                }
-            });
+    private TextView tvExperimentalStatus;
+    private TextView tvAutoTrackSource;
+    private boolean rendering;
+    private boolean resumed;
+    private boolean startExperimentalOnResume;
+    private int pendingShizukuRequest;
+    private final Handler statusHandler = new Handler(Looper.getMainLooper());
+    private final Runnable refreshStatus = new Runnable() {
+        @Override public void run() {
+            updateShizukuStatusDisplay();
+            statusHandler.postDelayed(this, 1000);
         }
     };
 
-    // 监听 Shizuku 服务绑定成功
-    private final Shizuku.OnBinderReceivedListener binderReceivedListener = () -> {
-        ShizukuManager.setBinderReady(true);
-        runOnUiThread(this::updateShizukuStatusDisplay);
+    private final Shizuku.OnRequestPermissionResultListener permissionListener = (requestCode, grantResult) -> {
+        if (requestCode != pendingShizukuRequest || pendingShizukuRequest == 0) return;
+        pendingShizukuRequest = 0;
+        if (grantResult == PackageManager.PERMISSION_GRANTED && ShizukuManager.hasShizukuPermission()) {
+            if (requestCode == REQUEST_KEEP_ALIVE) enableKeepAlive();
+            else continueExperimentalWhenResumed();
+        } else {
+            Toast.makeText(this, R.string.experimental_auth_denied, Toast.LENGTH_SHORT).show();
+            updateShizukuStatusDisplay();
+        }
     };
 
-    // 监听 Shizuku 服务断开
+    private final Shizuku.OnBinderReceivedListener binderReceivedListener = this::updateShizukuStatusDisplay;
     private final Shizuku.OnBinderDeadListener binderDeadListener = () -> {
-        ShizukuManager.setBinderReady(false);
-        runOnUiThread(this::updateShizukuStatusDisplay);
+        pendingShizukuRequest = 0;
+        startExperimentalOnResume = false;
+        updateShizukuStatusDisplay();
     };
 
     private static class KeywordItem implements Comparable<KeywordItem> {
@@ -141,89 +143,80 @@ public class AssistantManagerActivity extends AppCompatActivity {
         getWindow().setNavigationBarColor(Color.TRANSPARENT);
 
         setContentView(R.layout.activity_assistant_manager);
+        findViewById(R.id.btnScreenDebug).setOnClickListener(view ->
+                startActivity(new Intent(this, ScreenDebugActivity.class)));
 
         // 2. 适配内边距
         View rootLayout = findViewById(R.id.root_layout);
         if (rootLayout != null) {
-            final int originalPaddingTop = rootLayout.getPaddingTop();
-            final int originalPaddingBottom = rootLayout.getPaddingBottom();
-
-            ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
-                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(
-                        v.getPaddingLeft(),
-                        originalPaddingTop + insets.top,
-                        v.getPaddingRight(),
-                        originalPaddingBottom + insets.bottom
-                );
-                return WindowInsetsCompat.CONSUMED;
-            });
+            SettingsPage.applyInsets(rootLayout);
         }
 
         config = new AssistantConfig(this);
         // 确保默认关键字已初始化
         KeywordManager.initDefaults(this);
 
-        sp = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-
-        // 关键：在 super.onCreate 之后立即注册 Sticky 监听器
-        registerShizukuListeners();
-
+        captureSettings = new ScreenCaptureSettings(this);
+        if (savedInstanceState != null) {
+            pendingShizukuRequest = savedInstanceState.getInt("pending_shizuku_request");
+            startExperimentalOnResume = savedInstanceState.getBoolean("start_experimental_on_resume");
+        }
         initViews();
+        registerShizukuListeners();
     }
 
-    @Override
-    protected void onResume() {
+    @Override protected void onResume() {
         super.onResume();
+        resumed = true;
         loadData();
+        if (startExperimentalOnResume) continueExperimentalWhenResumed();
+        refreshStatus.run();
+    }
 
-        // ===== 新增：页面回到前台时更新 Shizuku 状态，并在已配置时尝试自愈拉起 =====
-        updateShizukuStatusDisplay();
-        if (sp != null && sp.getBoolean(KEY_SHIZUKU_ENABLED, false) && ShizukuManager.hasShizukuPermission()) {
-            if (!isAccessibilitySettingsOn()) {
-                enableKeepAliveAndAccessibility();
-            }
-        }
+    @Override protected void onPause() {
+        resumed = false;
+        statusHandler.removeCallbacks(refreshStatus);
+        super.onPause();
+    }
+
+    @Override protected void onSaveInstanceState(@NonNull Bundle state) {
+        state.putInt("pending_shizuku_request", pendingShizukuRequest);
+        state.putBoolean("start_experimental_on_resume", startExperimentalOnResume);
+        super.onSaveInstanceState(state);
     }
 
     private void initViews() {
+        findViewById(R.id.btn_auto_category_settings).setOnClickListener(view ->
+                startActivity(new Intent(this, AutoCategorySettingsActivity.class)));
+        findViewById(R.id.btn_auto_track_log).setOnClickListener(view ->
+                startActivity(new Intent(this, AutoTrackLogActivity.class)));
         switchAutoTrack = findViewById(R.id.switchAutoTrack);
-//        switchRefundMonitor = findViewById(R.id.switchRefundMonitor);
-        switchAssets = findViewById(R.id.switchAssets);
-        switchDetails = findViewById(R.id.switchDetails); // 新增
-
-        switchDetails.setChecked(config.isDetailsEnabled()); // 新增
+        switchSilentAccounting = findViewById(R.id.switchSilentAccounting);
+        switchSilentAccounting.setChecked(captureSettings.isSilentAccountingEnabled());
+        switchSilentAccounting.setOnCheckedChangeListener((button, checked) -> {
+            if (rendering) return;
+            captureSettings.setSilentAccountingEnabled(checked);
+            updateShizukuStatusDisplay();
+        });
 
         switchAutoTrack.setChecked(config.isEnabled());
-//        switchRefundMonitor.setChecked(config.isRefundEnabled());
-        switchAssets.setChecked(config.isAssetsEnabled());
 
-        switchAutoTrack.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            config.setEnabled(isChecked);
-            if (isChecked) {
-                // 如果开启了 Shizuku 自动保活且拥有权限，则静默拉起；否则执行原系统弹窗逻辑
-                if (sp.getBoolean(KEY_SHIZUKU_ENABLED, false) && ShizukuManager.hasShizukuPermission()) {
-                    enableKeepAliveAndAccessibility();
+        switchAutoTrack.setOnCheckedChangeListener((button, checked) -> {
+            if (rendering) return;
+            if (!checked) {
+                config.setEnabled(false);
+                ExperimentalAccountingService.stop(this);
+            } else if (captureSettings.isEnabled()) {
+                requestShizuku(REQUEST_EXPERIMENTAL);
+            } else {
+                config.setEnabled(true);
+                if (ShizukuManager.shouldRestoreAccessibility(this)) {
+                    ShizukuManager.restoreKeepAliveAsync(this);
                 } else {
                     checkAccessibilityPermission();
                 }
-                Toast.makeText(this, "已开启屏幕自动记账", Toast.LENGTH_SHORT).show();
             }
-        });
-
-        // 新增开关监听
-        switchDetails.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            config.setDetailsEnabled(isChecked);
-            Toast.makeText(this, "已" + (isChecked ? "开启" : "关闭") + "明细功能，重启应用后生效", Toast.LENGTH_LONG).show();
-        });
-
-        switchAssets.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            config.setAssetsEnabled(isChecked);
-            if (isChecked) {
-                Toast.makeText(this, "已开启资产功能，重启应用后生效", Toast.LENGTH_LONG).show();
-            } else {
-                Toast.makeText(this, "已关闭资产功能，重启应用后生效", Toast.LENGTH_LONG).show();
-            }
+            updateShizukuStatusDisplay();
         });
 
         rvKeywords = findViewById(R.id.rvKeywords);
@@ -236,123 +229,165 @@ public class AssistantManagerActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        // ===== 新增 Shizuku 视图绑定与事件监听 =====
         switchShizukuKeepAlive = findViewById(R.id.switchShizukuKeepAlive);
+        switchExperimental = findViewById(R.id.switchExperimentalAccounting);
         tvShizukuStatus = findViewById(R.id.tvShizukuStatus);
-
-        if (switchShizukuKeepAlive != null) {
-            boolean isConfigEnabled = sp.getBoolean(KEY_SHIZUKU_ENABLED, false);
-            switchShizukuKeepAlive.setChecked(isConfigEnabled);
-
-            switchShizukuKeepAlive.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (!buttonView.isPressed()) return; // 避免代码触发引发循环
-
-                if (isChecked) {
-                    handleEnableShizukuKeepAlive();
-                } else {
-                    sp.edit().putBoolean(KEY_SHIZUKU_ENABLED, false).apply();
-                    Toast.makeText(this, "已关闭 Shizuku 自动保活", Toast.LENGTH_SHORT).show();
-                    updateShizukuStatusDisplay();
-                }
-            });
-        }
+        tvExperimentalStatus = findViewById(R.id.tvExperimentalStatus);
+        tvAutoTrackSource = findViewById(R.id.tvAutoTrackSource);
+        switchShizukuKeepAlive.setOnCheckedChangeListener((button, checked) -> {
+            if (rendering) return;
+            if (checked) requestShizuku(REQUEST_KEEP_ALIVE);
+            else {
+                captureSettings.setKeepAliveEnabled(false);
+                ExperimentalAccountingService.refreshRestartPolicy(this);
+            }
+            updateShizukuStatusDisplay();
+        });
+        switchExperimental.setOnCheckedChangeListener((button, checked) -> {
+            if (rendering) return;
+            if (checked) {
+                new AlertDialog.Builder(this).setTitle(R.string.experimental_title)
+                        .setMessage(R.string.experimental_consent)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(R.string.experimental_continue, (dialog, which) -> requestShizuku(REQUEST_EXPERIMENTAL))
+                        .show();
+            } else {
+                // Disabling the new source must not silently opt the user back into accessibility.
+                config.setEnabled(false);
+                captureSettings.setEnabled(false);
+                ExperimentalAccountingService.stop(this);
+            }
+            updateShizukuStatusDisplay();
+        });
     }
 
-    // ===== 新增 Shizuku 业务控制逻辑 =====
     private void registerShizukuListeners() {
-        // 使用 Sticky 监听，即使在页面打开前 Binder 就已经连上了也能收到回调
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener);
         Shizuku.addBinderDeadListener(binderDeadListener);
         Shizuku.addRequestPermissionResultListener(permissionListener);
     }
 
     private void updateShizukuStatusDisplay() {
-        if (tvShizukuStatus == null) return;
-
-        boolean isServiceAvailable = ShizukuManager.isShizukuAvailable();
-        boolean hasPermission = ShizukuManager.hasShizukuPermission();
-        boolean isAccessRunning = isAccessibilitySettingsOn();
-
-        // 同步无障碍开关显示
-        if (switchAutoTrack != null) {
-            switchAutoTrack.setChecked(isAccessRunning);
-        }
-
-        if (!isServiceAvailable) {
-            tvShizukuStatus.setText("Shizuku 未运行 (点击开关查看引导)");
-            tvShizukuStatus.setTextColor(0xFFE53935);
-            if (switchShizukuKeepAlive != null) {
-                switchShizukuKeepAlive.setChecked(false);
-            }
-            return;
-        }
-
-        if (!hasPermission) {
-            tvShizukuStatus.setText("Shizuku 运行中，尚未授予应用权限");
-            tvShizukuStatus.setTextColor(0xFFFB8C00);
-            if (switchShizukuKeepAlive != null) {
-                switchShizukuKeepAlive.setChecked(false);
-            }
-            return;
-        }
-
-        if (isAccessRunning) {
-            tvShizukuStatus.setText("保护已激活：后台豁免生效，无障碍运行正常");
-            tvShizukuStatus.setTextColor(0xFF43A047);
-        } else {
-            tvShizukuStatus.setText("已获得 Shizuku 权限，无障碍待激活");
-            tvShizukuStatus.setTextColor(0xFFFB8C00);
-        }
+        boolean available = ShizukuManager.isShizukuAvailable();
+        boolean authorized = available && ShizukuManager.hasShizukuPermission();
+        boolean experimental = captureSettings.isEnabled();
+        boolean accessibility = isAccessibilitySettingsOn();
+        rendering = true;
+        try {
+            switchShizukuKeepAlive.setChecked(captureSettings.isKeepAliveEnabled());
+            switchExperimental.setChecked(experimental);
+            switchSilentAccounting.setChecked(captureSettings.isSilentAccountingEnabled());
+            switchAutoTrack.setChecked(config.isEnabled() && (experimental
+                    ? authorized && (ExperimentalAccountingService.isRunning()
+                        || ExperimentalAccountingService.isConnecting()) : accessibility));
+        } finally { rendering = false; }
+        tvAutoTrackSource.setText(experimental ? R.string.experimental_source : R.string.accessibility_source);
+        tvShizukuStatus.setText(!available ? R.string.shizuku_not_running
+                : !authorized ? R.string.shizuku_not_authorized
+                : !captureSettings.isKeepAliveEnabled() ? R.string.shizuku_authorized
+                : !config.isEnabled() ? R.string.shizuku_keep_alive_ready
+                : experimental ? R.string.shizuku_experimental_keep_alive
+                : accessibility ? R.string.shizuku_accessibility_active : R.string.shizuku_accessibility_waiting);
+        int missingPermission = experimental && authorized
+                ? ExperimentalAccountingService.getMissingPermissionStatus(this) : 0;
+        tvExperimentalStatus.setText(!experimental ? R.string.experimental_off
+                : !authorized ? R.string.experimental_status_auth_lost
+                : missingPermission != 0 ? missingPermission
+                : !config.isEnabled() ? R.string.experimental_status_stopped
+                : ExperimentalAccountingService.getStatus());
     }
 
-    private void handleEnableShizukuKeepAlive() {
+    private void requestShizuku(int requestCode) {
         if (!ShizukuManager.isShizukuAvailable()) {
-            if (switchShizukuKeepAlive != null) {
-                switchShizukuKeepAlive.setChecked(false);
-            }
             showShizukuNotRunningDialog();
             return;
         }
-
-        if (!ShizukuManager.hasShizukuPermission()) {
-            ShizukuManager.requestPermission(REQUEST_CODE_SHIZUKU);
-            return;
+        try {
+            if (Shizuku.isPreV11() || (requestCode == REQUEST_EXPERIMENTAL && Shizuku.getVersion() < 13)) {
+                Toast.makeText(this, R.string.experimental_shizuku_version, Toast.LENGTH_LONG).show();
+                return;
+            }
+            if (ShizukuManager.hasShizukuPermission()) {
+                if (requestCode == REQUEST_KEEP_ALIVE) enableKeepAlive();
+                else continueExperimentalWhenResumed();
+            } else if (Shizuku.shouldShowRequestPermissionRationale()) {
+                Toast.makeText(this, R.string.experimental_authorize_in_shizuku, Toast.LENGTH_LONG).show();
+            } else if (pendingShizukuRequest == 0) {
+                pendingShizukuRequest = requestCode;
+                Shizuku.requestPermission(requestCode);
+            }
+        } catch (RuntimeException e) {
+            pendingShizukuRequest = 0;
+            Toast.makeText(this, R.string.experimental_status_auth_lost, Toast.LENGTH_SHORT).show();
         }
-
-        enableKeepAliveAndAccessibility();
     }
 
-    private void enableKeepAliveAndAccessibility() {
-        new Thread(() -> {
-            ShizukuManager.grantBackgroundKeepAlive(this);
-            boolean success = ShizukuManager.enableAccessibilityService(this);
+    private void enableKeepAlive() {
+        captureSettings.setKeepAliveEnabled(true);
+        ExperimentalAccountingService.refreshRestartPolicy(this);
+        ShizukuManager.restoreKeepAliveAsync(this);
+        updateShizukuStatusDisplay();
+    }
 
-            runOnUiThread(() -> {
-                if (success) {
-                    sp.edit().putBoolean(KEY_SHIZUKU_ENABLED, true).apply();
-                    if (switchShizukuKeepAlive != null) {
-                        switchShizukuKeepAlive.setChecked(true);
-                    }
-                    if (switchAutoTrack != null) {
-                        switchAutoTrack.setChecked(true);
-                    }
-                    config.setEnabled(true);
-                    Toast.makeText(this, "后台保护与无障碍权限已静默激活！", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(this, "激活失败，请检查 Shizuku 权限及 ADB 权限", Toast.LENGTH_SHORT).show();
-                    if (switchShizukuKeepAlive != null) {
-                        switchShizukuKeepAlive.setChecked(false);
-                    }
-                }
-                updateShizukuStatusDisplay();
-            });
-        }).start();
+    private void continueExperimentalWhenResumed() {
+        startExperimentalOnResume = !resumed;
+        if (!resumed) return;
+        if (!ShizukuManager.hasShizukuPermission()) {
+            updateShizukuStatusDisplay();
+            return;
+        }
+        if (!ExperimentalAccountingService.overlayRequirementMet(this)) {
+            showExperimentalPermissionDialog(R.string.experimental_overlay_required,
+                    new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())), REQUEST_OVERLAY);
+            return;
+        }
+        if (!ExperimentalAccountingService.notificationsAllowed(this)) {
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
+            } else {
+                showExperimentalPermissionDialog(R.string.experimental_notifications_required,
+                        new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()),
+                        REQUEST_NOTIFICATIONS);
+            }
+            return;
+        }
+        captureSettings.setEnabled(true);
+        config.setEnabled(true);
+        if (!ExperimentalAccountingService.startFromUser(this)) {
+            Toast.makeText(this, R.string.experimental_status_connection_failed, Toast.LENGTH_LONG).show();
+        }
+        updateShizukuStatusDisplay();
+    }
+
+    private void showExperimentalPermissionDialog(int message, Intent intent, int requestCode) {
+        new AlertDialog.Builder(this).setTitle(R.string.experimental_title).setMessage(message)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.experimental_go_to_settings, (dialog, which) -> {
+                    try { startActivityForResult(intent, requestCode); }
+                    catch (RuntimeException e) { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); }
+                }).show();
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if ((requestCode == REQUEST_OVERLAY && ExperimentalAccountingService.overlayRequirementMet(this))
+                || (requestCode == REQUEST_NOTIFICATIONS && ExperimentalAccountingService.notificationsAllowed(this))) {
+            continueExperimentalWhenResumed();
+        }
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode != REQUEST_NOTIFICATIONS) return;
+        if (ExperimentalAccountingService.notificationsAllowed(this)) continueExperimentalWhenResumed();
+        else Toast.makeText(this, R.string.experimental_notifications_required, Toast.LENGTH_LONG).show();
     }
 
     private void showShizukuNotRunningDialog() {
         new AlertDialog.Builder(this)
                 .setTitle("Shizuku 未运行")
-                .setMessage("Shizuku 是一个能通过 ADB 无线调试或 Root 赋予应用系统权限的工具。\n\n如需免跳转自动开启无障碍并保活后台，请先安装并启动 Shizuku。")
+                .setMessage(R.string.shizuku_start_guide)
                 .setPositiveButton("打开/下载 Shizuku", (dialog, which) -> {
                     try {
                         Intent intent = getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
@@ -387,11 +422,12 @@ public class AssistantManagerActivity extends AppCompatActivity {
             TextView tvTitle = view.findViewById(R.id.tv_permission_title);
             TextView tvMessage = view.findViewById(R.id.tv_permission_message);
             tvTitle.setText("需要开启辅助服务");
-            tvMessage.setText("屏幕自动记账需要开启'记账屏幕同步助手'服务。");
+            tvMessage.setText(R.string.accessibility_permission_message);
 
             // 取消按钮：不仅关闭弹窗，还要把开关关掉
             view.findViewById(R.id.btn_cancel_permission).setOnClickListener(v -> {
-                switchAutoTrack.setChecked(false);
+                config.setEnabled(false);
+                updateShizukuStatusDisplay();
                 dialog.dismiss();
             });
 
@@ -401,24 +437,16 @@ public class AssistantManagerActivity extends AppCompatActivity {
                 dialog.dismiss();
             });
 
+            dialog.setOnCancelListener(ignored -> {
+                config.setEnabled(false);
+                updateShizukuStatusDisplay();
+            });
             dialog.show();
         }
     }
 
     private boolean isAccessibilitySettingsOn() {
-        int accessibilityEnabled = 0;
-        final String service = getPackageName() + "/" + SelectToSpeakService.class.getCanonicalName();
-        try {
-            accessibilityEnabled = Settings.Secure.getInt(getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED);
-        } catch (Settings.SettingNotFoundException e) { }
-
-        if (accessibilityEnabled == 1) {
-            String settingValue = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            if (settingValue != null) {
-                return settingValue.contains(service);
-            }
-        }
-        return false;
+        return ShizukuManager.isAccessibilityRunning(this);
     }
 
     private void loadData() {
@@ -426,7 +454,7 @@ public class AssistantManagerActivity extends AppCompatActivity {
         // 使用 KeywordManager 的新方法
         Map<String, Set<String>> incomeMap = KeywordManager.getIncomeKeywords(this);
         Map<String, Set<String>> expenseMap = KeywordManager.getExpenseKeywords(this);
-        Map<String, String> apps = KeywordManager.getSupportedApps();
+        Map<String, String> apps = KeywordManager.getRuleApps(this);
 
         // 整理收入关键字
         for (Map.Entry<String, Set<String>> entry : incomeMap.entrySet()) {
@@ -469,7 +497,7 @@ public class AssistantManagerActivity extends AppCompatActivity {
 
         // 设置 Spinner 数据
         List<AppSpinnerItem> spinnerItems = new ArrayList<>();
-        Map<String, String> apps = KeywordManager.getSupportedApps();
+        Map<String, String> apps = KeywordManager.getRuleApps(this);
 
         int selectedIndex = 0;
         int i = 0;

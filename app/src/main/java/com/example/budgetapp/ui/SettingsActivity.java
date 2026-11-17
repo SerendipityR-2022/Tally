@@ -17,9 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.example.budgetapp.BackupData;
@@ -30,6 +28,7 @@ import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.util.ExternalImportHelper;
+import com.example.budgetapp.util.RecentTaskSettings;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
 
 import java.io.BufferedReader;
@@ -48,7 +47,6 @@ public class SettingsActivity extends AppCompatActivity {
     private FinanceViewModel financeViewModel;
     private List<Transaction> allTransactions = new ArrayList<>();
     private List<AssetAccount> allAssets = new ArrayList<>();
-    private SwitchCompat switchMinimalist;
 
     // --- 查重辅助方法 开始 ---
     private boolean isDuplicateAsset(AssetAccount a, List<AssetAccount> existingList) {
@@ -452,21 +450,14 @@ public class SettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_settings);
 
         View rootView = findViewById(R.id.settings_root);
-        final int originalPaddingLeft = rootView.getPaddingLeft();
-        final int originalPaddingTop = rootView.getPaddingTop();
-        final int originalPaddingRight = rootView.getPaddingRight();
-        final int originalPaddingBottom = rootView.getPaddingBottom();
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(originalPaddingLeft + insets.left, originalPaddingTop + insets.top, originalPaddingRight + insets.right, originalPaddingBottom + insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView, true);
 
         financeViewModel = new ViewModelProvider(this).get(FinanceViewModel.class);
         financeViewModel.getAllTransactions().observe(this, list -> allTransactions = list);
         financeViewModel.getAllAssets().observe(this, list -> allAssets = list);
 
         findViewById(R.id.btn_category_setting).setOnClickListener(v -> startActivity(new Intent(this, CategorySettingsActivity.class)));
+        findViewById(R.id.btn_auto_category_setting).setOnClickListener(v -> startActivity(new Intent(this, AutoCategorySettingsActivity.class)));
 
         // 新增：跳转到预算管理页面
         findViewById(R.id.btn_budget_management).setOnClickListener(v -> startActivity(new Intent(this, BudgetManagementActivity.class)));
@@ -478,15 +469,10 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btn_ai_setting).setOnClickListener(v -> startActivity(new Intent(this, AiSettingActivity.class)));
 
         findViewById(R.id.btn_auto_asset).setOnClickListener(v -> startActivity(new Intent(this, AutoAssetActivity.class)));
-        findViewById(R.id.btn_default_page).setOnClickListener(v -> startActivity(new Intent(this, DefaultPageActivity.class)));
-        findViewById(R.id.btn_toggle_night_mode).setOnClickListener(v -> startActivity(new Intent(this, ThemeSettingsActivity.class)));
+        findViewById(R.id.btn_display_options).setOnClickListener(v -> startActivity(new Intent(this, DefaultPageActivity.class)));
+        findViewById(R.id.btn_toggle_night_mode).setOnClickListener(v -> showThemeChoice());
         findViewById(R.id.btn_assistant_setting).setOnClickListener(v -> startActivity(new Intent(this, AssistantManagerActivity.class)));
         findViewById(R.id.btn_overtime_setting).setOnClickListener(v -> showSetOvertimeRateDialog());
-        findViewById(R.id.btn_default_record_display).setOnClickListener(v -> showDefaultRecordDisplayDialog());
-
-        findViewById(R.id.btn_auto_track_log).setOnClickListener(v -> {
-            startActivity(new Intent(this, AutoTrackLogActivity.class));
-        });
 
         View btnPhotoBackup = findViewById(R.id.btn_photo_backup_setting);
         if (btnPhotoBackup != null) {
@@ -507,7 +493,8 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         // 新增：快捷按钮设置
-        findViewById(R.id.btn_quick_record_setting).setOnClickListener(v -> showQuickRecordSettingDialog());
+        findViewById(R.id.btn_quick_record_setting).setOnClickListener(v -> showPreferenceChoice(
+                "快捷记账", "quick_record_mode", new String[]{"记一笔", "今日账单", "AI 记账"}, new int[]{1, 0, 2}, 1));
 
         // 新增：点击进入密码与生物识别页面
         findViewById(R.id.btn_security_settings).setOnClickListener(v -> {
@@ -519,21 +506,133 @@ public class SettingsActivity extends AppCompatActivity {
             startActivity(new Intent(this, AboutActivity.class));
         });
 
-        // 极简模式逻辑
         SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
-        switchMinimalist = findViewById(R.id.switch_minimalist);
-        boolean isMinimalist = prefs.getBoolean("minimalist_mode", false);
-        switchMinimalist.setChecked(isMinimalist);
-        switchMinimalist.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean("minimalist_mode", isChecked).apply();
-            Toast.makeText(this, isChecked ? "极简模式已开启" : "极简模式已关闭", Toast.LENGTH_SHORT).show();
-        });
+        SwitchCompat switchHideInRecents = findViewById(R.id.switch_hide_in_recents);
+        switchHideInRecents.setChecked(RecentTaskSettings.isHidden(this));
+        switchHideInRecents.setOnCheckedChangeListener((button, checked) ->
+                RecentTaskSettings.setHidden(this, checked));
+
+        setupSettingsSearch();
+        refreshSettingsValues();
 
         // 检查是否已激活
         boolean isActivated = prefs.getBoolean("is_premium_activated", false);
         if (!isActivated) {
             showActivationDialog(prefs);
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshSettingsValues();
+    }
+
+    private void setupSettingsSearch() {
+        EditText search = findViewById(R.id.et_settings_search);
+        View clear = findViewById(R.id.btn_clear_settings_search);
+        clear.setOnClickListener(v -> search.setText(""));
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterSettings(s.toString());
+                clear.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE);
+            }
+            @Override public void afterTextChanged(android.text.Editable text) { }
+        });
+        search.setOnEditorActionListener((v, action, event) -> {
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) return false;
+            android.view.inputmethod.InputMethodManager keyboard =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (keyboard != null) keyboard.hideSoftInputFromWindow(search.getWindowToken(), 0);
+            search.clearFocus();
+            return true;
+        });
+    }
+
+    private void filterSettings(String text) {
+        String query = text.trim().toLowerCase(Locale.ROOT);
+        android.widget.LinearLayout sections = findViewById(R.id.settings_sections);
+        int visibleCount = 0;
+        for (int i = 0; i < sections.getChildCount(); i++) {
+            View child = sections.getChildAt(i);
+            if (!(child instanceof android.widget.LinearLayout)) continue;
+            android.widget.LinearLayout section = (android.widget.LinearLayout) child;
+            TextView heading = (TextView) section.getChildAt(0);
+            android.view.ViewGroup rows = (android.view.ViewGroup) section.getChildAt(1);
+            boolean sectionMatches = heading.getText().toString().toLowerCase(Locale.ROOT).contains(query);
+            int matches = 0;
+            for (int j = 0; j < rows.getChildCount(); j++) {
+                View row = rows.getChildAt(j);
+                boolean show = sectionMatches || (row instanceof SettingsRow
+                        ? ((SettingsRow) row).matches(query)
+                        : String.valueOf(row.getTag()).toLowerCase(Locale.ROOT).contains(query));
+                row.setVisibility(show ? View.VISIBLE : View.GONE);
+                if (show) matches++;
+            }
+            section.setVisibility(matches == 0 ? View.GONE : View.VISIBLE);
+            visibleCount += matches;
+        }
+        findViewById(R.id.tv_settings_empty).setVisibility(visibleCount == 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void showPreferenceChoice(String title, String key, String[] labels, int[] values, int fallback) {
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        int current = prefs.getInt(key, fallback);
+        int selected = -1;
+        for (int i = 0; i < values.length; i++) if (values[i] == current) selected = i;
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle(title)
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                    prefs.edit().putInt(key, values[which]).apply();
+                    BackupManager.triggerAutoUploadIfEnabled(this);
+                    refreshSettingsValues();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("取消", null).show();
+    }
+
+    private void showThemeChoice() {
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        int[] modes = {AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM, AppCompatDelegate.MODE_NIGHT_NO,
+                AppCompatDelegate.MODE_NIGHT_YES, 3};
+        int selected = 0;
+        int current = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
+        for (int i = 0; i < modes.length; i++) if (modes[i] == current) selected = i;
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("主题")
+                .setSingleChoiceItems(new String[]{"跟随系统", "浅色", "深色", "自定义背景"}, selected, (dialog, which) -> {
+                    dialog.dismiss();
+                    if (which == 3) {
+                        startActivity(new Intent(this, ThemeSettingsActivity.class));
+                        return;
+                    }
+                    prefs.edit().putInt("theme_mode", modes[which]).apply();
+                    BackupManager.triggerAutoUploadIfEnabled(this);
+                    AppCompatDelegate.setDefaultNightMode(modes[which]);
+                    refreshSettingsValues();
+                })
+                .setNegativeButton("取消", null).show();
+    }
+
+    private void refreshSettingsValues() {
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        setRowValue(R.id.btn_display_options, DefaultPageActivity.startPageLabel(this));
+        String[] modes = {"今日账单", "记一笔", "AI 记账"};
+        int quick = prefs.getInt("quick_record_mode", 1);
+        setRowValue(R.id.btn_quick_record_setting, modes[Math.max(0, Math.min(quick, 2))]);
+        int theme = prefs.getInt("theme_mode", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
+        setRowValue(R.id.btn_toggle_night_mode, theme == 1 ? "浅色" : theme == 2 ? "深色" : theme == 3 ? "自定义背景" : "跟随系统");
+        SharedPreferences cloud = getSharedPreferences("webdav_prefs", MODE_PRIVATE);
+        setRowValue(R.id.btn_webdav_backup, cloud.getBoolean("webdav_auto_sync", false) ? "自动备份" : "");
+        try {
+            setRowValue(R.id.btn_about, getPackageManager().getPackageInfo(getPackageName(), 0).versionName);
+        } catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
+    }
+
+    private void setRowValue(int id, String value) {
+        View row = findViewById(id);
+        if (row instanceof SettingsRow) ((SettingsRow) row).setValue(value);
     }
 
     private final ActivityResultLauncher<String[]> importYimuLauncher = registerForActivityResult(
@@ -1189,52 +1288,6 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         view.findViewById(R.id.btn_cancel_overtime).setOnClickListener(v -> dialog.dismiss());
-
-        dialog.show();
-    }
-
-    private void showDefaultRecordDisplayDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View view = LayoutInflater.from(this).inflate(R.layout.dialog_default_display_settings, null);
-        builder.setView(view);
-        AlertDialog dialog = builder.create();
-
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        }
-
-        android.widget.RadioGroup rgDisplay = view.findViewById(R.id.rg_default_display);
-        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
-        int currentMode = prefs.getInt("default_record_mode", 0);
-
-        switch (currentMode) {
-            case 1: rgDisplay.check(R.id.rb_display_income); break;
-            case 2: rgDisplay.check(R.id.rb_display_expense); break;
-            case 3: rgDisplay.check(R.id.rb_display_overtime); break;
-            default: rgDisplay.check(R.id.rb_display_balance); break;
-        }
-
-        rgDisplay.setOnCheckedChangeListener((group, checkedId) -> {
-            int selectedMode = 0;
-            String text = "结余";
-            if (checkedId == R.id.rb_display_income) {
-                selectedMode = 1;
-                text = "收入";
-            } else if (checkedId == R.id.rb_display_expense) {
-                selectedMode = 2;
-                text = "支出";
-            } else if (checkedId == R.id.rb_display_overtime) {
-                selectedMode = 3;
-                text = "加班";
-            }
-
-            prefs.edit().putInt("default_record_mode", selectedMode).apply();
-            Toast.makeText(this, "已设置为默认显示: " + text, Toast.LENGTH_SHORT).show();
-
-            view.postDelayed(dialog::dismiss, 200);
-        });
-
-        view.findViewById(R.id.btn_cancel_display).setOnClickListener(v -> dialog.dismiss());
 
         dialog.show();
     }

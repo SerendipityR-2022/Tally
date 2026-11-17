@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.TransactionRemarks;
 import com.example.budgetapp.util.AssetIconHelper;
 
 import java.time.LocalDate;
@@ -70,7 +71,7 @@ public class TransactionListAdapter extends RecyclerView.Adapter<TransactionList
 
         String symbol = (t.currencySymbol != null && !t.currencySymbol.isEmpty()) ? t.currencySymbol : "¥";
         String amountStr = String.format("%.2f", t.amount);
-        String displayAmount = showCurrency ? (symbol + " " + amountStr) : amountStr;
+        String displayAmount = showCurrency ? (symbol + amountStr) : amountStr;
 
         // --- 核心逻辑：自动续费预览账单处理 ---
         boolean isPreview = "PREVIEW_BILL".equals(t.remark);
@@ -148,17 +149,13 @@ public class TransactionListAdapter extends RecyclerView.Adapter<TransactionList
             holder.tvSubCategory.setVisibility(View.GONE);
         }
 
-        // 备注标识
-        if (t.note != null && !t.note.isEmpty()) {
-            holder.tvNote.setVisibility(View.VISIBLE);
-            holder.tvNote.setText(t.note);
-        } else {
-            holder.tvNote.setVisibility(View.GONE);
-        }
+        String remark = TransactionRemarks.display(t);
+        holder.tvNote.setText(TransactionRemarks.withTime(t, android.text.format.DateFormat.getTimeFormat(context)));
+        holder.tvNote.setVisibility(View.VISIBLE);
 
         // --- 右下角状态指示器 ---
         // 逻辑：如果有文字备注（非预览标识）或有照片，显示绿色，否则红色
-        boolean hasRemark = !TextUtils.isEmpty(t.remark) && !isPreview;
+        boolean hasRemark = !remark.isEmpty() && !isPreview;
         boolean hasPhoto = !TextUtils.isEmpty(t.photoPath);
 
         int statusColor = (hasRemark || hasPhoto)

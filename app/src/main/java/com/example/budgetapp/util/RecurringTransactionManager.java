@@ -8,12 +8,10 @@ import com.example.budgetapp.database.RecurringRule;
 import com.example.budgetapp.database.Transaction;
 
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * 周期记账管理器
@@ -66,15 +64,7 @@ public class RecurringTransactionManager {
                 // 计算生效时间
                 transaction.scheduledExecuteTime = calculateExecuteTime(scheduleDate, rule.triggerTime);
                 
-                // 【修改】备注：如果规则备注为空,自动生成"生效时间 MM-dd HH:mm"格式
-                if (rule.note == null || rule.note.trim().isEmpty()) {
-                    SimpleDateFormat sdf = new SimpleDateFormat("生效时间 MM-dd HH:mm", Locale.CHINA);
-                    transaction.note = sdf.format(new Date(transaction.scheduledExecuteTime));
-                } else {
-                    transaction.note = rule.note;
-                }
-                
-                transaction.remark = "";
+                transaction.remark = rule.note == null ? "" : rule.note.trim();
                 transaction.isSettled = false; // 未生效
                 transaction.recurringRuleId = rule.id;
                 

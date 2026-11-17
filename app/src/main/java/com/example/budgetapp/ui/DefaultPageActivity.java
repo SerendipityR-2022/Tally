@@ -1,28 +1,22 @@
 package com.example.budgetapp.ui;
 
+import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.os.Bundle;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
+import com.example.budgetapp.BackupManager;
 import com.example.budgetapp.R;
+import com.example.budgetapp.util.AssistantConfig;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class DefaultPageActivity extends AppCompatActivity {
-
-    private RadioGroup radioGroupDefaultPage;
-    private SwitchCompat switchDetailsQuickButton;
-    private SwitchCompat switchBillCard;
-    private SharedPreferences prefs;
-
     public static final String PREF_NAME = "app_prefs";
     public static final String KEY_DEFAULT_PAGE = "default_page";
     public static final String KEY_DETAILS_QUICK_BUTTON = "details_quick_button";
@@ -32,111 +26,109 @@ public class DefaultPageActivity extends AppCompatActivity {
     public static final int PAGE_BUDGET = 2;
     public static final int PAGE_ASSETS = 3;
     public static final int PAGE_STATS = 4;
+    private static final String KEY_CALENDAR_DISPLAY = "default_record_mode";
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    private SharedPreferences prefs;
+    private AssistantConfig config;
+    private SettingsRow startPage;
+    private SettingsRow calendarDisplay;
 
-        // 沉浸式设置
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        getWindow().setStatusBarColor(Color.TRANSPARENT);
-        getWindow().setNavigationBarColor(Color.TRANSPARENT);
-
         setContentView(R.layout.activity_default_page);
+        SettingsPage.applyInsets(findViewById(R.id.root_layout));
+        prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        config = new AssistantConfig(this);
 
-        // 适配内边距
-        android.view.View rootLayout = findViewById(R.id.root_layout);
-        if (rootLayout != null) {
-            final int originalPaddingTop = rootLayout.getPaddingTop();
-            final int originalPaddingBottom = rootLayout.getPaddingBottom();
+        startPage = findViewById(R.id.btn_default_page);
+        startPage.setOnClickListener(v -> chooseStartPage());
+        startPage.setValue(startPageLabel(this));
+        calendarDisplay = findViewById(R.id.btn_default_record_display);
+        calendarDisplay.setOnClickListener(v -> chooseCalendarDisplay());
+        updateCalendarDisplay();
 
-            ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
-                Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(
-                        v.getPaddingLeft(),
-                        originalPaddingTop + insets.top,
-                        v.getPaddingRight(),
-                        originalPaddingBottom + insets.bottom
-                );
-                return WindowInsetsCompat.CONSUMED;
-            });
-        }
-
-        initViews();
+        SwitchCompat details = findViewById(R.id.switchDetails);
+        details.setChecked(config.isDetailsEnabled());
+        details.setOnCheckedChangeListener((view, enabled) -> {
+            config.setDetailsEnabled(enabled);
+            startPage.setValue(startPageLabel(this));
+        });
+        SwitchCompat assets = findViewById(R.id.switchAssets);
+        assets.setChecked(config.isAssetsEnabled());
+        assets.setOnCheckedChangeListener((view, enabled) -> {
+            config.setAssetsEnabled(enabled);
+            startPage.setValue(startPageLabel(this));
+        });
+        bindSwitch(R.id.switchDetailsQuickButton, KEY_DETAILS_QUICK_BUTTON, true);
+        bindSwitch(R.id.switchBillCard, KEY_BILL_CARD, false);
+        bindSwitch(R.id.switch_minimalist, "minimalist_mode", false);
     }
 
-    private void initViews() {
-        prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-        radioGroupDefaultPage = findViewById(R.id.radioGroupDefaultPage);
-        switchDetailsQuickButton = findViewById(R.id.switchDetailsQuickButton);
-        switchBillCard = findViewById(R.id.switchBillCard);
-
-        // 读取当前设置
-        int currentPage = prefs.getInt(KEY_DEFAULT_PAGE, PAGE_RECORD);
-        boolean showQuickButton = prefs.getBoolean(KEY_DETAILS_QUICK_BUTTON, true);
-        boolean showBillCard = prefs.getBoolean(KEY_BILL_CARD, false);
-
-        // 设置开关状态
-        switchDetailsQuickButton.setChecked(showQuickButton);
-        switchBillCard.setChecked(showBillCard);
-
-        // 监听开关变化
-        switchDetailsQuickButton.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean(KEY_DETAILS_QUICK_BUTTON, isChecked).apply();
-            String status = isChecked ? "显示" : "隐藏";
-            Toast.makeText(this, "明细模块快捷按钮已设置为：" + status, Toast.LENGTH_SHORT).show();
+    private void bindSwitch(int id, String key, boolean defaultValue) {
+        SwitchCompat toggle = findViewById(id);
+        toggle.setChecked(prefs.getBoolean(key, defaultValue));
+        toggle.setOnCheckedChangeListener((view, checked) -> {
+            prefs.edit().putBoolean(key, checked).apply();
+            BackupManager.triggerAutoUploadIfEnabled(this);
         });
+    }
 
-        switchBillCard.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean(KEY_BILL_CARD, isChecked).apply();
-            String status = isChecked ? "开启" : "关闭";
-            Toast.makeText(this, "账单卡片已设置为：" + status, Toast.LENGTH_SHORT).show();
-        });
-        
-        // 设置选中状态
-        switch (currentPage) {
-            case PAGE_RECORD:
-                ((RadioButton) findViewById(R.id.radioRecord)).setChecked(true);
-                break;
-            case PAGE_DETAILS:
-                ((RadioButton) findViewById(R.id.radioDetails)).setChecked(true);
-                break;
-            case PAGE_BUDGET:
-                ((RadioButton) findViewById(R.id.radioBudget)).setChecked(true);
-                break;
-            case PAGE_ASSETS:
-                ((RadioButton) findViewById(R.id.radioAssets)).setChecked(true);
-                break;
-            case PAGE_STATS:
-                ((RadioButton) findViewById(R.id.radioStats)).setChecked(true);
-                break;
+    private static boolean pageAvailable(int page, AssistantConfig config) {
+        switch (page) {
+            case PAGE_RECORD: case PAGE_STATS: return true;
+            case PAGE_DETAILS: return config.isDetailsEnabled();
+            case PAGE_BUDGET: return config.isBudgetEnabled();
+            case PAGE_ASSETS: return config.isAssetsEnabled();
+            default: return false;
         }
+    }
 
-        // 监听选择变化
-        radioGroupDefaultPage.setOnCheckedChangeListener((group, checkedId) -> {
-            int selectedPage = PAGE_RECORD;
-            String pageName = "记账";
+    static String startPageLabel(Context context) {
+        int page = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE).getInt(KEY_DEFAULT_PAGE, PAGE_RECORD);
+        return context.getResources().getStringArray(R.array.settings_start_page_choices)
+                [pageAvailable(page, new AssistantConfig(context)) ? page : PAGE_RECORD];
+    }
 
-            if (checkedId == R.id.radioRecord) {
-                selectedPage = PAGE_RECORD;
-                pageName = "记账";
-            } else if (checkedId == R.id.radioDetails) {
-                selectedPage = PAGE_DETAILS;
-                pageName = "明细";
-            } else if (checkedId == R.id.radioBudget) {
-                selectedPage = PAGE_BUDGET;
-                pageName = "预算";
-            } else if (checkedId == R.id.radioAssets) {
-                selectedPage = PAGE_ASSETS;
-                pageName = "资产";
-            } else if (checkedId == R.id.radioStats) {
-                selectedPage = PAGE_STATS;
-                pageName = "统计";
-            }
+    private void chooseStartPage() {
+        String[] pages = getResources().getStringArray(R.array.settings_start_page_choices);
+        List<Integer> available = new ArrayList<>();
+        List<String> choices = new ArrayList<>();
+        for (int i = 0; i < pages.length; i++) {
+            if (!pageAvailable(i, config)) continue;
+            available.add(i);
+            choices.add(pages[i]);
+        }
+        int selected = available.indexOf(prefs.getInt(KEY_DEFAULT_PAGE, PAGE_RECORD));
+        new MaterialAlertDialogBuilder(this).setTitle(R.string.settings_start_page)
+                .setSingleChoiceItems(choices.toArray(new String[0]), Math.max(0, selected), (dialog, which) -> {
+                    setInt(KEY_DEFAULT_PAGE, available.get(which));
+                    startPage.setValue(choices.get(which));
+                    dialog.dismiss();
+                }).setNegativeButton(android.R.string.cancel, null).show();
+    }
 
-            // 保存设置
-            prefs.edit().putInt(KEY_DEFAULT_PAGE, selectedPage).apply();
-            Toast.makeText(this, "已设置默认页面为：" + pageName, Toast.LENGTH_SHORT).show();
-        });
+    private void chooseCalendarDisplay() {
+        String[] choices = getResources().getStringArray(R.array.settings_calendar_display_choices);
+        new MaterialAlertDialogBuilder(this).setTitle(R.string.settings_calendar_display)
+                .setSingleChoiceItems(choices, calendarIndex(choices.length), (dialog, which) -> {
+                    setInt(KEY_CALENDAR_DISPLAY, which);
+                    updateCalendarDisplay();
+                    dialog.dismiss();
+                }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
+    private int calendarIndex(int length) {
+        return Math.max(0, Math.min(length - 1, prefs.getInt(KEY_CALENDAR_DISPLAY, 0)));
+    }
+
+    private void updateCalendarDisplay() {
+        String[] choices = getResources().getStringArray(R.array.settings_calendar_display_choices);
+        calendarDisplay.setValue(choices[calendarIndex(choices.length)]);
+    }
+
+    private void setInt(String key, int value) {
+        prefs.edit().putInt(key, value).apply();
+        BackupManager.triggerAutoUploadIfEnabled(this);
     }
 }

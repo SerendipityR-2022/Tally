@@ -10,9 +10,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
@@ -43,21 +41,8 @@ public class SecuritySettingsActivity extends AppCompatActivity {
 
         // ======== 新增：2. 避让状态栏和底部导航栏(小白条) ========
         View rootView = findViewById(R.id.security_settings_root);
-        final int originalPaddingLeft = rootView.getPaddingLeft();
-        final int originalPaddingTop = rootView.getPaddingTop();
-        final int originalPaddingRight = rootView.getPaddingRight();
-        final int originalPaddingBottom = rootView.getPaddingBottom();
 
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(
-                    originalPaddingLeft + insets.left,
-                    originalPaddingTop + insets.top,
-                    originalPaddingRight + insets.right,
-                    originalPaddingBottom + insets.bottom
-            );
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
         // ======================================================
 
         prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
@@ -200,7 +185,7 @@ public class SecuritySettingsActivity extends AppCompatActivity {
         BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
                 .setTitle("验证指纹")
                 .setSubtitle("请验证以开启生物识别登录功能")
-                .setNegativeButtonText("取 消")
+                .setNegativeButtonText("取消")
                 .build();
 
         biometricPrompt.authenticate(promptInfo);

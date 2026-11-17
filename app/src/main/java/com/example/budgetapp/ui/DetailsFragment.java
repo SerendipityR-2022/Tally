@@ -48,6 +48,7 @@ import com.example.budgetapp.MainActivity;
 import com.example.budgetapp.ai.AiConfig;
 import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.TransactionRemarks;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
@@ -72,13 +73,11 @@ import java.util.stream.Collectors;
 
 import android.widget.NumberPicker;
 import android.text.Editable;
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 
 public class DetailsFragment extends Fragment {
 
     private FinanceViewModel viewModel;
     private RecyclerView recyclerView;
-    private TextView tvStatisticsSummary;
     private DetailsAdapter adapter;
     private List<Transaction> allTransactions = new ArrayList<>();
     private List<AssetAccount> assetList = new ArrayList<>();
@@ -366,7 +365,12 @@ public class DetailsFragment extends Fragment {
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerView.setItemAnimator(null);
 
-        tvStatisticsSummary = view.findViewById(R.id.tv_statistics_summary);
+        updateBudgetShortcut(view);
+        view.findViewById(R.id.ledger_details_budget).setOnClickListener(v -> {
+            if (!new AssistantConfig(requireContext()).isBudgetEnabled()) return;
+            com.google.android.material.bottomnavigation.BottomNavigationView nav = requireActivity().findViewById(R.id.bottom_nav);
+            nav.setSelectedItemId(R.id.nav_budget);
+        });
 
         adapter = new DetailsAdapter();
         adapter.setOnTransactionClickListener(t -> {
@@ -412,15 +416,13 @@ public class DetailsFragment extends Fragment {
         // 初始化快捷按钮（完全照搬RecordFragment）
         btnQuickRecord = view.findViewById(R.id.btn_quick_record_details);
         SharedPreferences appPrefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        boolean showQuickButton = appPrefs.getBoolean("details_quick_button", true);
-
-        if (showQuickButton && btnQuickRecord != null) {
-            btnQuickRecord.setVisibility(View.VISIBLE);
+        if (btnQuickRecord != null) {
+            btnQuickRecord.setVisibility(appPrefs.getBoolean("details_quick_button", true) ? View.VISIBLE : View.GONE);
 
             // 点击事件（完全照搬RecordFragment）
             btnQuickRecord.setOnClickListener(v -> {
                 v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
-                int quickMode = appPrefs.getInt("quick_record_mode", 0);
+                int quickMode = appPrefs.getInt("quick_record_mode", 1);
                 if (quickMode == 1) {
                     showAddOrEditDialog(null, LocalDate.now());
                 } else if (quickMode == 2) {
@@ -441,11 +443,10 @@ public class DetailsFragment extends Fragment {
                 AiConfig config = AiConfig.load(requireContext());
                 if (config.isEnabledAndReady()) {
                     startActivity(new Intent(requireContext(), com.example.budgetapp.ui.AiChatActivity.class));
-                    return true;
                 } else {
                     Toast.makeText(requireContext(), "请先在设置中启用 AI 记账，并至少填写 Base URL、API Key、文本模型。", Toast.LENGTH_LONG).show();
-                    return false;
                 }
+                return true;
             });
 
             // 初始化滚动监听器
@@ -457,8 +458,6 @@ public class DetailsFragment extends Fragment {
 //            fabGestureListener = new FabGestureListener();
 //            recyclerView.addOnItemTouchListener(fabGestureListener);
             android.util.Log.d("DetailsFragment", "FAB gesture listener added to recyclerView");
-        } else if (btnQuickRecord != null) {
-            btnQuickRecord.setVisibility(View.GONE);
         }
 
         viewModel = new ViewModelProvider(requireActivity()).get(FinanceViewModel.class);
@@ -528,16 +527,7 @@ public class DetailsFragment extends Fragment {
     private void showCustomDatePicker() {
         if (getContext() == null) return;
 
-        final BottomSheetDialog dialog = new BottomSheetDialog(getContext());
-        dialog.setContentView(R.layout.dialog_bottom_date_picker);
-
-        dialog.setOnShowListener(dialogInterface -> {
-            BottomSheetDialog bottomSheetDialog = (BottomSheetDialog) dialogInterface;
-            View bottomSheet = bottomSheetDialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) {
-                bottomSheet.setBackgroundResource(android.R.color.transparent);
-            }
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_date_picker);
 
         NumberPicker npYear = dialog.findViewById(R.id.np_year);
         NumberPicker npMonth = dialog.findViewById(R.id.np_month);
@@ -618,13 +608,7 @@ public class DetailsFragment extends Fragment {
     private void showTransactionDatePicker(java.util.Calendar calendar, Runnable updateDisplay) {
         if (getContext() == null) return;
 
-        final BottomSheetDialog dialog = new BottomSheetDialog(getContext());
-        dialog.setContentView(R.layout.dialog_bottom_date_picker);
-
-        dialog.setOnShowListener(dialogInterface -> {
-            View bottomSheet = ((BottomSheetDialog) dialogInterface).findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) bottomSheet.setBackgroundResource(android.R.color.transparent);
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_date_picker);
 
         NumberPicker npYear = dialog.findViewById(R.id.np_year);
         NumberPicker npMonth = dialog.findViewById(R.id.np_month);
@@ -677,7 +661,7 @@ public class DetailsFragment extends Fragment {
             calendar.set(java.util.Calendar.MONTH, npMonth.getValue() - 1);
             calendar.set(java.util.Calendar.DAY_OF_MONTH, npDay.getValue());
             dialog.dismiss();
-            showTransactionTimePicker(calendar, updateDisplay);
+
         });
 
         dialog.show();
@@ -689,13 +673,7 @@ public class DetailsFragment extends Fragment {
     private void showTransactionTimePicker(java.util.Calendar calendar, Runnable updateDisplay) {
         if (getContext() == null) return;
 
-        final BottomSheetDialog dialog = new BottomSheetDialog(getContext());
-        dialog.setContentView(R.layout.dialog_bottom_time_picker);
-
-        dialog.setOnShowListener(dialogInterface -> {
-            View bottomSheet = ((BottomSheetDialog) dialogInterface).findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) bottomSheet.setBackgroundResource(android.R.color.transparent);
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_time_picker);
 
         NumberPicker npHour = dialog.findViewById(R.id.np_hour);
         NumberPicker npMinute = dialog.findViewById(R.id.np_minute);
@@ -777,13 +755,7 @@ public class DetailsFragment extends Fragment {
         );
 
         currentFilteredDataLive.observe(getViewLifecycleOwner(), list -> {
-            if (list != null) {
-                // 🌟 修改点：将分页流替换为常规的 List 更新
-                adapter.setTransactions(list);
-                
-                // 更新统计信息
-                updateStatisticsSummary(list);
-            }
+            if (list != null) renderTransactions(list);
 
             if (getContext() != null && recyclerView != null && direction != 0) {
                 Animation anim = AnimationUtils.loadAnimation(getContext(), direction == 1 ? R.anim.slide_in_right : R.anim.slide_in_left);
@@ -828,66 +800,39 @@ public class DetailsFragment extends Fragment {
     /**
      * 更新统计信息摘要
      */
+    void renderTransactions(List<Transaction> transactions) {
+        View view = getView();
+        if (view == null) return;
+        adapter.setTransactions(transactions);
+        view.findViewById(R.id.tv_empty_state).setVisibility(transactions.isEmpty() ? View.VISIBLE : View.GONE);
+        updateStatisticsSummary(transactions);
+    }
+
     private void updateStatisticsSummary(List<Transaction> transactions) {
-        if (tvStatisticsSummary == null || transactions == null) {
-            return;
-        }
-
-        int count = 0;
-        double totalExpense = 0;
-        double totalIncome = 0;
-
-        for (Transaction t : transactions) {
-            // 排除转账类型（type=2）
-            if (t.type == 2 || "资产互转".equals(t.category)) {
-                continue;
-            }
-            
-            count++; // 只计算非转账账单
-            
-            if (t.type == 0) { // 支出
-                totalExpense += t.amount;
-            } else if (t.type == 1) { // 收入
-                totalIncome += t.amount;
+        View view = getView();
+        if (view == null) return;
+        LocalDate today = LocalDate.now();
+        long todayStart = today.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long nextDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long[] range = getTimeRange();
+        boolean includesToday = range[0] <= todayStart && range[1] >= todayStart;
+        double expense = 0, income = 0, todayExpense = 0;
+        for (Transaction tx : transactions) {
+            if (!tx.isSettled || "资产互转".equals(tx.category)) continue;
+            if (tx.type == 0) {
+                expense += tx.amount;
+                if (tx.date >= todayStart && tx.date < nextDay) todayExpense += tx.amount;
+            } else if (tx.type == 1) {
+                income += tx.amount;
             }
         }
-
-        double balance = totalIncome - totalExpense;
-
-        // 使用 SpannableStringBuilder 实现不同颜色
-        SpannableStringBuilder ssb = new SpannableStringBuilder();
-        int colorSecondary = ContextCompat.getColor(requireContext(), R.color.text_secondary);
-        int colorExpense = ContextCompat.getColor(requireContext(), R.color.expense_green);
-        int colorIncome = ContextCompat.getColor(requireContext(), R.color.income_red);
-        int colorBalance = balance >= 0 
-            ? ContextCompat.getColor(requireContext(), R.color.income_red) 
-            : ContextCompat.getColor(requireContext(), R.color.expense_green);
-
-        // 账单条数
-        String countStr = String.format(Locale.CHINA, "账单 %d 条  ", count);
-        int start = ssb.length();
-        ssb.append(countStr);
-        ssb.setSpan(new ForegroundColorSpan(colorSecondary), start, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-        // 支出
-        String expenseStr = String.format(Locale.CHINA, "支出 %.2f  ", totalExpense);
-        start = ssb.length();
-        ssb.append(expenseStr);
-        ssb.setSpan(new ForegroundColorSpan(colorExpense), start, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-        // 收入
-        String incomeStr = String.format(Locale.CHINA, "收入 %.2f  ", totalIncome);
-        start = ssb.length();
-        ssb.append(incomeStr);
-        ssb.setSpan(new ForegroundColorSpan(colorIncome), start, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-        // 结余
-        String balanceStr = String.format(Locale.CHINA, "结余 %.2f", balance);
-        start = ssb.length();
-        ssb.append(balanceStr);
-        ssb.setSpan(new ForegroundColorSpan(colorBalance), start, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-        tvStatisticsSummary.setText(ssb);
+        String scope = includesToday ? (currentMode == 0 ? "本年" : currentMode == 2 ? "本周" : "本月") : "";
+        ((TextView) view.findViewById(R.id.ledger_details_focus_label)).setText(includesToday ? "今日支出" : "收支结余");
+        ((TextView) view.findViewById(R.id.ledger_details_focus_amount)).setText(LedgerTransactionRow.money(includesToday ? todayExpense : income - expense));
+        ((TextView) view.findViewById(R.id.ledger_details_expense_label)).setText(scope + "支出");
+        ((TextView) view.findViewById(R.id.ledger_details_income_label)).setText(scope + "收入");
+        ((TextView) view.findViewById(R.id.ledger_details_expense)).setText(LedgerTransactionRow.money(expense));
+        ((TextView) view.findViewById(R.id.ledger_details_income)).setText(LedgerTransactionRow.money(income));
     }
 
     private void showAddOrEditDialog(Transaction existingTransaction, LocalDate date) {
@@ -899,15 +844,15 @@ public class DetailsFragment extends Fragment {
         AlertDialog dialog = builder.create();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
 
-        TextView tvDate = dialogView.findViewById(R.id.tv_dialog_date);
+        LedgerEntrySheet sheet = new LedgerEntrySheet(dialog, dialogView);
         RadioGroup rgType = dialogView.findViewById(R.id.rg_type);
         RecyclerView rvCategory = dialogView.findViewById(R.id.rv_category);
         EditText etAmount = dialogView.findViewById(R.id.et_amount);
         Button btnCurrency = dialogView.findViewById(R.id.btn_currency);
 
+        EditText etTargetObject = dialogView.findViewById(R.id.et_target_object);
         EditText etCustomCategory = dialogView.findViewById(R.id.et_custom_category);
         EditText etRemark = dialogView.findViewById(R.id.et_remark);
-        EditText etNote = dialogView.findViewById(R.id.et_note);
         Spinner spAsset = dialogView.findViewById(R.id.sp_asset);
 
         Button btnSave = dialogView.findViewById(R.id.btn_save);
@@ -1035,29 +980,21 @@ public class DetailsFragment extends Fragment {
                 return true;
             });
         } else {
-            btnTakePhoto.setVisibility(View.GONE);
+            btnTakePhoto.setContentDescription("照片设置");
+            btnTakePhoto.setOnClickListener(v -> startActivity(new Intent(requireContext(), PhotoBackupSettingsActivity.class)));
             btnViewPhoto.setVisibility(View.GONE);
         }
 
         List<String> expenseCategories = CategoryManager.getExpenseCategories(getContext());
         List<String> incomeCategories = CategoryManager.getIncomeCategories(getContext());
 
-        boolean isDetailed = com.example.budgetapp.util.CategoryManager.isDetailedCategoryEnabled(getContext());
-        if (isDetailed) {
-            com.google.android.flexbox.FlexboxLayoutManager flexboxLayoutManager = new com.google.android.flexbox.FlexboxLayoutManager(getContext());
-            flexboxLayoutManager.setFlexWrap(com.google.android.flexbox.FlexWrap.WRAP);
-            flexboxLayoutManager.setFlexDirection(com.google.android.flexbox.FlexDirection.ROW);
-            flexboxLayoutManager.setJustifyContent(com.google.android.flexbox.JustifyContent.FLEX_START);
-            rvCategory.setLayoutManager(flexboxLayoutManager);
-        } else {
-            rvCategory.setLayoutManager(new GridLayoutManager(getContext(), 5));
-        }
+        rvCategory.setLayoutManager(new GridLayoutManager(requireContext(), LedgerCategoryGrid.COLUMNS));
 
         final boolean[] isExpense = {true};
         final String[] selectedCategory = {expenseCategories.isEmpty() ? "自定义" : expenseCategories.get(0)};
         final String[] selectedSubCategory = {""};
 
-        CategoryAdapter categoryAdapter = new CategoryAdapter(getContext(), expenseCategories, selectedCategory[0], category -> {
+        CategoryAdapter categoryAdapter = new CategoryAdapter(getContext(), expenseCategories, selectedCategory[0], true, category -> {
             selectedCategory[0] = category;
             selectedSubCategory[0] = "";
             if ("自定义".equals(category)) {
@@ -1142,11 +1079,8 @@ public class DetailsFragment extends Fragment {
             return false;
         });
 
+        categoryAdapter.enableAdding();
         rvCategory.setAdapter(categoryAdapter);
-
-        if (existingTransaction != null && existingTransaction.subCategory != null) {
-            selectedSubCategory[0] = existingTransaction.subCategory;
-        }
 
         AssistantConfig config = new AssistantConfig(requireContext());
         boolean isAssetEnabled = config.isAssetsEnabled();
@@ -1209,24 +1143,32 @@ public class DetailsFragment extends Fragment {
             calendar.set(java.util.Calendar.MONTH, date.getMonthValue() - 1);
             calendar.set(java.util.Calendar.DAY_OF_MONTH, date.getDayOfMonth());
         }
-        Runnable updateDateDisplay = () -> {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.CHINA);
-            tvDate.setText(sdf.format(calendar.getTime()));
-        };
+        Runnable updateDateDisplay = () -> sheet.updateDate(calendar);
         updateDateDisplay.run();
-
-        // 点击日期可修改
-        tvDate.setClickable(true);
-        tvDate.setFocusable(true);
-        tvDate.setOnClickListener(v -> showTransactionDatePicker(calendar, updateDateDisplay));
+        sheet.bindDateActions(() -> showTransactionDatePicker(calendar, updateDateDisplay),
+                () -> showTransactionTimePicker(calendar, updateDateDisplay));
+        if (existingTransaction == null) sheet.bindAccountActions(categoryAdapter, viewModel, calendar, localAssetList);
 
         rgType.setOnCheckedChangeListener((g, id) -> {
+            selectedSubCategory[0] = "";
+            if (id == R.id.rb_liability || id == R.id.rb_lend) {
+                boolean lend = id == R.id.rb_lend;
+                selectedCategory[0] = lend ? "借出" : "借入";
+                etTargetObject.setHint(lend ? "借出对象" : "负债对象");
+                etTargetObject.setVisibility(View.VISIBLE);
+                etCustomCategory.setVisibility(View.GONE);
+                rvCategory.setVisibility(View.GONE);
+                return;
+            }
+            etTargetObject.setVisibility(View.GONE);
+            rvCategory.setVisibility(View.VISIBLE);
             boolean switchToExpense = (id == R.id.rb_expense);
             isExpense[0] = switchToExpense;
-            List<String> targetCategories = switchToExpense ? expenseCategories : incomeCategories;
+            List<String> targetCategories = switchToExpense ? CategoryManager.getExpenseCategories(requireContext())
+                    : CategoryManager.getIncomeCategories(requireContext());
             String defaultCat = targetCategories.isEmpty() ? "自定义" : targetCategories.get(0);
-            categoryAdapter.updateData(targetCategories);
-            categoryAdapter.setSelectedCategory(defaultCat);
+            categoryAdapter.setCategories(targetCategories, defaultCat, switchToExpense);
+            rvCategory.scrollToPosition(0);
             selectedCategory[0] = defaultCat;
             if ("自定义".equals(defaultCat)) {
                 etCustomCategory.setVisibility(View.VISIBLE);
@@ -1238,31 +1180,27 @@ public class DetailsFragment extends Fragment {
         if (existingTransaction != null) {
             btnSave.setText("保存修改");
             etAmount.setText(String.valueOf(existingTransaction.amount));
-            if (existingTransaction.remark != null) etRemark.setText(existingTransaction.remark);
-            if (existingTransaction.note != null) etNote.setText(existingTransaction.note);
+            etRemark.setText(TransactionRemarks.display(existingTransaction));
 
-            if (existingTransaction.type == 1) {
-                rgType.check(R.id.rb_income);
-                isExpense[0] = false;
-                categoryAdapter.updateData(incomeCategories);
+            if (existingTransaction.type == 3 || existingTransaction.type == 4) {
+                rgType.check(existingTransaction.type == 4 ? R.id.rb_lend : R.id.rb_liability);
+                etTargetObject.setText(existingTransaction.targetObject);
             } else {
-                rgType.check(R.id.rb_expense);
-                isExpense[0] = true;
-                categoryAdapter.updateData(expenseCategories);
-            }
-
-            String currentCat = existingTransaction.category;
-            List<String> currentList = isExpense[0] ? expenseCategories : incomeCategories;
-
-            if (currentList.contains(currentCat)) {
-                categoryAdapter.setSelectedCategory(currentCat);
-                selectedCategory[0] = currentCat;
-                etCustomCategory.setVisibility(View.GONE);
-            } else {
-                categoryAdapter.setSelectedCategory("自定义");
-                selectedCategory[0] = "自定义";
-                etCustomCategory.setVisibility(View.VISIBLE);
-                etCustomCategory.setText(currentCat);
+                isExpense[0] = existingTransaction.type != 1;
+                rgType.check(isExpense[0] ? R.id.rb_expense : R.id.rb_income);
+                String currentCat = existingTransaction.category;
+                List<String> currentList = isExpense[0] ? expenseCategories : incomeCategories;
+                if (currentList.contains(currentCat)) {
+                    categoryAdapter.setSelectedCategory(currentCat);
+                    selectedCategory[0] = currentCat;
+                    etCustomCategory.setVisibility(View.GONE);
+                } else {
+                    categoryAdapter.setSelectedCategory("自定义");
+                    selectedCategory[0] = "自定义";
+                    etCustomCategory.setVisibility(View.VISIBLE);
+                    etCustomCategory.setText(currentCat);
+                }
+                selectedSubCategory[0] = existingTransaction.subCategory;
             }
 
             btnDelete.setVisibility(View.VISIBLE);
@@ -1296,7 +1234,8 @@ public class DetailsFragment extends Fragment {
                 Transaction tempTx = new Transaction();
                 tempTx.id = existingTransaction.id;
                 tempTx.amount = Double.parseDouble(amountStr);
-                tempTx.type = rgType.getCheckedRadioButtonId() == R.id.rb_income ? 1 : 0;
+                tempTx.type = existingTransaction.type;
+                tempTx.targetObject = existingTransaction.targetObject;
                 tempTx.photoPath = currentPhotoPath[0];
 
                 int selectedAssetId = 0;
@@ -1312,18 +1251,24 @@ public class DetailsFragment extends Fragment {
             });
         } else {
             // 【新增】新建记录时，自动在备注字段填充默认时间标识
-            btnSave.setText("保 存");
+            btnSave.setText("保存");
             btnDelete.setVisibility(View.GONE);
             tvRevoke.setVisibility(View.GONE);
-            SimpleDateFormat noteSdf = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA);
-            etNote.setText(noteSdf.format(calendar.getTime()));
         }
 
-        btnSave.setOnClickListener(v -> {
+        sheet.bindSave(existingTransaction == null, keepRecording -> {
             String amountStr = etAmount.getText().toString();
             if (!amountStr.isEmpty()) {
                 double amount = Double.parseDouble(amountStr);
-                int type = rgType.getCheckedRadioButtonId() == R.id.rb_income ? 1 : 0;
+                int checkedType = rgType.getCheckedRadioButtonId();
+                int type = checkedType == R.id.rb_income ? 1
+                        : checkedType == R.id.rb_liability ? 3 : checkedType == R.id.rb_lend ? 4 : 0;
+                boolean loan = type == 3 || type == 4;
+                String targetObject = loan ? etTargetObject.getText().toString().trim() : null;
+                if (loan && targetObject.isEmpty()) {
+                    etTargetObject.setError("请输入对象名称");
+                    return;
+                }
 
                 String category = selectedCategory[0];
                 if ("自定义".equals(category)) {
@@ -1335,7 +1280,6 @@ public class DetailsFragment extends Fragment {
                 }
 
                 String userRemark = etRemark.getText().toString().trim();
-                String noteContent = etNote.getText().toString().trim();
                 long ts = calendar.getTimeInMillis();
 
                 int selectedAssetId = 0;
@@ -1349,9 +1293,11 @@ public class DetailsFragment extends Fragment {
                 String currencySymbol = isCurrencyEnabled ? btnCurrency.getText().toString() : "¥";
 
                 if (existingTransaction != null) {
-                    Transaction updateT = new Transaction(ts, type, category, amount, noteContent, userRemark);
+                    Transaction updateT = new Transaction(ts, type, category, amount, "", userRemark);
+                    TransactionRemarks.applyEdit(existingTransaction, updateT, userRemark);
                     updateT.id = existingTransaction.id;
                     updateT.assetId = selectedAssetId;
+                    updateT.targetObject = targetObject;
                     updateT.currencySymbol = currencySymbol;
                     updateT.subCategory = selectedSubCategory[0];
                     updateT.photoPath = currentPhotoPath[0];
@@ -1360,8 +1306,9 @@ public class DetailsFragment extends Fragment {
                     viewModel.updateTransactionWithAssetSync(existingTransaction, updateT);
                 } else {
                     // 新增交易
-                    Transaction newT = new Transaction(ts, type, category, amount, noteContent, userRemark);
+                    Transaction newT = new Transaction(ts, type, category, amount, "", userRemark);
                     newT.assetId = selectedAssetId;
+                    newT.targetObject = targetObject;
                     newT.currencySymbol = currencySymbol;
                     newT.subCategory = selectedSubCategory[0];
                     newT.photoPath = currentPhotoPath[0];
@@ -1370,6 +1317,10 @@ public class DetailsFragment extends Fragment {
                     viewModel.addTransactionWithAssetSync(newT);
                 }
                 dialog.dismiss();
+                if (keepRecording && existingTransaction == null) {
+                    showAddOrEditDialog(null, java.time.Instant.ofEpochMilli(calendar.getTimeInMillis())
+                            .atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+                }
             }
         });
 
@@ -1382,7 +1333,7 @@ public class DetailsFragment extends Fragment {
             }
         });
 
-        dialog.show();
+        sheet.show();
     }
 
     private void showPhotoDialog(String uriStr) {
@@ -1488,8 +1439,8 @@ public class DetailsFragment extends Fragment {
 
         Spinner spType = v.findViewById(R.id.sp_filter_type);
         String[] types = {"全部", "支出", "收入", "加班"};
-        ArrayAdapter<String> typeAdapter = new ArrayAdapter<>(requireContext(), R.layout.item_spinner_dropdown, types);
-        typeAdapter.setDropDownViewResource(R.layout.item_spinner_dropdown);
+        ArrayAdapter<String> typeAdapter = new ArrayAdapter<>(requireContext(), R.layout.item_form_spinner_value, types);
+        typeAdapter.setDropDownViewResource(R.layout.item_form_spinner_option);
         spType.setAdapter(typeAdapter);
 
         // 数据回显
@@ -1584,13 +1535,7 @@ public class DetailsFragment extends Fragment {
             calendar.setTimeInMillis(currentMillis);
         }
 
-        com.google.android.material.bottomsheet.BottomSheetDialog dialog = new com.google.android.material.bottomsheet.BottomSheetDialog(requireContext());
-        dialog.setContentView(R.layout.dialog_bottom_date_picker);
-
-        dialog.setOnShowListener(d -> {
-            View bottomSheet = ((com.google.android.material.bottomsheet.BottomSheetDialog) d).findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (bottomSheet != null) bottomSheet.setBackgroundResource(android.R.color.transparent);
-        });
+        LedgerPickerDialog dialog = new LedgerPickerDialog(requireContext(), R.layout.dialog_bottom_date_picker);
 
         NumberPicker npYear = dialog.findViewById(R.id.np_year);
         NumberPicker npMonth = dialog.findViewById(R.id.np_month);
@@ -1671,12 +1616,25 @@ public class DetailsFragment extends Fragment {
         }
     }
 
+    private void updateBudgetShortcut(View view) {
+        view.findViewById(R.id.ledger_details_budget).setVisibility(
+                new AssistantConfig(requireContext()).isBudgetEnabled() ? View.VISIBLE : View.GONE);
+    }
+
     @Override
     public void onResume() {
         super.onResume();
         SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
         boolean isCustomBg = prefs.getInt("theme_mode", -1) == 3;
         updateFragmentTransparency(isCustomBg);
+        updateBudgetShortcut(requireView());
+
+        if (btnQuickRecord != null) {
+            int mode = prefs.getInt("quick_record_mode", 1);
+            btnQuickRecord.setContentDescription(getString(mode == 0 ? R.string.record_today_bills_action
+                    : mode == 2 ? R.string.record_ai_action : R.string.record_action));
+            btnQuickRecord.setVisibility(prefs.getBoolean("details_quick_button", true) ? View.VISIBLE : View.GONE);
+        }
 
         // 重置 FAB 按钮状态
         if (btnQuickRecord != null && btnQuickRecord.getVisibility() == View.VISIBLE) {
@@ -1707,6 +1665,9 @@ public class DetailsFragment extends Fragment {
         View view = getView();
         if (view == null) return;
 
+        LedgerSummaryCard summary = view.findViewById(R.id.ledger_details_summary);
+        summary.applyBackground(isCustomBg);
+
         // 获取外层 FrameLayout (getView() 返回的就是根视图)
         View frameLayout = view;
         View rootLayout = view.findViewById(R.id.root_layout_details);
@@ -1714,8 +1675,7 @@ public class DetailsFragment extends Fragment {
         RadioGroup rgTimeMode = view.findViewById(R.id.rg_time_mode);
         androidx.core.widget.NestedScrollView scrollView = view.findViewById(R.id.scroll_view_details);
         RecyclerView recyclerDetails = view.findViewById(R.id.recycler_details);
-        com.google.android.material.floatingactionbutton.FloatingActionButton btnQuickRecord = view.findViewById(R.id.btn_quick_record_details);
-        TextView tvStatisticsSummary = view.findViewById(R.id.tv_statistics_summary);
+        FloatingActionButton btnQuickRecord = view.findViewById(R.id.btn_quick_record_details);
         View btnPrev = view.findViewById(R.id.btn_prev);
         android.widget.LinearLayout llTimeControls = btnPrev != null ? (android.widget.LinearLayout) btnPrev.getParent() : null;
 
@@ -1743,29 +1703,13 @@ public class DetailsFragment extends Fragment {
             }
 
             // 3. 统计信息文本：添加半透明圆角背景
-            if (tvStatisticsSummary != null && tvStatisticsSummary.getVisibility() == View.VISIBLE) {
-                android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
-                shape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
-                float radius = android.util.TypedValue.applyDimension(
-                        android.util.TypedValue.COMPLEX_UNIT_DIP, 12, getResources().getDisplayMetrics());
-                shape.setCornerRadius(radius);
-                int surfaceColor = ContextCompat.getColor(requireContext(), R.color.white);
-                int translucentSurface = androidx.core.graphics.ColorUtils.setAlphaComponent(surfaceColor, 230);
-                shape.setColor(translucentSurface);
-                
-                // 添加内边距
-                int padding8dp = (int) android.util.TypedValue.applyDimension(
-                        android.util.TypedValue.COMPLEX_UNIT_DIP, 8, getResources().getDisplayMetrics());
-                tvStatisticsSummary.setBackground(shape);
-                tvStatisticsSummary.setPadding(padding8dp, padding8dp, padding8dp, padding8dp);
-            }
 
             // 4. 快捷记账按钮：90% 透明度 (230) + 去除阴影
             if (btnQuickRecord != null) {
                 int fabColor = ContextCompat.getColor(requireContext(), R.color.app_blue);
                 int translucentFab = androidx.core.graphics.ColorUtils.setAlphaComponent(fabColor, 230);
                 btnQuickRecord.setBackgroundTintList(ColorStateList.valueOf(translucentFab));
-                btnQuickRecord.setCompatElevation(0f);
+                btnQuickRecord.setElevation(0f);
             }
 
         } else {
@@ -1790,30 +1734,12 @@ public class DetailsFragment extends Fragment {
             }
 
             // 恢复统计信息文本：移除背景，恢复原有边距
-            if (tvStatisticsSummary != null) {
-                tvStatisticsSummary.setBackground(null);
-                // 恢复原有的 margin，而不是 padding
-                int margin16dp = (int) android.util.TypedValue.applyDimension(
-                        android.util.TypedValue.COMPLEX_UNIT_DIP, 16, getResources().getDisplayMetrics());
-                int margin4dp = (int) android.util.TypedValue.applyDimension(
-                        android.util.TypedValue.COMPLEX_UNIT_DIP, 4, getResources().getDisplayMetrics());
-                int margin8dp = (int) android.util.TypedValue.applyDimension(
-                        android.util.TypedValue.COMPLEX_UNIT_DIP, 8, getResources().getDisplayMetrics());
-                
-                ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) tvStatisticsSummary.getLayoutParams();
-                params.leftMargin = margin16dp;
-                params.rightMargin = margin16dp;
-                params.topMargin = margin4dp;
-                params.bottomMargin = margin8dp;
-                tvStatisticsSummary.setLayoutParams(params);
-                tvStatisticsSummary.setPadding(0, 0, 0, 0);
-            }
 
             // 恢复快捷记账按钮：100% 不透明 + 去除阴影（统一去阴影风格）
             if (btnQuickRecord != null) {
                 int fabColor = ContextCompat.getColor(requireContext(), R.color.app_blue);
                 btnQuickRecord.setBackgroundTintList(ColorStateList.valueOf(fabColor));
-                btnQuickRecord.setCompatElevation(0f);
+                btnQuickRecord.setElevation(0f);
             }
         }
 
@@ -1834,9 +1760,9 @@ public class DetailsFragment extends Fragment {
             if (tvTopTitle != null) tvTopTitle.setBackgroundColor(Color.TRANSPARENT);
             if (recyclerDetails != null) recyclerDetails.setBackgroundColor(Color.TRANSPARENT);
         } else {
-            view.setBackgroundResource(R.color.bar_background);
-            if (tvTopTitle != null) tvTopTitle.setBackgroundResource(R.color.bar_background);
-            if (recyclerDetails != null) recyclerDetails.setBackgroundResource(R.color.bar_background);
+            view.setBackgroundResource(R.color.ledger_canvas);
+            if (tvTopTitle != null) tvTopTitle.setBackgroundResource(R.color.ledger_canvas);
+            if (recyclerDetails != null) recyclerDetails.setBackgroundResource(R.color.ledger_canvas);
         }
     }
 

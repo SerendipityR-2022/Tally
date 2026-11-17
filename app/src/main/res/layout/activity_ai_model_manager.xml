@@ -1,47 +1,36 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/ai_model_manager_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bar_background"
     android:orientation="vertical">
-
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:padding="16dp">
-
+        android:id="@+id/settings_toolbar"
+        style="@style/TallySettingsToolbar">
+        <com.example.budgetapp.ui.BackButton android:layout_width="48dp" android:layout_height="48dp" />
         <TextView
+            style="@style/TallySettingsTitle"
             android:id="@+id/tv_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="模型配置管理"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary"/>
+            android:text="模型配置管理" />
     </LinearLayout>
-
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
-
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
         <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingBottom="80dp"> <LinearLayout
-            android:id="@+id/layout_profiles"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingBottom="80dp">
+            <LinearLayout
+                android:id="@+id/layout_profiles"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
 
         </LinearLayout>
         </androidx.core.widget.NestedScrollView>
-
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/fab_add"
             android:layout_width="wrap_content"
@@ -52,10 +41,9 @@
             android:src="@drawable/ic_add"
             android:contentDescription="添加模型配置"
             app:backgroundTint="@color/app_blue"
-            app:tint="@android:color/white"
+            app:tint="@color/text_on_accent"
             app:elevation="6dp"
             app:pressedTranslationZ="12dp"
             app:fabSize="normal" />
-
     </FrameLayout>
 </LinearLayout>

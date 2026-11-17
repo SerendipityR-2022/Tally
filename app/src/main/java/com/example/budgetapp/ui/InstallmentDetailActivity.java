@@ -14,9 +14,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -48,20 +46,7 @@ public class InstallmentDetailActivity extends AppCompatActivity {
         // 2. 动态处理状态栏和小白条的 Insets 边距，与 SettingsActivity 保持一致
         View rootView = findViewById(R.id.installment_detail_root);
         if (rootView != null) {
-            final int originalPaddingLeft = rootView.getPaddingLeft();
-            final int originalPaddingTop = rootView.getPaddingTop();
-            final int originalPaddingRight = rootView.getPaddingRight();
-            final int originalPaddingBottom = rootView.getPaddingBottom();
-            ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-                androidx.core.graphics.Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                v.setPadding(
-                        originalPaddingLeft + insets.left,
-                        originalPaddingTop + insets.top,
-                        originalPaddingRight + insets.right,
-                        originalPaddingBottom + insets.bottom
-                );
-                return WindowInsetsCompat.CONSUMED;
-            });
+            SettingsPage.applyInsets(rootView);
         }
 
         viewModel = new ViewModelProvider(this).get(FinanceViewModel.class);

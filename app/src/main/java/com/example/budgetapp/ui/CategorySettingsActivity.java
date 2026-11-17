@@ -1,6 +1,7 @@
 package com.example.budgetapp.ui;
 
 import android.app.AlertDialog;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -13,13 +14,11 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.AppDatabase;
+import com.example.budgetapp.util.CategoryIcon;
 import com.example.budgetapp.util.CategoryManager;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
@@ -34,7 +33,6 @@ public class CategorySettingsActivity extends AppCompatActivity {
     private SwitchCompat switchSubCategory;
     private List<String> expenseList;
     private List<String> incomeList;
-    private SwitchCompat switchDetailedCategory; // 【新增】
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,11 +43,7 @@ public class CategorySettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_category_settings);
 
         View rootView = findViewById(R.id.root_view);
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-            return WindowInsetsCompat.CONSUMED;
-        });
+        SettingsPage.applyInsets(rootView);
         initViews();
         loadData();
     }
@@ -58,9 +52,6 @@ public class CategorySettingsActivity extends AppCompatActivity {
         chipGroupExpense = findViewById(R.id.chip_group_expense);
         chipGroupIncome = findViewById(R.id.chip_group_income);
         switchSubCategory = findViewById(R.id.switch_sub_category);
-
-        // 【新增】初始化详细分类开关
-        switchDetailedCategory = findViewById(R.id.switch_detailed_category);
 
         findViewById(R.id.btn_add_expense).setOnClickListener(v -> showAddDialog(true));
         // 【新增】绑定排序按钮
@@ -90,17 +81,6 @@ public class CategorySettingsActivity extends AppCompatActivity {
             });
         }
 
-        // 【新增】详细分类开关绑定（增加判空保护，防止找不到布局时闪退）
-        if (switchDetailedCategory != null) {
-            boolean isDetailedEnabled = CategoryManager.isDetailedCategoryEnabled(this);
-            switchDetailedCategory.setChecked(isDetailedEnabled);
-            switchDetailedCategory.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                CategoryManager.setDetailedCategoryEnabled(this, isChecked);
-            });
-        } else {
-            // 如果走到这里，说明 XML 布局文件没有生效（多半是因为深色模式加载了旧布局）
-            android.util.Log.e("CategorySettings", "未找到 switch_detailed_category 控件，请检查布局文件！");
-        }
     }
 
     private void loadData() {
@@ -124,6 +104,11 @@ public class CategorySettingsActivity extends AppCompatActivity {
             if ("自定义".equals(cat)) {
                 chip.setAlpha(0.6f);
             } else {
+                CategoryIcon icon = CategoryManager.getIcon(this, isExpense, cat);
+                chip.setChipIconResource(icon.drawable);
+                chip.setChipIconTint(ColorStateList.valueOf(icon.tint(this)));
+                chip.setChipIconSize(getResources().getDisplayMetrics().density * 18);
+                chip.setChipIconVisible(true);
                 chip.setOnClickListener(v -> showEditDialog(cat, isExpense));
                 chip.setOnLongClickListener(v -> {
                     if (switchSubCategory.isChecked()) {
@@ -137,73 +122,9 @@ public class CategorySettingsActivity extends AppCompatActivity {
         }
     }
 
-    // 编辑一级分类
-    private void showEditDialog(String oldCategory, boolean isExpense) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View view = LayoutInflater.from(this).inflate(R.layout.dialog_edit_category, null);
-        builder.setView(view);
-
-        AlertDialog dialog = builder.create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        }
-
-        TextView tvTitle = view.findViewById(R.id.tv_dialog_title);
-        EditText etInput = view.findViewById(R.id.et_category_name);
-        Button btnDelete = view.findViewById(R.id.btn_delete);
-        Button btnConfirm = view.findViewById(R.id.btn_confirm);
-
-        tvTitle.setText(isExpense ? "编辑支出分类" : "编辑收入分类");
-        etInput.setText(oldCategory);
-        etInput.setSelection(oldCategory.length());
-        etInput.requestFocus();
-
-        btnDelete.setOnClickListener(v -> {
-            dialog.dismiss();
-            showDeleteDialog(oldCategory, isExpense);
-        });
-
-        btnConfirm.setOnClickListener(v -> {
-            String newCategory = etInput.getText().toString().trim();
-            if (!newCategory.isEmpty()) {
-                if (newCategory.equals(oldCategory)) {
-                    dialog.dismiss();
-                    return;
-                }
-
-                List<String> list = isExpense ? expenseList : incomeList;
-                if (list.contains(newCategory)) {
-                    Toast.makeText(this, "该分类已存在", Toast.LENGTH_SHORT).show();
-                } else {
-                    int index = list.indexOf(oldCategory);
-                    if (index != -1) {
-                        list.set(index, newCategory);
-
-                        // 1. 同步迁移二级分类配置
-                        List<String> subCats = CategoryManager.getSubCategories(this, oldCategory);
-                        if (!subCats.isEmpty()) {
-                            CategoryManager.saveSubCategories(this, newCategory, subCats);
-                        }
-                        saveAndRefresh(isExpense);
-
-                        // 2. 在后台线程同步更新数据库里的历史账单的一级分类名称
-                        new Thread(() -> {
-                            // 【修复报错】此处将 getInstance 改为了 getDatabase
-                            AppDatabase db = AppDatabase.getDatabase(getApplicationContext());
-                            if (db != null && db.transactionDao() != null) {
-                                db.transactionDao().updateCategoryName(oldCategory, newCategory);
-                            }
-                        }).start();
-
-                        dialog.dismiss();
-                    }
-                }
-            } else {
-                Toast.makeText(this, "请输入分类名称", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        dialog.show();
+    private void showEditDialog(String category, boolean isExpense) {
+        CategoryEditorDialog.show(this, isExpense, category, name -> loadData(),
+                () -> showDeleteDialog(category, isExpense));
     }
 
     // 管理二级分类
@@ -361,47 +282,7 @@ public class CategorySettingsActivity extends AppCompatActivity {
     }
 
     private void showAddDialog(boolean isExpense) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View view = LayoutInflater.from(this).inflate(R.layout.dialog_add_category, null);
-        builder.setView(view);
-
-        AlertDialog dialog = builder.create();
-
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        }
-
-        TextView tvTitle = view.findViewById(R.id.tv_dialog_title);
-        EditText etInput = view.findViewById(R.id.et_category_name);
-        Button btnCancel = view.findViewById(R.id.btn_cancel);
-        Button btnConfirm = view.findViewById(R.id.btn_confirm);
-
-        tvTitle.setText(isExpense ? "添加支出分类" : "添加收入分类");
-        etInput.requestFocus();
-
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
-
-        btnConfirm.setOnClickListener(v -> {
-            String text = etInput.getText().toString().trim();
-            if (!text.isEmpty()) {
-                List<String> list = isExpense ? expenseList : incomeList;
-                if (list.contains(text)) {
-                    Toast.makeText(this, "该分类已存在", Toast.LENGTH_SHORT).show();
-                } else {
-                    if (list.contains("自定义")) {
-                        list.add(list.indexOf("自定义"), text);
-                    } else {
-                        list.add(text);
-                    }
-                    saveAndRefresh(isExpense);
-                    dialog.dismiss();
-                }
-            } else {
-                Toast.makeText(this, "请输入分类名称", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        dialog.show();
+        CategoryEditorDialog.show(this, isExpense, null, name -> loadData(), null);
     }
 
     private void showDeleteDialog(String category, boolean isExpense) {

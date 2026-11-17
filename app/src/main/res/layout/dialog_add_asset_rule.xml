@@ -1,12 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@drawable/bg_bottom_sheet_rounded"
     android:padding="24dp">
-
     <TextView
         android:id="@+id/tv_title"
         android:layout_width="match_parent"
@@ -16,93 +16,68 @@
         android:textStyle="bold"
         android:textColor="?android:attr/textColorPrimary"
         android:gravity="center"
-        android:layout_marginBottom="24dp"/>
-
+        android:layout_marginBottom="24dp" />
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="生效应用"
         android:textColor="?android:attr/textColorPrimary"
         android:textSize="14sp"
-        android:layout_marginBottom="8dp"/>
-
+        android:layout_marginBottom="8dp" />
     <Spinner
+        style="@style/Widget.Tally.FormSpinner"
         android:id="@+id/sp_app"
         android:layout_width="match_parent"
         android:layout_height="50dp"
-        android:background="@drawable/bg_input_field"
-        android:paddingHorizontal="12dp"
-        android:layout_marginBottom="16dp"
-        android:spinnerMode="dropdown"
-        android:popupBackground="@drawable/bg_input_field"/>
-
+        android:layout_marginBottom="16dp" />
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="关联资产"
         android:textColor="?android:attr/textColorPrimary"
         android:textSize="14sp"
-        android:layout_marginBottom="8dp"/>
-
+        android:layout_marginBottom="8dp" />
     <Spinner
+        style="@style/Widget.Tally.FormSpinner"
         android:id="@+id/sp_asset"
         android:layout_width="match_parent"
         android:layout_height="50dp"
-        android:background="@drawable/bg_input_field"
-        android:paddingHorizontal="12dp"
-        android:layout_marginBottom="16dp"
-        android:spinnerMode="dropdown"
-        android:popupBackground="@drawable/bg_input_field"/>
-
+        android:layout_marginBottom="16dp" />
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="屏幕关键字 (包含即触发)"
         android:textColor="?android:attr/textColorPrimary"
         android:textSize="14sp"
-        android:layout_marginBottom="8dp"/>
-
+        android:layout_marginBottom="8dp" />
     <com.example.budgetapp.ui.CustomHighlightEditText
+        style="@style/Widget.Tally.FormInput"
         android:id="@+id/et_keyword"
         android:layout_width="match_parent"
         android:layout_height="50dp"
-        android:background="@drawable/bg_input_field"
         android:hint="例如: 招商银行"
         android:inputType="text"
-        android:textColor="?android:attr/textColorPrimary"
-        android:textColorHint="?android:attr/textColorHint"
-        android:paddingHorizontal="16dp"
         android:textSize="16sp" />
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:layout_marginTop="24dp">
-
-        <Button
+        <com.google.android.material.button.MaterialButton
+            style="@style/Widget.Tally.Button.Secondary"
             android:id="@+id/btn_cancel"
             android:layout_width="0dp"
             android:layout_height="56dp"
             android:layout_weight="1"
-            android:text="取 消"
-            android:textColor="?android:attr/textColorSecondary"
-            android:backgroundTint="@color/input_bg"
-            android:layout_marginEnd="8dp"
-            app:cornerRadius="16dp"
-            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"/>
-
-        <Button
+            android:text="取消"
+            android:layout_marginEnd="8dp" />
+        <com.google.android.material.button.MaterialButton
+            style="@style/Widget.Tally.Button"
             android:id="@+id/btn_save"
             android:layout_width="0dp"
             android:layout_height="56dp"
             android:layout_weight="1"
-            android:text="保 存"
-            android:textColor="@color/real_white"
-            android:backgroundTint="@color/app_blue"
-            android:layout_marginStart="8dp"
-            app:cornerRadius="16dp"
-            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"/>
+            android:text="保存"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
-
 </LinearLayout>
