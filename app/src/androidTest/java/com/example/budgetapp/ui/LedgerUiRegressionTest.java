@@ -31,6 +31,7 @@ import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.database.TransactionDao;
 import com.example.budgetapp.util.DailyBudgetPlan;
+import com.example.budgetapp.util.MonthlyBudgetHistory;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -41,6 +42,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -66,10 +68,15 @@ public class LedgerUiRegressionTest {
     private static final String BUDGET_FIXTURE_OVERRIDE = "budget_2001_6";
     private static final String CURRENT_BUDGET_OVERRIDE = "budget_" + LocalDate.now().getYear()
             + "_" + LocalDate.now().getMonthValue();
+    private static final YearMonth PREVIOUS_BUDGET_MONTH = YearMonth.now().minusMonths(1);
+    private static final String PREVIOUS_BUDGET_SNAPSHOT = "budget_history_month_" + PREVIOUS_BUDGET_MONTH;
+    private static final String PREVIOUS_BUDGET_OVERRIDE = MonthlyBudgetHistory.overrideKey(PREVIOUS_BUDGET_MONTH);
     private static final String[] PREF_KEYS = {"default_page", "is_budget_enabled", "is_detailed_budget_enabled",
             "enable_details_module", "key_enable_assets_module", "theme_mode", DefaultPageActivity.KEY_DETAILS_BUDGET_SHORTCUT,
             DailyBudgetPlan.PREF_DYNAMIC, "monthly_budget", "budget_start_time", BUDGET_FIXTURE_OVERRIDE,
-            "bill_card_replace_budget", DefaultPageActivity.KEY_BILL_CARD, CURRENT_BUDGET_OVERRIDE};
+            "bill_card_replace_budget", DefaultPageActivity.KEY_BILL_CARD, CURRENT_BUDGET_OVERRIDE,
+            "budget_history_recorded_through", "budget_history_month_" + YearMonth.now(),
+            PREVIOUS_BUDGET_SNAPSHOT, PREVIOUS_BUDGET_OVERRIDE};
     private final Map<String, Object> original = new HashMap<>();
     private SharedPreferences prefs;
 
@@ -176,7 +183,8 @@ public class LedgerUiRegressionTest {
 
     @Test public void enablingDynamicBudgetUpdatesTheRecordCardAndCalendarAfterReturningFromSettings() {
         prefs.edit().putInt("default_page", 0).remove(DailyBudgetPlan.PREF_DYNAMIC).remove("budget_start_time")
-                .putFloat("monthly_budget", 1800f).putFloat(BUDGET_FIXTURE_OVERRIDE, 1500f)
+                .remove("budget_history_recorded_through").putFloat("monthly_budget", 0f)
+                .remove(CURRENT_BUDGET_OVERRIDE).putFloat(BUDGET_FIXTURE_OVERRIDE, 1500f)
                 .putBoolean("bill_card_replace_budget", false).putBoolean(DefaultPageActivity.KEY_BILL_CARD, true).commit();
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         TransactionDao dao = AppDatabase.getDatabase(context).transactionDao();
@@ -285,6 +293,78 @@ public class LedgerUiRegressionTest {
             assertEquals(percent, progress.getProgress());
             assertEquals(activity.getColor(color), progress.getProgressTintList().getDefaultColor());
         });
+    }
+
+    @Test public void historicalBalanceKeepsTheSavedAmountAndExcludesNonBudgetTransactions() {
+        YearMonth present = YearMonth.now();
+        YearMonth closed = PREVIOUS_BUDGET_MONTH;
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        TransactionDao dao = AppDatabase.getDatabase(context).transactionDao();
+        ZoneId zone = ZoneId.systemDefault();
+        long start = closed.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        long end = present.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        double existing = 0;
+        for (Transaction tx : dao.getTransactionsIncludingUnsettledSync(start, end - 1)) {
+            if (tx.type == 0 && !tx.excludeFromBudget && !"资产互转".equals(tx.category)) existing += tx.amount;
+        }
+
+        float effectiveBudget = (float) (existing + 1500);
+        prefs.edit().putLong("budget_start_time", start).remove("budget_history_recorded_through")
+                .putString(PREVIOUS_BUDGET_SNAPSHOT, Double.toString(effectiveBudget))
+                .putFloat(PREVIOUS_BUDGET_OVERRIDE, effectiveBudget + 200)
+                .putFloat("monthly_budget", effectiveBudget).commit();
+        MonthlyBudgetHistory.changeSettings(context, edit -> edit.putFloat("monthly_budget", effectiveBudget + 500));
+
+        Transaction actual = new Transaction(start + 1500, 0, "交通", 100);
+        Transaction excluded = new Transaction(start + 2500, 0, "购物", 50);
+        excluded.excludeFromBudget = true;
+        Transaction transfer = new Transaction(start + 3500, 0, "资产互转", 400);
+        List<Transaction> fixtures = new ArrayList<>();
+        try {
+            for (Transaction bill : Arrays.asList(actual, excluded, transfer)) {
+                bill.id = ThreadLocalRandom.current().nextInt(Integer.MIN_VALUE, -10);
+                dao.insert(bill);
+                fixtures.add(bill);
+            }
+            String monthLabel = context.getString(R.string.budget_history_month, closed.getYear(), closed.getMonthValue());
+            try (ActivityScenario<BudgetHistoryActivity> history = ActivityScenario.launch(BudgetHistoryActivity.class)) {
+                assertHistoryRow(history, monthLabel, context.getString(R.string.budget_history_amount, effectiveBudget),
+                        String.format(Locale.getDefault(), "+ %.2f", effectiveBudget - existing - 100));
+                excluded.excludeFromBudget = false;
+                dao.update(excluded);
+                assertHistoryRow(history, monthLabel, context.getString(R.string.budget_history_amount, effectiveBudget),
+                        String.format(Locale.getDefault(), "+ %.2f", effectiveBudget - existing - 150));
+            }
+        } finally {
+            for (Transaction bill : fixtures) dao.delete(bill);
+        }
+    }
+
+    private static void assertHistoryRow(ActivityScenario<BudgetHistoryActivity> history, String month,
+            String budget, String balance) {
+        AtomicReference<String> displayedBudget = new AtomicReference<>();
+        AtomicReference<String> displayedBalance = new AtomicReference<>();
+        long until = SystemClock.uptimeMillis() + 4000;
+        do {
+            history.onActivity(activity -> {
+                RecyclerView list = activity.findViewById(R.id.rv_timeline);
+                for (int i = 0; i < list.getChildCount(); i++) {
+                    View row = list.getChildAt(i);
+                    TextView title = row.findViewById(R.id.tv_month_title);
+                    if (title == null || !month.contentEquals(title.getText())) continue;
+                    displayedBudget.set(((TextView) row.findViewById(R.id.tv_month_subtitle)).getText().toString());
+                    displayedBalance.set(((TextView) row.findViewById(R.id.tv_month_surplus)).getText().toString());
+                    break;
+                }
+                if (displayedBudget.get() == null && list.getAdapter() != null && list.getAdapter().getItemCount() > 0) {
+                    list.scrollToPosition(list.getAdapter().getItemCount() - 1);
+                }
+            });
+            if (budget.equals(displayedBudget.get()) && balance.equals(displayedBalance.get())) return;
+            SystemClock.sleep(25);
+        } while (SystemClock.uptimeMillis() < until);
+        assertEquals(budget, displayedBudget.get());
+        assertEquals(balance, displayedBalance.get());
     }
 
     private static void pickRecordDate(ActivityScenario<MainActivity> main, LocalDate date) {

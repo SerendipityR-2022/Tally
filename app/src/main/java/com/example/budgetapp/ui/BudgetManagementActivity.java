@@ -22,6 +22,7 @@ import com.example.budgetapp.BackupManager;
 import com.example.budgetapp.R;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.util.DailyBudgetPlan;
+import com.example.budgetapp.util.MonthlyBudgetHistory;
 
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -87,12 +88,12 @@ public class BudgetManagementActivity extends AppCompatActivity {
         updateDailyHint();
 
         switchBudget.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean("is_budget_enabled", isChecked).apply();
+            MonthlyBudgetHistory.changeSettings(this, edit -> edit.putBoolean("is_budget_enabled", isChecked));
             updateUI(isChecked, switchDetailedBudget.isChecked());
         });
 
         switchDetailedBudget.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean("is_detailed_budget_enabled", isChecked).apply();
+            MonthlyBudgetHistory.changeSettings(this, edit -> edit.putBoolean("is_detailed_budget_enabled", isChecked));
             updateUI(switchBudget.isChecked(), isChecked);
             updateDailyHint();
         });
@@ -115,7 +116,7 @@ public class BudgetManagementActivity extends AppCompatActivity {
             }
         });
 
-        btnSaveBudget.setOnClickListener(v -> saveSettings(prefs));
+        btnSaveBudget.setOnClickListener(v -> saveSettings());
     }
 
     private void updateUI(boolean isBudgetEnabled, boolean isDetailedEnabled) {
@@ -186,32 +187,40 @@ public class BudgetManagementActivity extends AppCompatActivity {
         }
     }
 
-    private void saveSettings(SharedPreferences prefs) {
-        float totalBudget = 0;
-        if (switchDetailedBudget.isChecked()) {
-            // 开启详细模式：遍历保存各个分类，并加总
-            for (CategoryInputHolder holder : categoryInputs) {
-                float val = 0;
-                try {
-                    val = Float.parseFloat(holder.editText.getText().toString());
-                } catch (Exception ignored) {}
-                prefs.edit().putFloat("budget_cat_" + holder.categoryName, val).apply();
-                totalBudget += val;
-            }
-            prefs.edit().putFloat("monthly_budget", totalBudget).apply();
-            Toast.makeText(this, "详细分类预算已保存\n月总额更新为: " + totalBudget, Toast.LENGTH_SHORT).show();
-            finish();
-        } else {
-            // 普通模式：直接保存总额
-            try {
-                totalBudget = Float.parseFloat(etMonthlyBudget.getText().toString());
-                prefs.edit().putFloat("monthly_budget", totalBudget).apply();
+    private void saveSettings() {
+        try {
+            if (switchDetailedBudget.isChecked()) {
+                float[] values = new float[categoryInputs.size()];
+                float total = 0;
+                for (int i = 0; i < values.length; i++) {
+                    String input = categoryInputs.get(i).editText.getText().toString().trim();
+                    values[i] = input.isEmpty() ? 0 : parseBudget(input);
+                    total += values[i];
+                }
+                if (!Float.isFinite(total)) throw new NumberFormatException();
+                final float totalBudget = total;
+                MonthlyBudgetHistory.changeSettings(this, edit -> {
+                    for (int i = 0; i < values.length; i++) {
+                        edit.putFloat("budget_cat_" + categoryInputs.get(i).categoryName, values[i]);
+                    }
+                    edit.putFloat("monthly_budget", totalBudget);
+                });
+                Toast.makeText(this, "详细分类预算已保存\n月总额更新为: " + totalBudget, Toast.LENGTH_SHORT).show();
+            } else {
+                float totalBudget = parseBudget(etMonthlyBudget.getText().toString());
+                MonthlyBudgetHistory.changeSettings(this, edit -> edit.putFloat("monthly_budget", totalBudget));
                 Toast.makeText(this, "全局预算设置已保存", Toast.LENGTH_SHORT).show();
-                finish();
-            } catch (NumberFormatException e) {
-                Toast.makeText(this, "请输入有效的金额", Toast.LENGTH_SHORT).show();
             }
+            finish();
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "请输入有效的金额", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private static float parseBudget(String input) {
+        float amount = Float.parseFloat(input);
+        if (!Float.isFinite(amount) || amount < 0) throw new NumberFormatException();
+        return amount;
     }
 
     private static class CategoryInputHolder {

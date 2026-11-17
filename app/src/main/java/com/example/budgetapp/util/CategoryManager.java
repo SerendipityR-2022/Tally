@@ -105,7 +105,9 @@ public class CategoryManager {
     }
 
     public static synchronized void saveExpenseCategories(Context context, List<String> list) {
+        MonthlyBudgetHistory.checkpointBeforeSettingsChange(context);
         writeCategories(preferences(context), true, list);
+        MonthlyBudgetHistory.recordCurrent(context);
         BackupManager.triggerAutoUploadIfEnabled(context);
     }
 
@@ -146,7 +148,9 @@ public class CategoryManager {
             List<String> previous = getSubCategories(context, oldName);
             if (!previous.isEmpty()) prefs.edit().putString(SUB_PREFIX + name, TextUtils.join(",", previous)).apply();
         }
+        if (expense) MonthlyBudgetHistory.checkpointBeforeSettingsChange(context);
         writeCategories(prefs, expense, categories);
+        if (expense) MonthlyBudgetHistory.recordCurrent(context);
 
         Context application = context.getApplicationContext();
         if (renamed) {

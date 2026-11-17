@@ -16,6 +16,10 @@
     <string name="budget_daily_available">日可用预算</string>
     <string name="budget_daily_from_tomorrow">明日起日均</string>
     <string name="budget_remaining_today">今日剩余</string>
+    <string name="budget_history_month">%1$d年 %2$d月</string>
+    <string name="budget_history_amount">当月预算 %1$.2f</string>
+    <string name="budget_history_not_recorded">未记录当月预算</string>
+    <string name="budget_history_not_set">当月未设置预算</string>
     <string name="stats_empty">这段时间还没有账单</string>
     <string name="stats_expense_total">支出</string>
     <string name="stats_income_total">收入</string>

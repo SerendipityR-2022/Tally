@@ -40,6 +40,7 @@ import com.example.budgetapp.util.ScreenCaptureSettings;
 import com.example.budgetapp.util.ShizukuManager;
 import com.example.budgetapp.ui.SettingsActivity;
 import com.example.budgetapp.util.AssistantConfig;
+import com.example.budgetapp.util.MonthlyBudgetHistory;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
@@ -418,6 +419,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        MonthlyBudgetHistory.recordCurrent(this);
 
         // 【新增】每次回到主界面时，检查并刷新背景
         applyCustomBackground();

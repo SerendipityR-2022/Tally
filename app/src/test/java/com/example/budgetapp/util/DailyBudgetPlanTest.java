@@ -75,6 +75,24 @@ public class DailyBudgetPlanTest {
         assertEquals(before.limitOn(3), after.limitOn(3), 0);
     }
 
+    @Test public void aClosedMonthsBalanceMatchesItsLastDayBudgetSummary() {
+        Transaction excluded = expense(25, 90);
+        excluded.excludeFromBudget = true;
+        Transaction transfer = expense(28, 40);
+        transfer.category = "资产互转";
+        Transaction income = expense(29, 100);
+        income.type = 1;
+        java.util.List<Transaction> bills = Arrays.asList(expense(1, 50), expense(30, 30),
+                pendingExpense(30, 20), excluded, transfer, income);
+
+        DailyBudgetPlan closing = new DailyBudgetPlan(APRIL, APRIL.atEndOfMonth(), ZONE, 1500, true, bills);
+        DailyBudgetPlan history = new DailyBudgetPlan(APRIL, APRIL.plusMonths(1).atDay(1), ZONE, 1500, false, bills);
+        assertEquals(1400, history.remainingAfterKnownExpenses(), CENT_FRACTION);
+        assertEquals(closing.remainingAfterKnownExpenses(), history.remainingAfterKnownExpenses(), 0);
+        assertEquals(50, history.knownExpenseOn(30), CENT_FRACTION);
+        assertEquals(0, history.knownExpenseOn(25), CENT_FRACTION);
+    }
+
     @Test public void onlySettledBudgetExpensesInTheSelectedMonthCountAsHistoricalUsage() {
         Transaction excluded = expense(1, 90);
         excluded.excludeFromBudget = true;

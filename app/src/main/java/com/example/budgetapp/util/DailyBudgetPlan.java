@@ -19,6 +19,7 @@ public final class DailyBudgetPlan {
     private final int elapsedDays;
     private final double[] spending;
     private final double[] reserved;
+    private final double[] knownByDay;
     private final double[] limits;
     private final double remainingAfterKnownExpenses;
     private final double futureDailyBudget;
@@ -33,21 +34,22 @@ public final class DailyBudgetPlan {
         elapsedDays = month.isBefore(present) ? numDays : month.equals(present) ? today.getDayOfMonth() : 0;
         spending = new double[numDays];
         reserved = new double[numDays];
+        knownByDay = new double[numDays];
         limits = new double[numDays];
 
         long start = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
         long end = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
-        double knownExpenses = 0;
         for (Transaction tx : transactions) {
-            if (tx.date >= start && tx.date < end && tx.type == 0
-                    && !tx.excludeFromBudget && !"资产互转".equals(tx.category)) {
+            if (tx.date >= start && tx.date < end && countsTowardsBudget(tx)) {
                 int day = Instant.ofEpochMilli(tx.date).atZone(zone).getDayOfMonth();
                 // Reserve known expenses once, regardless of when their status changes to settled.
-                knownExpenses += tx.amount;
+                knownByDay[day - 1] += tx.amount;
                 if (!tx.isSettled || day > elapsedDays) reserved[day - 1] += tx.amount;
                 if (tx.isSettled && (!dynamic || day <= elapsedDays)) spending[day - 1] += tx.amount;
             }
         }
+        double knownExpenses = 0;
+        for (double dayExpense : knownByDay) knownExpenses += dayExpense;
         remainingAfterKnownExpenses = monthlyBudget - knownExpenses;
         int futureDays = numDays - elapsedDays;
         futureDailyBudget = futureDays > 0 ? Math.max(0, remainingAfterKnownExpenses) / futureDays : 0;
@@ -67,6 +69,12 @@ public final class DailyBudgetPlan {
     public boolean isFor(YearMonth month, LocalDate today) {
         return this.month.equals(month) && this.today.equals(today);
     }
+
+    public static boolean countsTowardsBudget(Transaction tx) {
+        return tx.type == 0 && !tx.excludeFromBudget && !"资产互转".equals(tx.category);
+    }
+
+    public double knownExpenseOn(int day) { return knownByDay[day - 1]; }
 
     public double spendingOn(int day) { return spending[day - 1]; }
 

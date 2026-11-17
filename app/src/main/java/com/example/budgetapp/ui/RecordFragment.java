@@ -62,6 +62,7 @@ import com.example.budgetapp.util.TransactionRemarks;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.util.DailyBudgetPlan;
+import com.example.budgetapp.util.MonthlyBudgetHistory;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
@@ -505,20 +506,10 @@ public class RecordFragment extends Fragment {
             enabled = !currentMonth.isBefore(startMonth);
         }
 
-        double monthlyBudget = 0;
-        if (enabled) {
-            if (prefs.getBoolean("is_detailed_budget_enabled", false)) {
-                for (String cat : CategoryManager.getExpenseCategories(requireContext())) {
-                    monthlyBudget += prefs.getFloat("budget_cat_" + cat, 0f);
-                }
-            } else {
-                String monthKey = "budget_" + currentMonth.getYear() + "_" + currentMonth.getMonthValue();
-                monthlyBudget = prefs.getFloat(monthKey, prefs.getFloat("monthly_budget", 0f));
-            }
-        }
-
         LocalDate today = LocalDate.now(zone);
-        dailyBudgetPlan = enabled && monthlyBudget > 0 && Double.isFinite(monthlyBudget)
+        MonthlyBudgetHistory.recordCurrent(requireContext());
+        Double monthlyBudget = enabled ? MonthlyBudgetHistory.amountFor(requireContext(), currentMonth, YearMonth.from(today)) : null;
+        dailyBudgetPlan = monthlyBudget != null && monthlyBudget > 0 && Double.isFinite(monthlyBudget)
                 ? new DailyBudgetPlan(currentMonth, today, zone, monthlyBudget,
                         prefs.getBoolean(DailyBudgetPlan.PREF_DYNAMIC, false), transactions) : null;
         adapter.setBudgetPlan(dailyBudgetPlan);

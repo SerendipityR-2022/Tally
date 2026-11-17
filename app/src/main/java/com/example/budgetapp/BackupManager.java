@@ -14,6 +14,7 @@ import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.AutoAssetManager;
 import com.example.budgetapp.util.CategoryManager;
+import com.example.budgetapp.util.MonthlyBudgetHistory;
 import com.google.gson.Gson;
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -1237,6 +1238,7 @@ public class BackupManager {
         BackupLedgerRestore ledger = new BackupLedgerRestore();
         db.runInTransaction(() -> ledger.merge(db, data));
 
+        MonthlyBudgetHistory.checkpointBeforeSettingsChange(context);
         CategoryManager.restoreBackupCategories(context, data.expenseCategories, data.incomeCategories,
                 data.subCategoryMap, data.incomeCatalogUpdated);
         if (data.autoAssetRules != null) {
@@ -1256,6 +1258,7 @@ public class BackupManager {
             restoreAssistantConfig(context, data.assistantConfig);
         }
         if (data.renewalList != null) new AssistantConfig(context).saveRenewalList(data.renewalList);
+        MonthlyBudgetHistory.recordCurrent(context);
         triggerAutoUploadIfEnabled(context);
         return ledger.result;
     }
@@ -1593,6 +1596,7 @@ public class BackupManager {
         }
 
         // 【修复】按照带类型的三列格式恢复配置。如果是旧版两列格式，则进行智能数据类型推断
+        MonthlyBudgetHistory.checkpointBeforeSettingsChange(context);
         SharedPreferences.Editor editor = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit();
         for (List<String> row : appPrefsRows) {
             if (row.size() < 2) continue;
@@ -2387,6 +2391,7 @@ public class BackupManager {
                     Gson gson = new Gson();
                     BackupData data = gson.fromJson(sb.toString(), BackupData.class);
 
+                    MonthlyBudgetHistory.checkpointBeforeSettingsChange(context);
                     CategoryManager.restoreBackupCategories(context, data.expenseCategories, data.incomeCategories,
                             data.subCategoryMap, data.incomeCatalogUpdated);
 
@@ -2407,6 +2412,7 @@ public class BackupManager {
                     if (data.renewalList != null) {
                         new AssistantConfig(context).saveRenewalList(data.renewalList);
                     }
+                    MonthlyBudgetHistory.recordCurrent(context);
 
                     return data; // 返回解析后的数据供数据库操作
                 }

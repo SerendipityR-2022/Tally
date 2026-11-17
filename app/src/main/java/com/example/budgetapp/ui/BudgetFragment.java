@@ -32,6 +32,7 @@ import com.example.budgetapp.database.Goal;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.util.DailyBudgetPlan;
+import com.example.budgetapp.util.MonthlyBudgetHistory;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
@@ -295,7 +296,7 @@ public class BudgetFragment extends Fragment {
                 double spent = 0;
                 for (Transaction t : transactions) {
                     // 【修改点】：增加 !t.excludeFromBudget 判断
-                    if (t.type == 0 && t.date >= startOfMonth && t.date <= endOfMonth && cat.equals(t.category) && !t.excludeFromBudget) {
+                    if (DailyBudgetPlan.countsTowardsBudget(t) && t.date >= startOfMonth && t.date <= endOfMonth && cat.equals(t.category)) {
                         spent += t.amount;
                     }
                 }
@@ -356,11 +357,8 @@ public class BudgetFragment extends Fragment {
         view.findViewById(R.id.btn_save).setOnClickListener(v -> {
             try {
                 float newLimit = Float.parseFloat(etBudget.getText().toString());
-                if (newLimit < 0) throw new Exception();
-
-                SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-                // 保存分类预算：使用与 calculateDetailedBudgets 一致的 Key
-                prefs.edit().putFloat("budget_cat_" + item.name, newLimit).apply();
+                if (!Float.isFinite(newLimit) || newLimit < 0) throw new NumberFormatException();
+                MonthlyBudgetHistory.changeSettings(requireContext(), edit -> edit.putFloat("budget_cat_" + item.name, newLimit));
 
                 // 刷新数据
                 if (viewModel.getAllTransactions().getValue() != null) {
@@ -451,23 +449,8 @@ public class BudgetFragment extends Fragment {
         tvHeaderDailyLabel.setText(!dynamic ? R.string.budget_daily_available
                 : lastDay ? R.string.budget_remaining_today : R.string.budget_daily_from_tomorrow);
 
-        double monthlyBudget = 0;
-
-        // 获取当月总预算
-        if (isDetailedEnabled) {
-            List<String> expenseCategories = CategoryManager.getExpenseCategories(requireContext());
-            for (String cat : expenseCategories) {
-                monthlyBudget += prefs.getFloat("budget_cat_" + cat, 0f);
-            }
-        } else {
-            float defaultBudget = prefs.getFloat("monthly_budget", 0f);
-            String monthKey = "budget_" + today.getYear() + "_" + today.getMonthValue();
-            monthlyBudget = prefs.getFloat(monthKey, defaultBudget);
-        }
-
-        if (Double.isFinite(monthlyBudget) && monthlyBudget > 0 && prefs.getLong("budget_start_time", 0) == 0) {
-            prefs.edit().putLong("budget_start_time", System.currentTimeMillis()).apply();
-        }
+        MonthlyBudgetHistory.recordCurrent(requireContext());
+        double monthlyBudget = MonthlyBudgetHistory.configuredAmount(requireContext(), month);
 
         tvHeaderMonthlyBudget.setText(getString(R.string.budget_amount, monthlyBudget));
 
@@ -511,19 +494,16 @@ public class BudgetFragment extends Fragment {
         LocalDate today = LocalDate.now();
         tvTitle.setText("设置 " + today.getYear() + "年" + today.getMonthValue() + "月 预算");
 
-        SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        float defaultBudget = prefs.getFloat("monthly_budget", 0f);
-        String monthKey = "budget_" + today.getYear() + "_" + today.getMonthValue();
-        float currentMonthBudget = prefs.getFloat(monthKey, defaultBudget);
+        YearMonth month = YearMonth.from(today);
+        String monthKey = MonthlyBudgetHistory.overrideKey(month);
+        float currentMonthBudget = (float) MonthlyBudgetHistory.configuredAmount(requireContext(), month);
         etBudget.setText(currentMonthBudget > 0 ? String.valueOf(currentMonthBudget) : "");
 
         view.findViewById(R.id.btn_save).setOnClickListener(v -> {
             try {
                 float newBudget = Float.parseFloat(etBudget.getText().toString());
-                prefs.edit().putFloat(monthKey, newBudget).apply();
-                if (prefs.getLong("budget_start_time", 0) == 0) {
-                    prefs.edit().putLong("budget_start_time", System.currentTimeMillis()).apply();
-                }
+                if (!Float.isFinite(newBudget) || newBudget < 0) throw new NumberFormatException();
+                MonthlyBudgetHistory.changeSettings(requireContext(), edit -> edit.putFloat(monthKey, newBudget));
                 if (viewModel.getAllTransactions().getValue() != null) {
                     calculateMonthHeader(viewModel.getAllTransactions().getValue());
                     goalAdapter.setTransactions(viewModel.getAllTransactions().getValue());
@@ -672,8 +652,6 @@ public class BudgetFragment extends Fragment {
             });
 
             SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-            float defaultBudget = prefs.getFloat("monthly_budget", 0f);
-
             long earliestGoal = Long.MAX_VALUE;
             for (Goal g : goals) {
                 if (g.createdAt < earliestGoal) earliestGoal = g.createdAt;
@@ -684,24 +662,24 @@ public class BudgetFragment extends Fragment {
 
             LocalDate today = LocalDate.now();
             if (!start.isBefore(today)) return;
+            YearMonth present = YearMonth.from(today);
+            ZoneId zone = ZoneId.systemDefault();
+            YearMonth planMonth = null;
+            DailyBudgetPlan plan = null;
+            double dailyBudget = 0;
 
             double pool = 0;
 
             for (LocalDate d = start; d.isBefore(today); d = d.plusDays(1)) {
-                String key = "budget_" + d.getYear() + "_" + d.getMonthValue();
-                float monthBudget = prefs.getFloat(key, defaultBudget);
-                double dailyBudget = (monthBudget > 0) ? ((double) monthBudget / d.lengthOfMonth()) : 0;
-
-                double expenseToday = 0;
-                long startOfDay = d.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-                long endOfDay = d.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-                for (Transaction t : allTransactions) {
-                    // 【修改点】：增加不计入预算和资产互转的过滤
-                    boolean isTransfer = "资产互转".equals(t.category);
-                    if (t.date >= startOfDay && t.date < endOfDay && t.type == 0 && !isTransfer && !t.excludeFromBudget) {
-                        expenseToday += t.amount;
-                    }
+                YearMonth month = YearMonth.from(d);
+                if (!month.equals(planMonth)) {
+                    planMonth = month;
+                    Double amount = MonthlyBudgetHistory.amountFor(requireContext(), month, present);
+                    plan = amount == null || amount <= 0 ? null : new DailyBudgetPlan(month, today, zone, amount, false, allTransactions);
+                    dailyBudget = plan == null ? 0 : amount / month.lengthOfMonth();
                 }
+                if (plan == null) continue;
+                double expenseToday = plan.knownExpenseOn(d.getDayOfMonth());
 
                 boolean hasActiveGoal = false;
                 for (Goal g : sortedGoals) {

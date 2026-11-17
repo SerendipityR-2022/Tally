@@ -1,12 +1,12 @@
-# Tally · 3.8.8
+# Tally · 3.8.7
 
 [![Android Build](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml/badge.svg)](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml) [下载正式 APK](https://github.com/SerendipityR-2022/Tally/releases/latest)
 
-这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的社区分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。应用包名为 `com.example.budgetapp`。[稳定版 3.8.8](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.8)
+这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的社区分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。应用包名为 `com.example.budgetapp`。[稳定版 3.8.7](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.7) · [预发布版 3.8.8-rc4](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.8-rc4)
 
 分支 APK 使用分支签名。如果手机上的同包名版本采用不同签名，需先备份账本再换装。
 
-3.8.8 增加学习记录管理、按应用默认关联资产和动态日均预算，统一了收支构成图，并改进趋势图拖动和微信支付分类。
+3.8.8 候选版增加学习记录管理、按应用默认关联资产和动态日均预算，统一了收支构成图，并改进趋势图拖动和微信支付分类。RC4 修复了历史月份预算被当前设置覆盖的问题。
 
 ## 分支改动
 
@@ -14,6 +14,7 @@
 - **分类与 AI**：自动记账优先使用确认学习记录；识别到商户且未命中学习时，才调用已启用的 AI 分类，超时后按本地规则回退。已识别的账单在退出支付页后继续分类。开启反向学习后，确认账单分类或在明细中修改自动账单的分类时，会记住已识别商户的分类；免确认入账本身不会新增学习记录。超时可设为 1–10 秒，最多保留 2000 条学习记录。AI 设置支持获取和选择服务端模型。
 - **数据恢复**：本地 ZIP 合并导入会恢复备份中已有的储蓄目标、周期记账规则和资产关联，支持原版 3.8.5 的备份；重复导入同一备份不会增加相同记录。
 - **动态日均预算**：在预算管理中开启后，记账页按当天以前的支出调整当日额度。记账页的未来额度和预算页的「明日起日均」使用同一个预测值：预留本月已录入的未来支出及未生效的周期账单后，再平分余额。未来日期的进度条显示「当天预留金额 / 日额度」。
+- **预算历史**：使用各月保存的预算额度，排除不计入预算的账单和资产互转，结余与预算页采用相同口径。旧月份若没有保存过额度，历史会明确标注。
 - **收入分类**：新增薪资、理财、收红包、收转账、借入、收款、其他及相应图标，保留原有分类和自定义图标。
 - **界面**：改进日历、记账表单、明细、预算和资产总览，设置支持搜索。统计概览四等分，周、月、年趋势均可点击数据点保留金额标签，或在图表内直接横滑切换数据点。确认窗中的备注输入会随键盘上移。
 
