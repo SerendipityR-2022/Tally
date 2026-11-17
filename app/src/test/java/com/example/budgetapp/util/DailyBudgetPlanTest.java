@@ -54,7 +54,10 @@ public class DailyBudgetPlanTest {
         assertEquals(90.00, plan.reservedOn(18), CENT_FRACTION);
         assertEquals(0.00, plan.spendingOn(7), CENT_FRACTION);
         assertTrue(plan.isForecastDay(7));
-        assertFalse(plan.isOverBudget(7));
+        assertEquals(260.00, plan.usageOn(7), CENT_FRACTION);
+        assertTrue(plan.isOverBudget(7));
+        assertEquals(0.00, plan.usageOn(4), CENT_FRACTION);
+        assertFalse(plan.isOverBudget(4));
     }
 
     @Test public void settlementMovesAPendingExpenseToSpendingWithoutDeductingItAgain() {

@@ -12,8 +12,6 @@
     <string name="record_budget_today">今日预算</string>
     <string name="record_budget_day">%1$d月%2$d日预算</string>
     <string name="record_budget_amounts">%1$.2f / %2$.2f</string>
-    <string name="record_budget_day_available">%1$d月%2$d日可用</string>
-    <string name="record_budget_reserved">当日已预留 %1$.2f</string>
     <string name="budget_amount">%1$.2f</string>
     <string name="budget_daily_available">日可用预算</string>
     <string name="budget_daily_from_tomorrow">明日起日均</string>

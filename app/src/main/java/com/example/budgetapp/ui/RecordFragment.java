@@ -116,7 +116,7 @@ public class RecordFragment extends Fragment {
     private int currentFilterMode = 0;
 
     private androidx.cardview.widget.CardView cardBudgetStatus;
-    private TextView tvBudgetTitle, tvBudgetText, tvBudgetReserved;
+    private TextView tvBudgetTitle, tvBudgetText;
     private android.widget.ProgressBar pbBudget;
     private DailyBudgetPlan dailyBudgetPlan;
 
@@ -324,7 +324,6 @@ public class RecordFragment extends Fragment {
         cardBudgetStatus = view.findViewById(R.id.card_budget_status);
         tvBudgetTitle = view.findViewById(R.id.tv_budget_title);
         tvBudgetText = view.findViewById(R.id.tv_budget_text);
-        tvBudgetReserved = view.findViewById(R.id.tv_budget_reserved);
         pbBudget = view.findViewById(R.id.pb_budget);
 
         // 初始化账单滑动卡片
@@ -568,26 +567,13 @@ public class RecordFragment extends Fragment {
         if (dailyBudgetPlan == null) return;
         int day = date.getDayOfMonth();
         double budget = dailyBudgetPlan.limitOn(day);
-        if (dailyBudgetPlan.isForecastDay(day)) {
-            tvBudgetTitle.setText(getString(R.string.record_budget_day_available, date.getMonthValue(), day));
-            tvBudgetText.setText(getString(R.string.budget_amount, budget));
-            tvBudgetText.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary));
-            double reserved = dailyBudgetPlan.reservedOn(day);
-            tvBudgetReserved.setText(getString(R.string.record_budget_reserved, reserved));
-            tvBudgetReserved.setVisibility(reserved > 0 ? View.VISIBLE : View.GONE);
-            pbBudget.setVisibility(View.GONE);
-            return;
-        }
-
-        tvBudgetReserved.setVisibility(View.GONE);
-        pbBudget.setVisibility(View.VISIBLE);
-        double spending = dailyBudgetPlan.spendingOn(day);
+        double usage = dailyBudgetPlan.usageOn(day);
         boolean overBudget = dailyBudgetPlan.isOverBudget(day);
 
         tvBudgetTitle.setText(date.equals(today) ? getString(R.string.record_budget_today)
                 : getString(R.string.record_budget_day, date.getMonthValue(), day));
-        tvBudgetText.setText(getString(R.string.record_budget_amounts, spending, budget));
-        int progress = budget > 0 ? (int) Math.round(Math.max(0, Math.min(100, 100 * spending / budget)))
+        tvBudgetText.setText(getString(R.string.record_budget_amounts, usage, budget));
+        int progress = budget > 0 ? (int) Math.round(Math.max(0, Math.min(100, 100 * usage / budget)))
                 : (overBudget ? 100 : 0);
         pbBudget.setProgress(progress);
         pbBudget.setProgressTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(),

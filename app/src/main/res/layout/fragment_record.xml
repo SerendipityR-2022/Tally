@@ -352,14 +352,6 @@
                     android:textStyle="bold"
                     android:textColor="@color/text_secondary" />
             </LinearLayout>
-            <TextView
-                android:id="@+id/tv_budget_reserved"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textSize="11sp"
-                android:textColor="@color/text_secondary"
-                android:visibility="gone" />
             <ProgressBar
                 android:id="@+id/pb_budget"
                 style="?android:attr/progressBarStyleHorizontal"

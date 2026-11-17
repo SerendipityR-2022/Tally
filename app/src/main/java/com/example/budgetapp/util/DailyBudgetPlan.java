@@ -74,6 +74,9 @@ public final class DailyBudgetPlan {
 
     public double reservedOn(int day) { return reserved[day - 1]; }
 
+    /** Card usage is planned spending on forecast dates and recorded spending otherwise. */
+    public double usageOn(int day) { return isForecastDay(day) ? reservedOn(day) : spendingOn(day); }
+
     public double limitOn(int day) { return limits[day - 1]; }
 
     public double remainingAfterKnownExpenses() { return remainingAfterKnownExpenses; }
@@ -82,6 +85,6 @@ public final class DailyBudgetPlan {
 
     public boolean isOverBudget(int day) {
         // Use the same cent precision shown on the budget card.
-        return Math.round(spendingOn(day) * 100) > Math.round(limitOn(day) * 100);
+        return Math.round(usageOn(day) * 100) > Math.round(limitOn(day) * 100);
     }
 }

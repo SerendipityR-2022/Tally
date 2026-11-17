@@ -13,6 +13,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.NumberPicker;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.recyclerview.widget.RecyclerView;
@@ -33,6 +34,7 @@ import com.example.budgetapp.util.DailyBudgetPlan;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -40,7 +42,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ThreadLocalRandom;
@@ -211,7 +215,7 @@ public class LedgerUiRegressionTest {
         }
     }
 
-    @Test public void budgetAndRecordShowTheSameFutureAllowanceAfterReservingKnownBills() {
+    @Test public void futureBudgetTracksReservationsAndUsesTheSameAllowanceOnBothPages() {
         LocalDate today = LocalDate.now();
         LocalDate tomorrow = today.plusDays(1);
         YearMonth month = YearMonth.from(today);
@@ -224,13 +228,15 @@ public class LedgerUiRegressionTest {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         TransactionDao dao = AppDatabase.getDatabase(context).transactionDao();
         double existing = 0, existingTomorrow = 0;
+        Set<LocalDate> datesWithExpenses = new HashSet<>();
         for (Transaction tx : dao.getTransactionsIncludingUnsettledSync(firstDay, nextMonth - 1)) {
             if (tx.type != 0 || tx.excludeFromBudget || "资产互转".equals(tx.category)) continue;
             existing += tx.amount;
+            datesWithExpenses.add(Instant.ofEpochMilli(tx.date).atZone(zone).toLocalDate());
             if (tx.date >= tomorrowStart && tx.date < endOfTomorrow) existingTomorrow += tx.amount;
         }
-        // Leave 1500 of the configured budget available for these synthetic transactions.
-        float budget = (float) (existing + 1500);
+        // Reserve 350 on one day and leave 230 to share, so that day exceeds its allowance.
+        float budget = (float) (existing + 600);
         prefs.edit().putInt("default_page", 0).putBoolean(DailyBudgetPlan.PREF_DYNAMIC, true).remove("budget_start_time")
                 .putFloat(CURRENT_BUDGET_OVERRIDE, budget).putBoolean("bill_card_replace_budget", false).commit();
 
@@ -247,23 +253,38 @@ public class LedgerUiRegressionTest {
                 dao.insert(expense);
                 fixtures.add(expense);
             }
-            String expectedDaily = context.getString(R.string.budget_amount,
-                    (budget - existing - 370) / (today.lengthOfMonth() - today.getDayOfMonth()));
-            String expectedReserved = context.getString(R.string.record_budget_reserved, existingTomorrow + 350);
+            double allowance = (budget - existing - 370) / (today.lengthOfMonth() - today.getDayOfMonth());
             try (ActivityScenario<MainActivity> main = ActivityScenario.launch(MainActivity.class)) {
                 pickRecordDate(main, tomorrow);
-                awaitText(main, R.id.tv_budget_text, expectedDaily);
-                awaitText(main, R.id.tv_budget_reserved, expectedReserved);
-                main.onActivity(activity -> assertEquals(View.GONE,
-                        active(activity).requireView().findViewById(R.id.pb_budget).getVisibility()));
+                awaitBudgetAmount(main, existingTomorrow + 350, allowance);
+                assertBudgetProgress(main, 100, R.color.budget_progress_exceed);
+
+                LocalDate quietDay = tomorrow.plusDays(1);
+                while (YearMonth.from(quietDay).equals(month) && datesWithExpenses.contains(quietDay)) {
+                    quietDay = quietDay.plusDays(1);
+                }
+                if (YearMonth.from(quietDay).equals(month)) {
+                    pickRecordDate(main, quietDay);
+                    awaitBudgetAmount(main, 0, allowance);
+                    assertBudgetProgress(main, 0, R.color.budget_progress_safe);
+                }
 
                 select(main, R.id.nav_budget);
-                awaitText(main, R.id.tv_header_daily_available, expectedDaily);
+                awaitText(main, R.id.tv_header_daily_available, context.getString(R.string.budget_amount, allowance));
                 awaitText(main, R.id.tv_header_daily_label, context.getString(R.string.budget_daily_from_tomorrow));
             }
         } finally {
             for (Transaction expense : fixtures) dao.delete(expense);
         }
+    }
+
+    private static void assertBudgetProgress(ActivityScenario<MainActivity> main, int percent, int color) {
+        main.onActivity(activity -> {
+            ProgressBar progress = active(activity).requireView().findViewById(R.id.pb_budget);
+            assertTrue(progress.isShown());
+            assertEquals(percent, progress.getProgress());
+            assertEquals(activity.getColor(color), progress.getProgressTintList().getDefaultColor());
+        });
     }
 
     private static void pickRecordDate(ActivityScenario<MainActivity> main, LocalDate date) {
