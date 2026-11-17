@@ -93,7 +93,7 @@ public class StatsFragment extends Fragment {
     private View dividerOvertime;
     private TextView tvOvertimeContent;
     private ScrollView scrollView;
-    private GestureDetector gestureDetector;
+    private long pageSwipeDownTime = -1L;
     private float touchStartX, touchStartY;
     private boolean isDirectionLocked = false;
     private boolean isHorizontalSwipe = false;
@@ -936,11 +936,17 @@ public class StatsFragment extends Fragment {
     private void setupGestures() {
         if (scrollView == null) return;
         touchSlop = ViewConfiguration.get(requireContext()).getScaledTouchSlop();
-        gestureDetector = new GestureDetector(requireContext(), new SwipeGestureListener());
+        GestureDetector pageSwipe = new GestureDetector(requireContext(), new SwipeGestureListener());
 
         scrollView.setOnTouchListener((v, event) -> {
-            gestureDetector.onTouchEvent(event);
-            switch (event.getAction()) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                pageSwipeDownTime = isTrendTouch(event) ? -1L : event.getDownTime();
+            }
+            // A scroll handed off by the trend chart can only move the page vertically.
+            if (event.getDownTime() != pageSwipeDownTime) return false;
+            pageSwipe.onTouchEvent(event);
+            switch (action) {
                 case MotionEvent.ACTION_DOWN:
                     touchStartX = event.getX();
                     touchStartY = event.getY();
@@ -967,6 +973,7 @@ public class StatsFragment extends Fragment {
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
+                    pageSwipeDownTime = -1L;
                     isDirectionLocked = false;
                     isHorizontalSwipe = false;
                     scrollView.requestDisallowInterceptTouchEvent(false);
@@ -976,13 +983,22 @@ public class StatsFragment extends Fragment {
         });
 
         // 构成图仍可横滑翻期；趋势图独立处理数据点选择。
+        GestureDetector compositionSwipe = new GestureDetector(requireContext(), new SwipeGestureListener());
         View.OnTouchListener chartTouchListener = (v, event) -> {
-            gestureDetector.onTouchEvent(event);
+            compositionSwipe.onTouchEvent(event);
             return false;
         };
 
         if (expensePieChart != null) expensePieChart.setOnTouchListener(chartTouchListener);
         if (incomePieChart != null) incomePieChart.setOnTouchListener(chartTouchListener);
+    }
+
+    private boolean isTrendTouch(MotionEvent event) {
+        if (lineChart == null || !lineChart.isShown()) return false;
+        int[] location = new int[2];
+        lineChart.getLocationOnScreen(location);
+        float x = event.getRawX() - location[0], y = event.getRawY() - location[1];
+        return x >= 0 && x < lineChart.getWidth() && y >= 0 && y < lineChart.getHeight();
     }
 
     private class SwipeGestureListener extends GestureDetector.SimpleOnGestureListener {

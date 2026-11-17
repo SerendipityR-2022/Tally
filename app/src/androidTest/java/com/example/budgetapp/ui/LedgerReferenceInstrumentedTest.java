@@ -162,7 +162,7 @@ public class LedgerReferenceInstrumentedTest {
         }
     }
 
-    @Test public void trendPointStaysSelectedAndHoldingLetsItSlideWithoutChangingPeriod() throws Exception {
+    @Test public void trendPointTracksImmediateDragsWithoutChangingPeriod() throws Exception {
         LocalDate first = LocalDate.now().withDayOfMonth(1);
         LocalDate peak = first.plusDays(4);
         LocalDate last = first.plusMonths(1).minusDays(1);
@@ -212,19 +212,20 @@ public class LedgerReferenceInstrumentedTest {
             });
             if (screenshots) save(trendScreenshot.get(), "tally-trend-point.png");
 
+            // First move drifts vertically beyond ScrollView's slop, but is predominantly horizontal.
+            float dragY = screenPoints[0][1] - ViewConfiguration.get(chart.getContext()).getScaledTouchSlop() * 1.5f;
             long down = SystemClock.uptimeMillis();
             touchScreen(test, down, MotionEvent.ACTION_DOWN, screenPoints[0][0], screenPoints[0][1]);
             try {
-                SystemClock.sleep(ViewConfiguration.getLongPressTimeout() + 120);
                 scenario.onActivity(activity -> {
                     assertTrendPoint(chart, 1, prefix + "1 支出，¥24.30");
                     verifyTrendMarker(chart).recycle();
                 });
-                touchScreen(test, down, MotionEvent.ACTION_MOVE, screenPoints[1][0], screenPoints[0][1]);
+                touchScreen(test, down, MotionEvent.ACTION_MOVE, screenPoints[1][0], dragY);
                 scenario.onActivity(activity -> assertTrendPoint(chart, 5, prefix + "5 支出，¥99.79"));
-                touchScreen(test, down, MotionEvent.ACTION_MOVE, screenPoints[2][0], screenPoints[0][1]);
+                touchScreen(test, down, MotionEvent.ACTION_MOVE, screenPoints[2][0], dragY);
             } finally {
-                touchScreen(test, down, MotionEvent.ACTION_UP, screenPoints[2][0], screenPoints[0][1]);
+                touchScreen(test, down, MotionEvent.ACTION_UP, screenPoints[2][0], dragY);
             }
             SystemClock.sleep(200); // Give any wrongly triggered period animation time to run.
             scenario.onActivity(activity -> {

@@ -2,8 +2,8 @@ package com.example.budgetapp.ui;
 
 import android.content.Context;
 import android.util.AttributeSet;
-import android.view.GestureDetector;
 import android.view.MotionEvent;
+import android.view.ViewConfiguration;
 import android.view.ViewParent;
 
 import androidx.annotation.Nullable;
@@ -17,12 +17,15 @@ import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
 
 import java.util.Objects;
 
-/** A tap selects a point. Holding a finger on the plot also lets it scrub across the points. */
+/** Touch selects a point immediately; horizontal motion selects its neighbors. */
 public final class LedgerTrendChart extends LineChart {
+    private enum TouchMode { IDLE, UNDECIDED, HORIZONTAL }
+
     private final CustomMarkerView marker;
-    private final GestureDetector gestures;
+    private final int touchSlop;
     private final float[] pointer = new float[2];
-    private boolean scrubbing;
+    private TouchMode touchMode = TouchMode.IDLE;
+    private float downX, downY;
     private String seriesKey;
 
     public LedgerTrendChart(Context context, AttributeSet attrs) {
@@ -35,24 +38,7 @@ public final class LedgerTrendChart extends LineChart {
         setMinimumHeight((int) Math.ceil(headroom + 176f * density));
         setClickable(true);
         setFocusable(true);
-        gestures = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
-            @Override public boolean onDown(MotionEvent e) { return true; }
-
-            @Override public boolean onSingleTapUp(MotionEvent e) {
-                selectAt(e.getX());
-                performClick();
-                return true;
-            }
-
-            @Override public void onLongPress(MotionEvent e) {
-                if (!isAttachedToWindow() || !isShown() || !selectAt(e.getX())) return;
-                // A normal vertical drag still goes to the ScrollView until a hold is recognized.
-                scrubbing = true;
-                ViewParent parent = getParent();
-                if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
-            }
-        });
-        gestures.setOnDoubleTapListener(null);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
     }
 
     void setTrendData(@Nullable LineData data, @Nullable String key) {
@@ -75,13 +61,43 @@ public final class LedgerTrendChart extends LineChart {
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
-        int action = event.getActionMasked();
-        if (action == MotionEvent.ACTION_DOWN && (!isEnabled() || series() == null)) return false;
-        gestures.onTouchEvent(event);
-        if (scrubbing && action == MotionEvent.ACTION_MOVE) selectAt(event.getX());
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL
-                || action == MotionEvent.ACTION_POINTER_DOWN) finishScrubbing();
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                finishTouch();
+                if (!isEnabled() || !selectAt(event.getX())) return false;
+                downX = event.getX();
+                downY = event.getY();
+                touchMode = TouchMode.UNDECIDED;
+                // Hold interception while deciding direction, even if the first move is diagonal.
+                disallowParentIntercept(true);
+                break;
+            case MotionEvent.ACTION_MOVE:
+                updateTouch(event.getX(), event.getY());
+                break;
+            case MotionEvent.ACTION_UP:
+                updateTouch(event.getX(), event.getY());
+                if (touchMode == TouchMode.UNDECIDED) performClick();
+                finishTouch();
+                break;
+            case MotionEvent.ACTION_CANCEL:
+            case MotionEvent.ACTION_POINTER_DOWN:
+                finishTouch();
+                break;
+        }
         return true;
+    }
+
+    private void updateTouch(float x, float y) {
+        if (touchMode == TouchMode.UNDECIDED) {
+            float dx = Math.abs(x - downX), dy = Math.abs(y - downY);
+            if (dx >= touchSlop * 0.5f && dx >= dy) {
+                touchMode = TouchMode.HORIZONTAL;
+            } else if (dy >= touchSlop && dy > dx) {
+                // A vertical drag belongs to the page from here on.
+                finishTouch();
+            }
+        }
+        if (touchMode == TouchMode.HORIZONTAL) selectAt(x);
     }
 
     @Override public boolean performClick() {
@@ -93,7 +109,7 @@ public final class LedgerTrendChart extends LineChart {
     }
 
     @Override protected void onDetachedFromWindow() {
-        finishScrubbing();
+        finishTouch();
         super.onDetachedFromWindow();
     }
 
@@ -116,10 +132,14 @@ public final class LedgerTrendChart extends LineChart {
         ViewCompat.setStateDescription(this, marker.describe(point));
     }
 
-    private void finishScrubbing() {
-        if (!scrubbing) return;
-        scrubbing = false;
+    private void finishTouch() {
+        if (touchMode == TouchMode.IDLE) return;
+        touchMode = TouchMode.IDLE;
+        disallowParentIntercept(false);
+    }
+
+    private void disallowParentIntercept(boolean disallow) {
         ViewParent parent = getParent();
-        if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
+        if (parent != null) parent.requestDisallowInterceptTouchEvent(disallow);
     }
 }
