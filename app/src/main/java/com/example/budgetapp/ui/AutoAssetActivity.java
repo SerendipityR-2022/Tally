@@ -22,6 +22,7 @@ import androidx.core.view.WindowCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.budgetapp.BackupManager;
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.AssetAccount;
@@ -108,7 +109,8 @@ public class AutoAssetActivity extends AppCompatActivity {
     private void loadData() {
         ruleList = AutoAssetManager.getRules(this);
         adapter.notifyDataSetChanged();
-        Map<String, String> apps = KeywordManager.getSupportedApps();
+        Map<String, String> apps = KeywordManager.getRuleApps(this);
+        for (AutoAssetManager.AssetRule rule : ruleList) apps.putIfAbsent(rule.packageName, rule.packageName);
         cachedApps.clear();
         for (Map.Entry<String, String> entry : apps.entrySet()) {
             cachedApps.add(new AppItem(entry.getKey(), entry.getValue()));
@@ -233,10 +235,6 @@ public class AutoAssetActivity extends AppCompatActivity {
 
         btnSave.setOnClickListener(v -> {
             String keyword = etKeyword.getText().toString().trim();
-            if (keyword.isEmpty()) {
-                Toast.makeText(this, "请输入关键字", Toast.LENGTH_SHORT).show();
-                return;
-            }
             AppItem selectedApp = (AppItem) spApp.getSelectedItem();
             if (selectedApp == null) return;
 
@@ -246,11 +244,8 @@ public class AutoAssetActivity extends AppCompatActivity {
 
             AutoAssetManager.AssetRule newRule = new AutoAssetManager.AssetRule(selectedApp.packageName, keyword, selectedAsset.id);
             
-            // 先删旧的，再加新的（因为没有ID，靠equals判断）
-            if (oldRule != null) {
-                AutoAssetManager.removeRule(this, oldRule);
-            }
-            AutoAssetManager.addRule(this, newRule);
+            AutoAssetManager.replaceRule(this, oldRule, newRule);
+            BackupManager.triggerAutoUploadIfEnabled(getApplicationContext());
             loadData();
             
             String msg = (oldRule != null) ? "规则已更新" : "规则已添加";
@@ -287,7 +282,8 @@ public class AutoAssetActivity extends AppCompatActivity {
             AutoAssetManager.AssetRule rule = ruleList.get(position);
             String appName = getAppNameByPkg(rule.packageName);
             
-            holder.text1.setText("[" + appName + "] 关键字: " + rule.keyword);
+            holder.text1.setText(rule.keyword.isEmpty() ? getString(R.string.asset_rule_for_app, appName)
+                    : "[" + appName + "] 关键词：" + rule.keyword);
             holder.text1.setTextColor(ContextCompat.getColor(AutoAssetActivity.this, R.color.text_primary));
             holder.text1.setTextSize(16);
             
@@ -318,6 +314,7 @@ public class AutoAssetActivity extends AppCompatActivity {
                 dialogView.findViewById(R.id.btn_dialog_cancel).setOnClickListener(dv -> dialog.dismiss());
                 dialogView.findViewById(R.id.btn_dialog_confirm).setOnClickListener(dv -> {
                     AutoAssetManager.removeRule(AutoAssetActivity.this, rule);
+                    BackupManager.triggerAutoUploadIfEnabled(getApplicationContext());
                     loadData();
                     dialog.dismiss();
                 });

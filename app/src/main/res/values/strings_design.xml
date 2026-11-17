@@ -5,9 +5,13 @@
     <string name="settings_no_results">没有匹配的设置</string>
     <string name="settings_clear_search">清除搜索</string>
     <string name="record_action">记一笔</string>
+    <string name="record_save">保存</string>
+    <string name="record_save_changes">保存修改</string>
     <string name="record_today_bills_action">今日账单</string>
     <string name="record_ai_action">AI 记账</string>
     <string name="stats_empty">这段时间还没有账单</string>
+    <string name="stats_expense_total">支出</string>
+    <string name="stats_pie_yuan">%1$s（元）</string>
     <string name="details_empty">没有找到符合条件的账单</string>
     <string name="assets_empty">添加第一个账户</string>
     <string name="goals_empty">添加一个储蓄目标</string>

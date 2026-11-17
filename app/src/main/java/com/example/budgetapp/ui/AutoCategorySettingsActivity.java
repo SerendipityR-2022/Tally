@@ -94,14 +94,8 @@ public class AutoCategorySettingsActivity extends AppCompatActivity {
                 startActivity(new Intent(this, AiCategoryRuleActivity.class)));
         findViewById(R.id.btn_category_ai_config).setOnClickListener(view ->
                 startActivity(new Intent(this, AiSettingActivity.class)));
-        findViewById(R.id.btn_category_clear_learning).setOnClickListener(view ->
-                new AlertDialog.Builder(this).setTitle(R.string.auto_category_clear)
-                        .setMessage(R.string.auto_category_clear_message)
-                        .setPositiveButton("清除", (dialog, which) -> {
-                            AutoCategoryManager.clearLearned(this);
-                            refresh();
-                            Toast.makeText(this, R.string.auto_category_cleared, Toast.LENGTH_SHORT).show();
-                        }).setNegativeButton("取消", null).show());
+        findViewById(R.id.row_category_learning_records).setOnClickListener(view ->
+                startActivity(new Intent(this, LearnedCategoryActivity.class)));
     }
 
     private Runnable stopObservingLearning;
@@ -123,9 +117,8 @@ public class AutoCategorySettingsActivity extends AppCompatActivity {
     }
 
     private void refreshLearningCount() {
-        ((TextView) findViewById(R.id.tv_category_learning_count)).setText(
-                getString(R.string.auto_category_learning_count, AutoCategoryManager.getLearned(this).size(),
-                        AutoCategoryManager.MAX_LEARNED));
+        ((SettingsRow) findViewById(R.id.row_category_learning_records)).setValue(
+                getString(R.string.auto_category_learning_short_count, AutoCategoryManager.getLearned(this).size()));
     }
 
     private void refresh() {

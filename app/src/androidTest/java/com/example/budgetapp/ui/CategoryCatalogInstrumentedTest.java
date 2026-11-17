@@ -18,6 +18,8 @@ import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.util.CategoryIcon;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.util.CategoryTestContext;
+import com.example.budgetapp.util.AutoCategoryClassifier;
+import com.example.budgetapp.util.AutoCategoryManager;
 
 import org.junit.After;
 import org.junit.Before;
@@ -64,6 +66,27 @@ public class CategoryCatalogInstrumentedTest {
         categories.remove("宠物");
         CategoryManager.saveExpenseCategories(context, categories);
         assertFalse(CategoryManager.getExpenseCategories(context).contains("宠物"));
+    }
+
+    @Test public void oldSalaryPresetKeepsTheRedIconAndRemainsUsableForLearnedIncome() throws Exception {
+        context.getSharedPreferences("category_prefs", Context.MODE_PRIVATE).edit()
+                .putString("key_income_categories", "工资,奖金,薪资,薪资,自定义").putBoolean("income_catalog_386", true)
+                .putString("sub_cat_工资", "基本工资,绩效").putString("sub_cat_薪资", "绩效,补发").apply();
+        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit()
+                .putString("screen_category_learned_rules", new org.json.JSONArray()
+                        .put(new org.json.JSONObject().put("package", "test.payroll").put("identity", "示例公司")
+                                .put("type", 1).put("category", "工资").put("subCategory", "基本工资")).toString()).apply();
+        CategoryManager.setSubCategoryEnabled(context, true);
+        assertEquals(Arrays.asList("薪资", "奖金", "自定义"), CategoryManager.getIncomeCategories(context));
+        assertEquals(CategoryIcon.SALARY, CategoryManager.getIcon(context, false, "工资"));
+        assertEquals(Arrays.asList("绩效", "补发", "基本工资"), CategoryManager.getSubCategories(context, "薪资"));
+        AutoCategoryClassifier.Result match = AutoCategoryManager.classifyLocal(context,
+                new AutoCategoryClassifier.Input("test.payroll", "示例公司", 1, ""));
+        assertEquals(AutoCategoryClassifier.Source.LEARNED, match.source);
+        assertEquals("薪资", match.category);
+        assertEquals("基本工资", match.subCategory);
+        CategoryManager.saveSubCategories(context, "薪资", Collections.singletonList("补发"));
+        assertEquals(Collections.singletonList("补发"), CategoryManager.getSubCategories(context, "薪资"));
     }
 
     @Test public void customIconsAreIndependentAndRoundTripThroughCsv() throws Exception {

@@ -54,7 +54,10 @@
                 android:layout_width="0dp" android:layout_height="@dimen/ledger_key_height" android:layout_weight="1" android:text="." />
             <com.google.android.material.button.MaterialButton
                 style="@style/Widget.Tally.Button" android:id="@+id/btn_save"
-                android:layout_width="0dp" android:layout_height="@dimen/ledger_key_height" android:layout_weight="1"
-                android:text="保存" />
+                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:minHeight="@dimen/ledger_key_height"
+                android:paddingStart="8dp" android:paddingEnd="8dp"
+                android:paddingTop="0dp" android:paddingBottom="0dp"
+                android:singleLine="true" android:text="@string/record_save" />
     </LinearLayout>
 </LinearLayout>

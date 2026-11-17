@@ -1668,10 +1668,10 @@ public class BackupManager {
                 for (String s : subsArr) {
                     if (!TextUtils.isEmpty(s)) subList.add(s);
                 }
-                CategoryManager.saveSubCategories(context, parent, subList);
                 restoredSubMap.put(parent, subList);
             }
         }
+        if (!restoredSubMap.isEmpty()) CategoryManager.restoreSubCategories(context, restoredSubMap);
 
         // 解析助手配置
         BackupData.AssistantConfigData restoredConfig = new BackupData.AssistantConfigData();

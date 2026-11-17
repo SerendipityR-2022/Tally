@@ -8,6 +8,7 @@
     <string name="settings_switch_details">在底部导航显示明细</string>
     <string name="settings_switch_assets">在底部导航显示资产</string>
     <string name="settings_show_quick_button">明细页显示「记一笔」按钮</string>
+    <string name="settings_show_budget_shortcut">明细页显示「预算」按钮</string>
     <string name="settings_show_bill_card">记账页显示账单卡片</string>
     <string name="settings_calendar_display">日历默认显示</string>
     <string name="settings_calendar_minimal">精简日历</string>

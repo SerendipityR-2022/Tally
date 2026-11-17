@@ -248,7 +248,12 @@ final class LedgerEntrySheet {
     void bindSave(boolean newEntry, Consumer<Boolean> listener) {
         View again = root.findViewById(R.id.entry_save_again);
         again.setVisibility(newEntry ? View.VISIBLE : View.GONE);
-        View save = root.findViewById(R.id.btn_save);
+        TextView save = root.findViewById(R.id.btn_save);
+        save.setText(newEntry ? R.string.record_save : R.string.record_save_changes);
+        LinearLayout.LayoutParams saveParams = (LinearLayout.LayoutParams) save.getLayoutParams();
+        // Editing leaves room in the bottom row; measure the full label before distributing that room.
+        saveParams.width = newEntry ? 0 : ViewGroup.LayoutParams.WRAP_CONTENT;
+        save.setLayoutParams(saveParams);
         save.setOnClickListener(v -> save(v, false, listener));
         again.setOnClickListener(v -> save(v, true, listener));
     }

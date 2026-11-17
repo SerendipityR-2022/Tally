@@ -8,7 +8,6 @@ import com.example.budgetapp.database.AssetAccount;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -28,7 +27,7 @@ public class AutoAssetManager {
 
         public AssetRule(String packageName, String keyword, int assetId) {
             this.packageName = packageName;
-            this.keyword = keyword;
+            this.keyword = keyword == null ? "" : keyword;
             this.assetId = assetId;
         }
 
@@ -73,29 +72,36 @@ public class AutoAssetManager {
     }
 
     public static void addRule(Context context, AssetRule rule) {
+        replaceRule(context, null, rule);
+    }
+
+    public static synchronized void replaceRule(Context context, AssetRule previous, AssetRule rule) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         Set<String> set = new HashSet<>(prefs.getStringSet(KEY_RULES, new HashSet<>()));
-        set.add(rule.toString());
+        if (previous != null) set.remove(previous.toString());
+        putRule(set, rule);
         prefs.edit().putStringSet(KEY_RULES, set).apply();
     }
 
     /** Replace matching rules with the imported rule using the mapped asset ID. */
-    public static void mergeRestoredRules(Context context, List<AssetRule> restored) {
+    public static synchronized void mergeRestoredRules(Context context, List<AssetRule> restored) {
         if (restored.isEmpty()) return;
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         Set<String> rules = new HashSet<>(prefs.getStringSet(KEY_RULES, new HashSet<>()));
-        for (AssetRule incoming : restored) {
-            rules.removeIf(stored -> {
-                AssetRule current = AssetRule.fromString(stored);
-                return current != null && Objects.equals(current.packageName, incoming.packageName)
-                        && Objects.equals(current.keyword, incoming.keyword);
-            });
-            rules.add(incoming.toString());
-        }
+        for (AssetRule incoming : restored) putRule(rules, incoming);
         prefs.edit().putStringSet(KEY_RULES, rules).apply();
     }
 
-    public static void removeRule(Context context, AssetRule rule) {
+    private static void putRule(Set<String> rules, AssetRule incoming) {
+        rules.removeIf(stored -> {
+            AssetRule current = AssetRule.fromString(stored);
+            return current != null && current.packageName.equals(incoming.packageName)
+                    && current.keyword.equals(incoming.keyword);
+        });
+        rules.add(incoming.toString());
+    }
+
+    public static synchronized void removeRule(Context context, AssetRule rule) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         Set<String> set = new HashSet<>(prefs.getStringSet(KEY_RULES, new HashSet<>()));
         set.remove(rule.toString());
@@ -104,19 +110,22 @@ public class AutoAssetManager {
 
     /**
      * 核心逻辑：根据当前应用包名和屏幕文字，匹配资产ID
-     * 匹配优先级：用户自定义精确规则 > 数据库智能模糊匹配 > 默认资产(未命中返回-1)
+     * 匹配优先级：关键词规则 > 应用默认规则 > 资产名模糊匹配（未命中返回 -1）
      */
     public static int matchAsset(Context context, String packageName, String text) {
         if (!isEnabled(context)) return -1;
-        if (text == null || packageName == null || text.trim().isEmpty()) return -1;
+        if (packageName == null || packageName.isEmpty()) return -1;
 
-        // 1. 优先匹配用户自定义的精确规则 (最高优先级)
-        List<AssetRule> rules = getRules(context);
-        for (AssetRule rule : rules) {
-            if (rule.packageName.equals(packageName) && text.contains(rule.keyword)) {
-                return rule.assetId; // 命中精确规则，直接返回
-            }
+        // Prefer the most specific match, regardless of the preference set's iteration order.
+        AssetRule best = null;
+        for (AssetRule rule : getRules(context)) {
+            if (!packageName.equals(rule.packageName) || rule.assetId <= 0) continue;
+            if (!rule.keyword.isEmpty() && (text == null || !text.contains(rule.keyword))) continue;
+            if (best == null || rule.keyword.length() > best.keyword.length()
+                    || (rule.keyword.length() == best.keyword.length() && rule.assetId < best.assetId)) best = rule;
         }
+        if (best != null) return best.assetId;
+        if (text == null || text.trim().isEmpty()) return -1;
 
         // 2. 智能模糊匹配：扫描数据库中的所有资产名称 (优先级高于全局默认资产)
         final int[] matchedId = {-1};

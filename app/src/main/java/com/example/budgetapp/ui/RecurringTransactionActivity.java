@@ -277,9 +277,9 @@ public class RecurringTransactionActivity extends AppCompatActivity {
             etAmount.setText(String.format(Locale.getDefault(), "%.2f", existingRule.amount));
             selectedCurrency[0] = existingRule.currencySymbol;
             tvCurrency.setText(selectedCurrency[0] + " " + getCurrencyName(selectedCurrency[0]));
-            selectedCategory[0] = existingRule.category;
+            selectedCategory[0] = CategoryManager.canonicalCategory(existingRule.type, existingRule.category);
             selectedSubCategory[0] = existingRule.subCategory != null ? existingRule.subCategory : "";
-            tvCategory.setText(existingRule.category + (TextUtils.isEmpty(selectedSubCategory[0]) ? "" : " - " + selectedSubCategory[0]));
+            tvCategory.setText(selectedCategory[0] + (TextUtils.isEmpty(selectedSubCategory[0]) ? "" : " - " + selectedSubCategory[0]));
             etInterval.setText(String.valueOf(existingRule.periodInterval));
             spinnerPeriodUnit.setSelection(getPeriodUnitIndex(existingRule.periodUnit));
             startDateMillis[0] = existingRule.startDate;

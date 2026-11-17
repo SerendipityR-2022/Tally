@@ -87,7 +87,7 @@ public class AiAccountingClient {
         int end = reply.lastIndexOf('}');
         if (start < 0 || end < start) throw new IOException("分类结果不是JSON对象");
         JSONObject result = new JSONObject(reply.substring(start, end + 1));
-        return new AutoCategoryClassifier.Result(result.optString("category", ""),
+        return new AutoCategoryClassifier.Result(CategoryManager.canonicalCategory(input.type, result.optString("category", "")),
                 result.optString("subCategory", ""), AutoCategoryClassifier.Source.AI);
     }
 

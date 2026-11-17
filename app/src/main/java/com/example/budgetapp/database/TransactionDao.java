@@ -71,7 +71,8 @@ public interface TransactionDao {
             "AND (:type IS NULL OR t.type = :type) " +
             "AND (:minAmount IS NULL OR t.amount >= :minAmount) " +
             "AND (:maxAmount IS NULL OR t.amount <= :maxAmount) " +
-            "AND (:keyword IS NULL OR t.category LIKE '%' || :keyword || '%' OR t.subCategory LIKE '%' || :keyword || '%' OR t.note LIKE '%' || :keyword || '%' OR t.remark LIKE '%' || :keyword || '%') " +
+            "AND (:keyword IS NULL OR t.category LIKE '%' || :keyword || '%' OR t.subCategory LIKE '%' || :keyword || '%' OR t.note LIKE '%' || :keyword || '%' OR t.remark LIKE '%' || :keyword || '%' " +
+            "OR (t.type = 1 AND t.category IN ('工资', '薪资') AND ('工资' LIKE '%' || :keyword || '%' OR '薪资' LIKE '%' || :keyword || '%'))) " +
             "AND (:assetName IS NULL OR a.name LIKE '%' || :assetName || '%' OR t.remark LIKE '%' || :assetName || '%') " +
             "ORDER BY t.date DESC")
     LiveData<List<Transaction>> getFilteredTransactions(long startDate, long endDate, Integer type, Float minAmount, Float maxAmount, String keyword, String assetName);

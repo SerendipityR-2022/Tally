@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="asset_rule_keyword">付款关键词（选填）</string>
+    <string name="asset_rule_keyword_hint">留空时，该应用直接关联所选资产</string>
+    <string name="asset_rule_for_app">%1$s · 应用默认关联</string>
+</resources>

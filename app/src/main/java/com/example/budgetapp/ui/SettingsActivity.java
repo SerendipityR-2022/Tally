@@ -187,7 +187,8 @@ public class SettingsActivity extends AppCompatActivity {
             if (ext.date == newTx.date &&
                     ext.type == newTx.type &&
                     Math.abs(ext.amount - newTx.amount) < 0.01 &&
-                    Objects.equals(ext.category, newTx.category) &&
+                    Objects.equals(CategoryManager.canonicalCategory(ext.type, ext.category),
+                            CategoryManager.canonicalCategory(newTx.type, newTx.category)) &&
                     Objects.equals(ext.subCategory, newTx.subCategory) &&
                     Objects.equals(ext.note, newTx.note) &&
                     Objects.equals(ext.remark, newTx.remark)) {
@@ -1409,6 +1410,7 @@ public class SettingsActivity extends AppCompatActivity {
                         // 恢复二级分类映射
                         if (root.has("subCategoryMap")) {
                             org.json.JSONObject subCatsObj = root.getJSONObject("subCategoryMap");
+                            Map<String, List<String>> restoredChildren = new java.util.HashMap<>();
                             java.util.Iterator<String> keys = subCatsObj.keys();
                             while (keys.hasNext()) {
                                 String parentCategory = keys.next();
@@ -1417,8 +1419,9 @@ public class SettingsActivity extends AppCompatActivity {
                                 for (int i = 0; i < subArray.length(); i++) {
                                     subCategories.add(subArray.getString(i));
                                 }
-                                CategoryManager.saveSubCategories(this, parentCategory, subCategories);
+                                restoredChildren.put(parentCategory, subCategories);
                             }
+                            CategoryManager.restoreSubCategories(this, restoredChildren);
                         }
 
                         Toast.makeText(this, "分类预设导入成功", Toast.LENGTH_SHORT).show();

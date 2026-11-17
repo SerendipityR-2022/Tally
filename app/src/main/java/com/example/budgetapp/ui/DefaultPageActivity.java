@@ -20,6 +20,7 @@ public class DefaultPageActivity extends AppCompatActivity {
     public static final String PREF_NAME = "app_prefs";
     public static final String KEY_DEFAULT_PAGE = "default_page";
     public static final String KEY_DETAILS_QUICK_BUTTON = "details_quick_button";
+    static final String KEY_DETAILS_BUDGET_SHORTCUT = "details_budget_shortcut";
     public static final String KEY_BILL_CARD = "bill_card";
     public static final int PAGE_RECORD = 0;
     public static final int PAGE_DETAILS = 1;
@@ -66,12 +67,28 @@ public class DefaultPageActivity extends AppCompatActivity {
     }
 
     private void bindSwitch(int id, String key, boolean defaultValue) {
+        bindSwitch(id, key, defaultValue, true);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        bindSwitch(R.id.switchDetailsBudgetShortcut, KEY_DETAILS_BUDGET_SHORTCUT, true, config.isBudgetEnabled());
+    }
+
+    private void bindSwitch(int id, String key, boolean defaultValue, boolean available) {
         SwitchCompat toggle = findViewById(id);
-        toggle.setChecked(prefs.getBoolean(key, defaultValue));
+        toggle.setOnCheckedChangeListener(null);
+        toggle.setEnabled(available);
+        toggle.setChecked(available && prefs.getBoolean(key, defaultValue));
         toggle.setOnCheckedChangeListener((view, checked) -> {
             prefs.edit().putBoolean(key, checked).apply();
             BackupManager.triggerAutoUploadIfEnabled(this);
         });
+    }
+
+    static boolean isDetailsBudgetShortcutEnabled(Context context) {
+        return new AssistantConfig(context).isBudgetEnabled() && context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                .getBoolean(KEY_DETAILS_BUDGET_SHORTCUT, true);
     }
 
     private static boolean pageAvailable(int page, AssistantConfig config) {

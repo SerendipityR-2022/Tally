@@ -112,20 +112,12 @@
                         android:textSize="13sp"
                         android:textColor="?android:attr/textColorSecondary"
                         android:layout_marginTop="8dp" />
-                    <TextView
-                        android:id="@+id/tv_category_learning_count"
+                    <com.example.budgetapp.ui.SettingsRow
+                        android:id="@+id/row_category_learning_records"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textSize="12sp"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:layout_marginTop="12dp" />
-                    <com.google.android.material.button.MaterialButton
-                        style="@style/Widget.Tally.Button.Text"
-                        android:id="@+id/btn_category_clear_learning"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:minHeight="48dp"
-                        android:text="@string/auto_category_clear" />
+                        android:layout_marginTop="4dp"
+                        android:text="@string/auto_category_learning_records" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
             <androidx.cardview.widget.CardView

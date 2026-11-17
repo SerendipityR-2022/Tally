@@ -89,7 +89,7 @@ public class StatsFragment extends Fragment {
 
     private FinanceViewModel viewModel;
     private LineChart lineChart;
-    private PieChart expensePieChart;
+    private ExpenseCompositionChart expensePieChart;
     private PieChart incomePieChart;
     private LinearLayout layoutTrend;
     private LinearLayout layoutExpense;
@@ -274,7 +274,7 @@ public class StatsFragment extends Fragment {
 
         List<Transaction> baseList = new ArrayList<>();
         for (Transaction t : allTransactions) {
-            String category = android.text.TextUtils.isEmpty(t.category) ? "未分类" : t.category;
+            String category = android.text.TextUtils.isEmpty(t.category) ? "未分类" : CategoryManager.canonicalCategory(t.type, t.category);
             if (t.isSettled && t.date >= startMillis && t.date < endMillis && t.type == currentDetailType
                     && !"资产互转".equals(category) && category.equals(currentDetailCategory)) {
                 baseList.add(t);
@@ -515,7 +515,6 @@ public class StatsFragment extends Fragment {
         EditText etRemark = dialogView.findViewById(R.id.et_remark);
         Spinner spAsset = dialogView.findViewById(R.id.sp_asset);
 
-        Button btnSave = dialogView.findViewById(R.id.btn_save);
         Button btnDelete = dialogView.findViewById(R.id.btn_delete);
         TextView tvRevoke = dialogView.findViewById(R.id.tv_revoke);
 
@@ -734,7 +733,6 @@ public class StatsFragment extends Fragment {
         });
 
         if (existingTransaction != null) {
-            btnSave.setText("保存修改");
             etAmount.setText(String.valueOf(existingTransaction.amount));
             etRemark.setText(TransactionRemarks.display(existingTransaction));
 
@@ -751,7 +749,7 @@ public class StatsFragment extends Fragment {
                 isExpense[0] = true;
             }
 
-            String currentCat = existingTransaction.category;
+            String currentCat = CategoryManager.canonicalCategory(existingTransaction.type, existingTransaction.category);
             List<String> currentList = isExpense[0] ? expenseCategories : incomeCategories;
 
             if (currentList.contains(currentCat)) {
@@ -779,7 +777,6 @@ public class StatsFragment extends Fragment {
             });
 
         } else {
-            btnSave.setText("保存");
             btnDelete.setVisibility(View.GONE);
             tvRevoke.setVisibility(View.GONE);
         }
@@ -1292,7 +1289,7 @@ public class StatsFragment extends Fragment {
             int index = extractor.getIndex(tx);
             if (index < 0) continue;
             lastBucket = Math.max(lastBucket, index);
-            String category = android.text.TextUtils.isEmpty(tx.category) ? "未分类" : tx.category;
+            String category = android.text.TextUtils.isEmpty(tx.category) ? "未分类" : CategoryManager.canonicalCategory(tx.type, tx.category);
             if (tx.type == 0) {
                 totalExpense += tx.amount;
                 spending.add(tx);
@@ -1398,7 +1395,10 @@ public class StatsFragment extends Fragment {
         panel.setVisibility(total > 0 ? View.VISIBLE : View.GONE);
         LinearLayout rows = dashboard.findViewById(rowsId);
         rows.removeAllViews();
-        if (total <= 0) return;
+        if (total <= 0) {
+            if (chart == expensePieChart) expensePieChart.setComposition(Collections.emptyList(), Collections.emptyList(), 0, null);
+            return;
+        }
         List<Map.Entry<String, Double>> sorted = new ArrayList<>(values.entrySet());
         sorted.sort((a, b) -> {
             int amount = Double.compare(b.getValue(), a.getValue());
@@ -1412,9 +1412,10 @@ public class StatsFragment extends Fragment {
             String category = item.getKey();
             double value = item.getValue();
             CategoryIcon icon = LedgerCategory.icon(requireContext(), category, type);
-            int color = icon.tint(requireContext());
+            int color = chart == expensePieChart && i < 7 ? expensePieChart.sliceColor(i) : icon.tint(requireContext());
             if (i < 7 && value > 0) {
-                slices.add(new PieEntry((float) value, category));
+                slices.add(chart == expensePieChart ? new PieEntry((float) value, category, value)
+                        : new PieEntry((float) value, category));
                 colors.add(color);
             } else if (value > 0) remaining += value;
             View row = LayoutInflater.from(requireContext()).inflate(R.layout.item_ledger_category_rank, rows, false);
@@ -1429,8 +1430,13 @@ public class StatsFragment extends Fragment {
             rows.addView(row);
         }
         if (remaining > 0) {
-            slices.add(new PieEntry((float) remaining, "其余分类", Boolean.TRUE));
+            slices.add(chart == expensePieChart ? new PieEntry((float) remaining, "其余分类", remaining)
+                    : new PieEntry((float) remaining, "其余分类", Boolean.TRUE));
             colors.add(requireContext().getColor(R.color.ledger_muted));
+        }
+        if (chart == expensePieChart) {
+            expensePieChart.setComposition(slices, colors, total, currentMode + ":" + periodStart(selectedDate));
+            return;
         }
         PieDataSet data = new PieDataSet(slices, "");
         data.setColors(colors);
@@ -1687,7 +1693,6 @@ public class StatsFragment extends Fragment {
     }
 
     private void setupPieCharts() {
-        initPieChartStyle(expensePieChart, 0);
         initPieChartStyle(incomePieChart, 1);
     }
 

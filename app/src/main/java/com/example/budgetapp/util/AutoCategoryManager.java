@@ -115,8 +115,9 @@ public final class AutoCategoryManager {
                 for (int i = 0; i < array.length() && result.size() < MAX_LEARNED; i++) {
                     JSONObject item = array.optJSONObject(i);
                     if (item == null) continue;
+                    int type = item.optInt("type", -1);
                     result.add(new AutoCategoryClassifier.Learned(item.optString("package"), item.optString("identity"),
-                            item.optInt("type", -1), item.optString("category"), item.optString("subCategory")));
+                            type, CategoryManager.canonicalCategory(type, item.optString("category")), item.optString("subCategory")));
                 }
             } catch (org.json.JSONException e) {
                 Log.w("AutoCategoryManager", "Ignoring malformed learned categories");
@@ -151,7 +152,8 @@ public final class AutoCategoryManager {
     }
 
     private static boolean sameClassification(Transaction bill, String category, String subCategory) {
-        return value(bill.category).equals(value(category)) && value(bill.subCategory).equals(value(subCategory));
+        return value(CategoryManager.canonicalCategory(bill.type, bill.category)).equals(
+                value(CategoryManager.canonicalCategory(bill.type, category))) && value(bill.subCategory).equals(value(subCategory));
     }
 
     private static String value(String text) {
@@ -162,7 +164,8 @@ public final class AutoCategoryManager {
         if (!isLearningEnabled(context) || (bill.type != 0 && bill.type != 1)
                 || value(bill.screenSourcePackage).isEmpty() || value(bill.screenMerchantIdentity).isEmpty()) return;
         AutoCategoryClassifier.Result confirmed = AutoCategoryClassifier.validate(getCatalog(context, bill.type),
-                bill.category, bill.subCategory, AutoCategoryClassifier.Source.LEARNED, CategoryManager.isSubCategoryEnabled(context));
+                CategoryManager.canonicalCategory(bill.type, bill.category), bill.subCategory,
+                AutoCategoryClassifier.Source.LEARNED, CategoryManager.isSubCategoryEnabled(context));
         if (confirmed == null) return;
         List<AutoCategoryClassifier.Learned> rules = new ArrayList<>(getLearned(context));
         if (!rules.isEmpty()) {
@@ -175,6 +178,44 @@ public final class AutoCategoryManager {
                 && rule.identity.equals(bill.screenMerchantIdentity));
         rules.add(0, new AutoCategoryClassifier.Learned(bill.screenSourcePackage, bill.screenMerchantIdentity,
                 bill.type, confirmed.category, confirmed.subCategory));
+        // The caller backs up the bill and the learned rule together after saving.
+        saveLearned(context, rules);
+    }
+
+    /** Update the result while keeping the app, merchant and transaction type as the matching key. */
+    public static synchronized boolean updateLearned(Context context, AutoCategoryClassifier.Learned key,
+            String category, String subCategory) {
+        AutoCategoryClassifier.Result validated = AutoCategoryClassifier.validate(getCatalog(context, key.type),
+                category, subCategory, AutoCategoryClassifier.Source.LEARNED, true);
+        if (validated == null) return false;
+        List<AutoCategoryClassifier.Learned> rules = new ArrayList<>(getLearned(context));
+        for (int i = 0; i < rules.size(); i++) {
+            AutoCategoryClassifier.Learned current = rules.get(i);
+            if (!sameKey(current, key)) continue;
+            if (current.category.equals(validated.category) && current.subCategory.equals(validated.subCategory)) return true;
+            rules.set(i, new AutoCategoryClassifier.Learned(current.packageName, current.identity, current.type,
+                    validated.category, validated.subCategory));
+            return saveManagedRules(context, rules);
+        }
+        return false;
+    }
+
+    public static synchronized boolean deleteLearned(Context context, AutoCategoryClassifier.Learned key) {
+        List<AutoCategoryClassifier.Learned> rules = new ArrayList<>(getLearned(context));
+        return rules.removeIf(rule -> sameKey(rule, key)) && saveManagedRules(context, rules);
+    }
+
+    private static boolean sameKey(AutoCategoryClassifier.Learned a, AutoCategoryClassifier.Learned b) {
+        return a.type == b.type && a.packageName.equals(b.packageName) && a.identity.equals(b.identity);
+    }
+
+    private static boolean saveManagedRules(Context context, List<AutoCategoryClassifier.Learned> rules) {
+        if (!saveLearned(context, rules)) return false;
+        BackupManager.triggerAutoUploadIfEnabled(context.getApplicationContext());
+        return true;
+    }
+
+    private static boolean saveLearned(Context context, List<AutoCategoryClassifier.Learned> rules) {
         JSONArray array = new JSONArray();
         try {
             for (int i = 0; i < Math.min(MAX_LEARNED, rules.size()); i++) {
@@ -182,10 +223,11 @@ public final class AutoCategoryManager {
                 array.put(new JSONObject().put("package", rule.packageName).put("identity", rule.identity)
                         .put("type", rule.type).put("category", rule.category).put("subCategory", rule.subCategory));
             }
-            // The caller backs up the bill and the learned rule together after saving.
             prefs(context).edit().putString(KEY_LEARNED, array.toString()).apply();
-        } catch (Exception e) {
+            return true;
+        } catch (org.json.JSONException e) {
             Log.w("AutoCategoryManager", "Could not save learned category");
+            return false;
         }
     }
 

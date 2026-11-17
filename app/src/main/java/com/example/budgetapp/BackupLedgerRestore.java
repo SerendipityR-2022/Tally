@@ -5,6 +5,7 @@ import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Goal;
 import com.example.budgetapp.database.RecurringRule;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.CategoryManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -132,13 +133,15 @@ final class BackupLedgerRestore {
     }
 
     private static List<?> ruleKey(RecurringRule rule) {
-        return Arrays.asList(rule.type, rule.amount, rule.currencySymbol, rule.category, rule.subCategory,
+        return Arrays.asList(rule.type, rule.amount, rule.currencySymbol,
+                CategoryManager.canonicalCategory(rule.type, rule.category), rule.subCategory,
                 rule.periodUnit, rule.periodInterval, rule.startDate, rule.endDate, rule.triggerTime, rule.note,
                 rule.isEnabled, rule.createTime);
     }
 
     private static List<?> billKey(Transaction bill) {
-        return Arrays.asList(bill.date, bill.type, bill.amount, bill.currencySymbol, bill.category, bill.subCategory,
+        return Arrays.asList(bill.date, bill.type, bill.amount, bill.currencySymbol,
+                CategoryManager.canonicalCategory(bill.type, bill.category), bill.subCategory,
                 bill.note, bill.remark, bill.photoPath, bill.targetObject, bill.excludeFromBudget, bill.isSettled,
                 bill.scheduledExecuteTime);
     }

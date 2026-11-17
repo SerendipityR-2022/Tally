@@ -12,6 +12,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Lifecycle;
@@ -22,6 +23,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.example.budgetapp.MainActivity;
 import com.example.budgetapp.R;
+import com.example.budgetapp.database.Transaction;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -42,7 +44,7 @@ import static org.junit.Assert.*;
 @RunWith(AndroidJUnit4.class)
 public class LedgerUiRegressionTest {
     private static final String[] PREF_KEYS = {"default_page", "is_budget_enabled", "is_detailed_budget_enabled",
-            "enable_details_module", "key_enable_assets_module", "theme_mode"};
+            "enable_details_module", "key_enable_assets_module", "theme_mode", DefaultPageActivity.KEY_DETAILS_BUDGET_SHORTCUT};
     private final Map<String, Object> original = new HashMap<>();
     private SharedPreferences prefs;
 
@@ -52,7 +54,8 @@ public class LedgerUiRegressionTest {
         Map<String, ?> values = prefs.getAll();
         for (String key : PREF_KEYS) original.put(key, values.get(key));
         prefs.edit().putBoolean("is_budget_enabled", true).putBoolean("is_detailed_budget_enabled", false)
-                .putBoolean("enable_details_module", true).putBoolean("key_enable_assets_module", true).commit();
+                .putBoolean("enable_details_module", true).putBoolean("key_enable_assets_module", true)
+                .remove(DefaultPageActivity.KEY_DETAILS_BUDGET_SHORTCUT).commit();
     }
 
     @After public void restorePreferences() {
@@ -105,6 +108,70 @@ public class LedgerUiRegressionTest {
         }
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             scenario.onActivity(a -> assertDestination(a, R.id.nav_record));
+        }
+    }
+
+    @Test public void budgetShortcutSwitchIsIndependentAndKeepsItsChoiceWhenBudgetIsDisabled() {
+        try (ActivityScenario<DefaultPageActivity> settings = ActivityScenario.launch(DefaultPageActivity.class)) {
+            settings.onActivity(activity -> {
+                androidx.appcompat.widget.SwitchCompat shortcut = activity.findViewById(R.id.switchDetailsBudgetShortcut);
+                assertTrue(shortcut.isEnabled());
+                assertTrue(shortcut.isChecked());
+                shortcut.performClick();
+                assertFalse(shortcut.isChecked());
+            });
+            settings.moveToState(Lifecycle.State.STARTED);
+            prefs.edit().putBoolean("is_budget_enabled", false).commit();
+            settings.moveToState(Lifecycle.State.RESUMED);
+            settings.onActivity(activity -> {
+                androidx.appcompat.widget.SwitchCompat shortcut = activity.findViewById(R.id.switchDetailsBudgetShortcut);
+                assertFalse(shortcut.isEnabled());
+                assertFalse(shortcut.isChecked());
+            });
+            settings.moveToState(Lifecycle.State.STARTED);
+            prefs.edit().putBoolean("is_budget_enabled", true).commit();
+            settings.moveToState(Lifecycle.State.RESUMED);
+            settings.onActivity(activity -> {
+                androidx.appcompat.widget.SwitchCompat shortcut = activity.findViewById(R.id.switchDetailsBudgetShortcut);
+                assertTrue(shortcut.isEnabled());
+                assertFalse(shortcut.isChecked());
+            });
+        }
+
+        prefs.edit().putInt("default_page", 1).commit();
+        try (ActivityScenario<MainActivity> main = ActivityScenario.launch(MainActivity.class)) {
+            main.onActivity(activity -> {
+                assertTrue(bottom(activity).getMenu().findItem(R.id.nav_budget).isVisible());
+                assertEquals(View.GONE, active(activity).requireView().findViewById(R.id.ledger_details_budget).getVisibility());
+            });
+        }
+    }
+
+    @Test public void editingFromDetailsShowsTheFullSaveLabelOnOneLine() {
+        prefs.edit().putInt("default_page", 0).commit();
+        try (ActivityScenario<MainActivity> main = ActivityScenario.launch(MainActivity.class)) {
+            select(main, R.id.nav_details);
+            main.onActivity(activity -> ((DetailsFragment) active(activity)).renderTransactions(
+                    java.util.Collections.singletonList(new Transaction(System.currentTimeMillis(), 0, "餐饮", 19.4))));
+            idle();
+            main.onActivity(activity -> {
+                RecyclerView bills = active(activity).requireView().findViewById(R.id.recycler_details);
+                DetailsAdapter.ViewHolder holder = (DetailsAdapter.ViewHolder) bills.findViewHolderForAdapterPosition(0);
+                assertNotNull(holder);
+                assertTrue(holder.row.performClick());
+            });
+            androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withId(R.id.btn_save))
+                    .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
+                    .check((view, error) -> {
+                        if (error != null) throw error;
+                        TextView button = (TextView) view;
+                        assertEquals("保存修改", button.getText().toString());
+                        assertEquals(1, button.getLayout().getLineCount());
+                        assertEquals(0, button.getLayout().getEllipsisCount(0));
+                        assertTrue(button.getLayout().getLineWidth(0) <= button.getLayout().getWidth() + 1);
+                        assertFullyVisible(button);
+                    });
+            androidx.test.espresso.Espresso.pressBack();
         }
     }
 

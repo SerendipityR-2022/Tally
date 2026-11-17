@@ -14,6 +14,7 @@ import com.example.budgetapp.database.AssetAccount;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.util.TransactionRemarks;
 import com.example.budgetapp.util.AssetIconHelper;
+import com.example.budgetapp.util.CategoryManager;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -141,7 +142,7 @@ public class TransactionListAdapter extends RecyclerView.Adapter<TransactionList
         }
 
         // 分类与二级分类显示
-        holder.tvDate.setText(t.category);
+        holder.tvDate.setText(CategoryManager.canonicalCategory(t.type, t.category));
         if (t.subCategory != null && !t.subCategory.isEmpty()) {
             holder.tvSubCategory.setText(t.subCategory);
             holder.tvSubCategory.setVisibility(View.VISIBLE);

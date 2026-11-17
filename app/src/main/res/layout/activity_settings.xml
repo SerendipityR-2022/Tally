@@ -197,7 +197,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="@string/settings_pages"
-                        android:tag="启动页面 页面显示 底部导航 资产功能 明细功能 账单卡片 明细模块快捷按钮 日历显示 精简日历 极简模式" />
+                        android:tag="启动页面 页面显示 底部导航 资产功能 明细功能 账单卡片 明细模块快捷按钮 预算快捷入口 日历显示 精简日历 极简模式" />
                 </LinearLayout>
             </LinearLayout>
             <LinearLayout

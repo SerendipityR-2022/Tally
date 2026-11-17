@@ -7,6 +7,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import com.example.budgetapp.R;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.util.TransactionRemarks;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -32,7 +33,7 @@ final class LedgerTransactionRow {
 
     void bind(Transaction tx, String asset, boolean showCurrency, boolean showDate) {
         Context context = view.getContext();
-        String category = TextUtils.isEmpty(tx.category) ? "未分类" : tx.category;
+        String category = TextUtils.isEmpty(tx.category) ? "未分类" : CategoryManager.canonicalCategory(tx.type, tx.category);
         LedgerCategory.bind(icon, LedgerCategory.icon(context, category, tx.type));
         title.setText(TextUtils.isEmpty(tx.subCategory) ? category : category + "  ·  " + tx.subCategory);
         String detail = new SimpleDateFormat(showDate ? "M月d日 HH:mm" : "HH:mm", Locale.CHINA).format(new Date(TransactionRemarks.displayTime(tx)));

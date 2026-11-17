@@ -1533,7 +1533,6 @@ public class RecordFragment extends Fragment {
         }
         // ================= 【新增】不计入预算逻辑结束 =================
 
-        Button btnSave = dialogView.findViewById(R.id.btn_save);
         Button btnDelete = dialogView.findViewById(R.id.btn_delete);
         TextView tvRevoke = dialogView.findViewById(R.id.tv_revoke);
 
@@ -1865,7 +1864,6 @@ public class RecordFragment extends Fragment {
         });
 
         if (existingTransaction != null) {
-            btnSave.setText("保存修改");
             etAmount.setText(String.valueOf(existingTransaction.amount));
             etRemark.setText(TransactionRemarks.display(existingTransaction));
 
@@ -1873,7 +1871,7 @@ public class RecordFragment extends Fragment {
             if (existingTransaction.type == 1) {
                 rgType.check(R.id.rb_income);
                 isExpense[0] = false;
-                String currentCat = existingTransaction.category;
+                String currentCat = CategoryManager.canonicalCategory(existingTransaction.type, existingTransaction.category);
                 if (incomeCategories.contains(currentCat)) {
                     categoryAdapter.setSelectedCategory(currentCat);
                     selectedCategory[0] = currentCat;
@@ -1899,7 +1897,7 @@ public class RecordFragment extends Fragment {
             } else {
                 rgType.check(R.id.rb_expense);
                 isExpense[0] = true;
-                String currentCat = existingTransaction.category;
+                String currentCat = CategoryManager.canonicalCategory(existingTransaction.type, existingTransaction.category);
                 if (expenseCategories.contains(currentCat)) {
                     categoryAdapter.setSelectedCategory(currentCat);
                     selectedCategory[0] = currentCat;
@@ -1977,7 +1975,6 @@ public class RecordFragment extends Fragment {
                 showRevokeDialog(tempTx, dialog);
             });
         } else {
-            btnSave.setText("保存");
             btnDelete.setVisibility(View.GONE);
             tvRevoke.setVisibility(View.GONE);
         }

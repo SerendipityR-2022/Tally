@@ -242,7 +242,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
 
             // ======= 美团专属逻辑 =======
             if (packageName != null && packageName.contains("meituan")) {
-                if (handleMeituanPaySuccessPage(rootNode)) return;
+                if (handleMeituanPaySuccessPage(rootNode, packageName)) return;
             }
             // ============================
 
@@ -3159,7 +3159,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
      * 【专版专杀】专门适配美团“支付成功”页面
      * 解决金额与标题合并 (如 "支付成功 ¥25.38") 的问题，并精准提取支付方式
      */
-    private boolean handleMeituanPaySuccessPage(ScreenNode root) {
+    private boolean handleMeituanPaySuccessPage(ScreenNode root, String sourcePackage) {
         if (root == null) return false;
 
         List<ScreenNode> allNodes = new ArrayList<>();
@@ -3213,7 +3213,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
             if (now - lastWindowDismissTime < 2500) return true;
 
             // 防重复录入签名 (使用 5分钟/300000ms 防抖)
-            String signature = "meituan_pay-" + amount + "-" + paymentMethod;
+            String signature = sourcePackage + "_pay-" + amount + "-" + paymentMethod;
             if (now - lastRecordTime < 300000 && signature.equals(lastContentSignature)) return true;
 
             lastRecordTime = now;
@@ -3230,10 +3230,10 @@ public class ScreenAccountingEngine extends ContextWrapper {
 
             // 资产模糊匹配
             String assetKeyword = paymentMethod.isEmpty() ? "美团" : paymentMethod;
-            int autoAssetId = AutoAssetManager.matchAsset(this, "com.sankuai.meituan", assetKeyword);
+            int autoAssetId = AutoAssetManager.matchAsset(this, sourcePackage, assetKeyword);
 
             // 触发记账确认窗口（type: 0 为支出）
-            dispatchConfirmWindow(root, finalAmount, 0, finalBusinessHint, recordIdentifier, autoAssetId, "¥", finalTimestamp, "com.sankuai.meituan");
+            dispatchConfirmWindow(root, finalAmount, 0, finalBusinessHint, recordIdentifier, autoAssetId, "¥", finalTimestamp, sourcePackage);
 
             return true;
         }

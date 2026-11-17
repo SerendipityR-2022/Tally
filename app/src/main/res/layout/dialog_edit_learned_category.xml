@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp">
+
+    <TextView
+        android:id="@+id/learning_edit_source"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:padding="8dp"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp" />
+
+    <com.example.budgetapp.ui.LedgerCategoryGrid
+        android:id="@+id/learning_category_picker"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="vertical" />
+
+    <com.example.budgetapp.ui.SettingsRow
+        android:id="@+id/learning_subcategory_picker"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/auto_category_learning_select_subcategory" />
+</LinearLayout>

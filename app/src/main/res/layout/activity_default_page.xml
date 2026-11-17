@@ -54,6 +54,11 @@
                     android:id="@+id/switchDetailsQuickButton"
                     style="@style/TallySettingsSwitch"
                     android:text="@string/settings_show_quick_button" />
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchDetailsBudgetShortcut"
+                    style="@style/TallySettingsSwitch"
+                    android:saveEnabled="false"
+                    android:text="@string/settings_show_budget_shortcut" />
             </LinearLayout>
             <TextView style="@style/TallySection" android:text="@string/settings_page_calendar" />
             <LinearLayout

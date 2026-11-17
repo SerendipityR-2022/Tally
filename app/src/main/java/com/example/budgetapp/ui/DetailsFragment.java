@@ -367,7 +367,7 @@ public class DetailsFragment extends Fragment {
 
         updateBudgetShortcut(view);
         view.findViewById(R.id.ledger_details_budget).setOnClickListener(v -> {
-            if (!new AssistantConfig(requireContext()).isBudgetEnabled()) return;
+            if (!DefaultPageActivity.isDetailsBudgetShortcutEnabled(requireContext())) return;
             com.google.android.material.bottomnavigation.BottomNavigationView nav = requireActivity().findViewById(R.id.bottom_nav);
             nav.setSelectedItemId(R.id.nav_budget);
         });
@@ -855,7 +855,6 @@ public class DetailsFragment extends Fragment {
         EditText etRemark = dialogView.findViewById(R.id.et_remark);
         Spinner spAsset = dialogView.findViewById(R.id.sp_asset);
 
-        Button btnSave = dialogView.findViewById(R.id.btn_save);
         Button btnDelete = dialogView.findViewById(R.id.btn_delete);
         TextView tvRevoke = dialogView.findViewById(R.id.tv_revoke);
 
@@ -1178,7 +1177,6 @@ public class DetailsFragment extends Fragment {
         });
 
         if (existingTransaction != null) {
-            btnSave.setText("保存修改");
             etAmount.setText(String.valueOf(existingTransaction.amount));
             etRemark.setText(TransactionRemarks.display(existingTransaction));
 
@@ -1188,7 +1186,7 @@ public class DetailsFragment extends Fragment {
             } else {
                 isExpense[0] = existingTransaction.type != 1;
                 rgType.check(isExpense[0] ? R.id.rb_expense : R.id.rb_income);
-                String currentCat = existingTransaction.category;
+                String currentCat = CategoryManager.canonicalCategory(existingTransaction.type, existingTransaction.category);
                 List<String> currentList = isExpense[0] ? expenseCategories : incomeCategories;
                 if (currentList.contains(currentCat)) {
                     categoryAdapter.setSelectedCategory(currentCat);
@@ -1251,7 +1249,6 @@ public class DetailsFragment extends Fragment {
             });
         } else {
             // 【新增】新建记录时，自动在备注字段填充默认时间标识
-            btnSave.setText("保存");
             btnDelete.setVisibility(View.GONE);
             tvRevoke.setVisibility(View.GONE);
         }
@@ -1618,7 +1615,7 @@ public class DetailsFragment extends Fragment {
 
     private void updateBudgetShortcut(View view) {
         view.findViewById(R.id.ledger_details_budget).setVisibility(
-                new AssistantConfig(requireContext()).isBudgetEnabled() ? View.VISIBLE : View.GONE);
+                DefaultPageActivity.isDetailsBudgetShortcutEnabled(requireContext()) ? View.VISIBLE : View.GONE);
     }
 
     @Override

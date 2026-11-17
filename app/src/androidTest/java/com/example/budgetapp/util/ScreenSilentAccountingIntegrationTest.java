@@ -110,6 +110,30 @@ public class ScreenSilentAccountingIntegrationTest {
         assertFalse(engine.hasConfirmationWindow());
     }
 
+    @Test public void appDefaultRuleWorksWithoutTextAndTheActualMeituanAppUsesIt() {
+        String takeout = "com.sankuai.meituan.takeoutnew";
+        settings.setSilentAccountingEnabled(true);
+        config.setAssetsEnabled(true);
+        AssetAccount account = new AssetAccount("外卖关联账户", 100, 0);
+        account.id = 61;
+        db.assetAccountDao().insert(account);
+        AutoAssetManager.setEnabled(context, true);
+        AutoAssetManager.addRule(context, new AutoAssetManager.AssetRule(takeout, "", account.id));
+        AutoAssetManager.addRule(context, new AutoAssetManager.AssetRule(takeout, "招商银行", 62));
+        AutoAssetManager.addRule(context, new AutoAssetManager.AssetRule(KeywordManager.PKG_MEITUAN, "", 63));
+
+        assertEquals(account.id, AutoAssetManager.matchAsset(context, takeout, null));
+        assertEquals(62, AutoAssetManager.matchAsset(context, takeout, "招商银行储蓄卡"));
+        assertEquals(-1, AutoAssetManager.matchAsset(context, "test.unrelated", ""));
+        runMain(() -> engine.analyze(new ScreenNode("支付成功 ¥26.70", null, takeout, "TextView", null,
+                Collections.emptyList())));
+        assertEquals(account.id, awaitSaved().assetId);
+
+        AutoAssetManager.addRule(context, new AutoAssetManager.AssetRule(takeout, "", 64));
+        assertEquals(64, AutoAssetManager.matchAsset(context, takeout, ""));
+        assertEquals(3, AutoAssetManager.getRules(context).size());
+    }
+
     @Test public void optInCannotBypassScreenCaptureGuard() {
         settings.setSilentAccountingEnabled(true);
         AtomicBoolean allowed = new AtomicBoolean(true);

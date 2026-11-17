@@ -95,6 +95,7 @@ public class TransactionDraftMapper {
                     object.optString("mainCategory", ""),
                     object.optString("primaryCategory", "")
             );
+            rawCategory = CategoryManager.canonicalCategory(draft.type, rawCategory);
             String rawSubCategory = firstNonEmpty(
                     object.optString("subCategory", ""),
                     object.optString("subcategory", ""),

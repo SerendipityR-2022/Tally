@@ -48,6 +48,7 @@ public class AiCategoryRuleManager {
             for (int i = 0; i < jsonArray.length(); i++) {
                 JSONObject jsonObject = jsonArray.getJSONObject(i);
                 CategoryRule rule = CategoryRule.fromJson(jsonObject);
+                rule.setCategory(CategoryManager.canonicalCategory(rule.getType(), rule.getCategory()));
                 rules.add(rule);
             }
         } catch (JSONException e) {

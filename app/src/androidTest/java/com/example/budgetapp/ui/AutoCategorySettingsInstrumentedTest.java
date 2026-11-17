@@ -28,6 +28,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 
 import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.Espresso.pressBack;
+import static androidx.test.espresso.action.ViewActions.click;
+import static androidx.test.espresso.action.ViewActions.replaceText;
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
 import static androidx.test.espresso.matcher.ViewMatchers.hasDescendant;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withParent;
@@ -37,6 +41,48 @@ import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public class AutoCategorySettingsInstrumentedTest {
+    @Test public void learnedRecordsCanBeSearchedEditedAndDeletedWhileLearningIsOff() {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        android.content.SharedPreferences prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+        String key = "screen_category_learned_rules";
+        String original = prefs.getString(key, null);
+        boolean learning = AutoCategoryManager.isLearningEnabled(context);
+        String[] packages = {"com.tencent.mm", "com.eg.android.AlipayGphone"};
+        try {
+            AutoCategoryManager.clearLearned(context);
+            AutoCategoryManager.setLearningEnabled(context, true);
+            for (String pkg : packages) {
+                Transaction bill = new Transaction(1000, 0, "餐饮", 1);
+                AutoCategoryManager.attachScreenSource(bill, new AutoCategoryClassifier.Input(pkg, "示例咖啡", 0, ""));
+                AutoCategoryManager.rememberConfirmation(context, bill,
+                        new AutoCategoryClassifier.Result("餐饮", "", AutoCategoryClassifier.Source.LOCAL));
+            }
+            AutoCategoryManager.setLearningEnabled(context, false);
+            try (ActivityScenario<AutoCategorySettingsActivity> settings = ActivityScenario.launch(AutoCategorySettingsActivity.class)) {
+                settings.onActivity(activity -> activity.findViewById(R.id.row_category_learning_records).performClick());
+                onView(withId(R.id.learning_search)).perform(replaceText("支付宝"));
+                onView(withId(R.id.learning_edit)).perform(click());
+                onView(allOf(withId(R.id.tv_category_icon), withText("购物"))).inRoot(isDialog()).perform(click());
+                onView(withText(R.string.record_save_changes)).inRoot(isDialog()).perform(click());
+                assertEquals("购物", AutoCategoryManager.getLearned(context).get(0).category);
+                assertEquals("餐饮", AutoCategoryManager.getLearned(context).get(1).category);
+                onView(withId(R.id.learning_delete)).perform(click());
+                onView(withText(R.string.auto_category_learning_delete_button)).inRoot(isDialog()).perform(click());
+                assertEquals(1, AutoCategoryManager.getLearned(context).size());
+                assertEquals(packages[0], AutoCategoryManager.getLearned(context).get(0).packageName);
+                onView(withId(R.id.btn_category_clear_learning)).perform(click());
+                onView(allOf(withId(android.R.id.button1), withText(R.string.auto_category_learning_clear_button)))
+                        .inRoot(isDialog()).perform(click());
+                assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+                pressBack();
+            }
+        } finally {
+            if (original == null) prefs.edit().remove(key).commit();
+            else prefs.edit().putString(key, original).commit();
+            AutoCategoryManager.setLearningEnabled(context, learning);
+        }
+    }
+
     @Test public void learningCountRefreshesWhenABillIsConfirmedWhileSettingsRemainVisible() {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         android.content.SharedPreferences prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
@@ -47,8 +93,9 @@ public class AutoCategorySettingsInstrumentedTest {
         AutoCategoryManager.setLearningEnabled(context, true);
         try (ActivityScenario<AutoCategorySettingsActivity> scenario = ActivityScenario.launch(AutoCategorySettingsActivity.class)) {
             scenario.onActivity(activity -> {
-                TextView count = activity.findViewById(R.id.tv_category_learning_count);
-                assertEquals(activity.getString(R.string.auto_category_learning_count, 0, AutoCategoryManager.MAX_LEARNED), count.getText().toString());
+                View entry = activity.findViewById(R.id.row_category_learning_records);
+                assertTrue(entry.getContentDescription().toString().endsWith(
+                        activity.getString(R.string.auto_category_learning_short_count, 0)));
                 String category = AutoCategoryManager.getCatalog(context, 0).get(0).name;
                 Transaction bill = new Transaction(1000, 0, category, 1.0);
                 AutoCategoryManager.attachScreenSource(bill, new AutoCategoryClassifier.Input("test.learning", "示例店铺", 0, ""));
@@ -56,8 +103,8 @@ public class AutoCategorySettingsInstrumentedTest {
                         new AutoCategoryClassifier.Result(category, "", AutoCategoryClassifier.Source.LOCAL));
             });
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-            scenario.onActivity(activity -> assertEquals(activity.getString(R.string.auto_category_learning_count, 1,
-                    AutoCategoryManager.MAX_LEARNED), ((TextView) activity.findViewById(R.id.tv_category_learning_count)).getText().toString()));
+            scenario.onActivity(activity -> assertTrue(activity.findViewById(R.id.row_category_learning_records)
+                    .getContentDescription().toString().endsWith(activity.getString(R.string.auto_category_learning_short_count, 1))));
         } finally {
             if (original == null) prefs.edit().remove(key).commit();
             else prefs.edit().putString(key, original).commit();
@@ -83,7 +130,8 @@ public class AutoCategorySettingsInstrumentedTest {
                         .findViewById(R.id.btn_strategy_drag).getVisibility());
                 assertEquals(View.INVISIBLE, priorities.findViewHolderForAdapterPosition(5).itemView
                         .findViewById(R.id.btn_strategy_drag).getVisibility());
-                assertTrue(((TextView) activity.findViewById(R.id.tv_category_learning_count)).getText().length() > 0);
+                assertNotNull(activity.findViewById(R.id.row_category_learning_records));
+                assertNull(activity.findViewById(R.id.btn_category_clear_learning));
                 assertTrue(((TextView) activity.findViewById(R.id.tv_category_ai_status)).getText().length() > 0);
             });
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
