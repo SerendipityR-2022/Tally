@@ -54,11 +54,11 @@
 <details>
 <summary>软件截图（展开查看）</summary>
 
-截图使用合成账本。点击图片可查看原图。
+截图来自模拟器上的 Tally 3.8.8-rc4，账单均为示例数据。点击图片可查看原图。
 
 | 记一笔 | 统计（长图） | 明细（长图） |
 | :---: | :---: | :---: |
-| [<img src=".github/screenshots/record.png" alt="记一笔收入表单及内置分类" width="240">](.github/screenshots/record.png) | [<img src=".github/screenshots/stats.png" alt="统计概览、月趋势、分类构成和支出排行长图" width="240">](.github/screenshots/stats.png) | [<img src=".github/screenshots/details.png" alt="明细月总览及合成账单长图" width="240">](.github/screenshots/details.png) |
+| [<img src=".github/screenshots/record.png" alt="记一笔收入表单及内置分类" width="240">](.github/screenshots/record.png) | [<img src=".github/screenshots/stats.png" alt="统计月概览、支出趋势、收支构成和支出排行长图" width="240">](.github/screenshots/stats.png) | [<img src=".github/screenshots/details.png" alt="明细月总览及示例账单长图" width="240">](.github/screenshots/details.png) |
 
 </details>
 
