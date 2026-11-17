@@ -20,6 +20,9 @@ public interface TransactionDao {
     @Update
     void update(Transaction transaction);
 
+    @Query("SELECT * FROM transactions WHERE id = :id")
+    Transaction getByIdSync(int id);
+
     @Query("SELECT * FROM transactions ORDER BY date DESC")
     LiveData<List<Transaction>> getAllTransactions();
 

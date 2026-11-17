@@ -21,6 +21,7 @@ import com.example.budgetapp.database.GoalDao;
 import com.example.budgetapp.database.RenewalItem;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.database.TransactionDao;
+import com.example.budgetapp.util.AutoCategoryManager;
 import com.example.budgetapp.widget.MonthSummaryWidget;
 import com.example.budgetapp.widget.TodaySummaryWidget;
 
@@ -46,9 +47,12 @@ public class FinanceViewModel extends AndroidViewModel {
     // 动态观察该时间段内的账单
     private final LiveData<List<Transaction>> rangeTransactions;
     public FinanceViewModel(@NonNull Application application) {
+        this(application, AppDatabase.getDatabase(application));
+    }
+
+    FinanceViewModel(@NonNull Application application, AppDatabase database) {
         super(application);
-        // 1. 获取数据库实例
-        database = AppDatabase.getDatabase(application);
+        this.database = database;
 
         // 2. 初始化所有 DAO
         transactionDao = database.transactionDao();
@@ -165,9 +169,15 @@ public class FinanceViewModel extends AndroidViewModel {
     /**
      * 【增强】同步修改历史账单及对应的双边资产余额
      */
-    public void updateTransactionWithAssetSync(Transaction oldTx, Transaction newTx) {
+    public void updateTransactionWithAssetSync(Transaction newTx) {
         AppDatabase.databaseWriteExecutor.execute(() -> {
-            database.runInTransaction(() -> {
+            Transaction previous = database.runInTransaction(() -> {
+                Transaction oldTx = transactionDao.getByIdSync(newTx.id);
+                if (oldTx == null) return null;
+                // A changed transaction direction must not teach a rule for the original payment.
+                newTx.screenSourcePackage = oldTx.type == newTx.type ? oldTx.screenSourcePackage : null;
+                newTx.screenMerchantIdentity = oldTx.type == newTx.type ? oldTx.screenMerchantIdentity : null;
+
                 // 1. 处理己方支付账户（如微信、支付宝）的资产变更
                 if (oldTx.assetId == newTx.assetId && oldTx.assetId != 0) {
                     AssetAccount asset = assetDao.getAssetByIdSync(oldTx.assetId);
@@ -262,7 +272,10 @@ public class FinanceViewModel extends AndroidViewModel {
 
                 // 3. 最终更新数据库中的账单记录
                 transactionDao.update(newTx);
+                return oldTx;
             });
+            if (previous == null) return;
+            AutoCategoryManager.rememberCategoryEdit(getApplication(), previous, newTx);
             com.example.budgetapp.BackupManager.triggerAutoUploadIfEnabled(getApplication());
             notifyWidgetUpdate(); // 【新增】事务完成后通知刷新
         });

@@ -71,6 +71,7 @@ public final class AutoCategoryClassifier {
     }
 
     private static final Pattern NORMALIZE = Pattern.compile("[\\p{Z}\\s\\p{P}\\p{S}]+");
+    private static final Pattern LEARNING_NORMALIZE = Pattern.compile("[\\p{Z}\\s\\p{P}\\p{S}&&[^*]]+");
     private static final Pattern LEADING_TIME = Pattern.compile("^\\s*(?:(?:\\d{4}[-/.年])?\\d{1,2}[-/.月]\\d{1,2}日?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?\\s*|\\d{1,2}:\\d{2}(?::\\d{2})?\\s*)");
     private static final Pattern BACKGROUND_SUFFIX = Pattern.compile("\\s*[（(]后台[）)]\\s*$");
 
@@ -289,10 +290,12 @@ public final class AutoCategoryClassifier {
 
     /** Exact, app- and type-scoped merchant identity; never learn generic/time-only screens. */
     public static String learningIdentity(String description) {
-        String identity = normalize(cleanDescription(description));
-        if (identity.length() < 2 || identity.matches("[0-9]+")) return "";
+        // Keep redaction markers: **（张） and 张** are different merchant identities.
+        String identity = LEARNING_NORMALIZE.matcher(cleanDescription(description).toLowerCase(Locale.ROOT)
+                .replace('＊', '*')).replaceAll("");
+        if (identity.length() < 2 || identity.matches("[0-9*]+")) return "";
         String[] generic = {"微信", "支付宝", "京东", "淘宝", "拼多多", "抖音", "美团", "云闪付", "抖省省", "通义千问",
-                "自动记账", "微信账单", "支付宝账单", "微信支付", "支付成功", "付款成功", "商家转账", "转账", "红包",
+                "自动记账", "微信账单", "支付宝账单", "微信支付", "支付宝支付", "支付成功", "付款成功", "商家转账", "转账", "红包",
                 "京东购物", "拼多多购物", "淘宝购物", "抖音购物", "美团消费", "抖省省消费", "通义千问支付"};
         for (String item : generic) if (identity.equals(normalize(item))) return "";
         return identity;

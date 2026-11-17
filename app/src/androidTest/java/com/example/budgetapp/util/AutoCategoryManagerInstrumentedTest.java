@@ -1,6 +1,7 @@
 package com.example.budgetapp.util;
 
 import android.content.Context;
+import com.example.budgetapp.database.Transaction;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.json.JSONArray;
@@ -37,28 +38,29 @@ public class AutoCategoryManagerInstrumentedTest {
     }
     @Test public void correctedConfirmationIsPersistedAndReused() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberConfirmation(context, input, original, 0, "购物", "超市");
+        remember(input, original, 0, "购物", "超市");
         Result next = AutoCategoryManager.classifyLocal(context,
                 new Input("com.tencent.mm", "11-16 08:00 瑞幸", 0, "购物"));
         assertEquals(Source.LEARNED, next.source);
         assertEquals("购物", next.category);
         assertEquals("超市", next.subCategory);
     }
-    @Test public void acceptingUnchangedLocalSuggestionDoesNotTrain() {
+    @Test public void acceptingUnchangedLocalSuggestionIsPersistedAndReused() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberConfirmation(context, input, original, 0, original.category, original.subCategory);
-        assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+        remember(input, original, 0, original.category, original.subCategory);
+        assertEquals(1, AutoCategoryManager.getLearned(context).size());
+        assertEquals(Source.LEARNED, AutoCategoryManager.classifyLocal(context, input).source);
     }
     @Test public void acceptedAiIsLearnedButAnEditStoresOnlyTheUserChoice() {
         Result model = new Result("餐饮", "咖啡", Source.AI);
         AutoCategoryManager.setLearningEnabled(context, false);
-        AutoCategoryManager.rememberConfirmation(context, input, model, 0, "餐饮", "咖啡");
+        remember(input, model, 0, "餐饮", "咖啡");
         assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
         AutoCategoryManager.setLearningEnabled(context, true);
-        AutoCategoryManager.rememberConfirmation(context, input, model, 0, "餐饮", "咖啡");
+        remember(input, model, 0, "餐饮", "咖啡");
         assertEquals(Source.LEARNED, AutoCategoryManager.classifyLocal(context, input).source);
         assertEquals("咖啡", AutoCategoryManager.classifyLocal(context, input).subCategory);
-        AutoCategoryManager.rememberConfirmation(context, input, model, 0, "购物", "超市");
+        remember(input, model, 0, "购物", "超市");
         assertEquals(1, AutoCategoryManager.getLearned(context).size());
         assertEquals("购物", AutoCategoryManager.getLearned(context).get(0).category);
     }
@@ -77,16 +79,16 @@ public class AutoCategoryManagerInstrumentedTest {
 
     @Test public void changedTypeAndUnregisteredCustomCategoryAreNotLearned() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberConfirmation(context, input, original, 1, "工资", "");
-        AutoCategoryManager.rememberConfirmation(context, input, original, 0, "临时自定义", "");
+        remember(input, original, 1, "工资", "");
+        remember(input, original, 0, "临时自定义", "");
         assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
     }
     @Test public void learningCanBeDisabledAndClearedIndependently() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberConfirmation(context, input, original, 0, "购物", "超市");
+        remember(input, original, 0, "购物", "超市");
         AutoCategoryManager.setLearningEnabled(context, false);
         assertNotEquals(Source.LEARNED, AutoCategoryManager.classifyLocal(context, input).source);
-        AutoCategoryManager.rememberConfirmation(context, new Input("com.tencent.mm", "蜜雪", 0, "购物"),
+        remember(new Input("com.tencent.mm", "蜜雪", 0, "购物"),
                 original, 0, "购物", "超市");
         assertEquals(1, AutoCategoryManager.getLearned(context).size());
         AutoCategoryManager.clearLearned(context);
@@ -95,14 +97,14 @@ public class AutoCategoryManagerInstrumentedTest {
     }
     @Test public void changingClassificationReplacesSameMerchantLearning() {
         Result original = AutoCategoryManager.classifyLocal(context, input);
-        AutoCategoryManager.rememberConfirmation(context, input, original, 0, "购物", "超市");
-        AutoCategoryManager.rememberConfirmation(context, input,
+        remember(input, original, 0, "购物", "超市");
+        remember(input,
                 AutoCategoryManager.classifyLocal(context, input), 0, "餐饮", "奶茶");
         assertEquals(1, AutoCategoryManager.getLearned(context).size());
         assertEquals("奶茶", AutoCategoryManager.classifyLocal(context, input).subCategory);
     }
     @Test public void removedSubCategoryInvalidatesLearning() {
-        AutoCategoryManager.rememberConfirmation(context, input,
+        remember(input,
                 AutoCategoryManager.classifyLocal(context, input), 0, "购物", "超市");
         CategoryManager.saveSubCategories(context, "购物", Arrays.asList("百货"));
         assertNotEquals(Source.LEARNED, AutoCategoryManager.classifyLocal(context, input).source);
@@ -131,7 +133,7 @@ public class AutoCategoryManagerInstrumentedTest {
                 .put("identity", "旧商户" + i).put("type", 0).put("category", "购物").put("subCategory", "超市"));
         context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit()
                 .putString("screen_category_learned_rules", records.toString()).commit();
-        AutoCategoryManager.rememberConfirmation(context, input,
+        remember(input,
                 AutoCategoryManager.classifyLocal(context, input), 0, "购物", "超市");
         assertEquals(2000, AutoCategoryManager.getLearned(context).size());
         assertEquals("旧商户1998", AutoCategoryManager.getLearned(context).get(1999).identity);
@@ -174,4 +176,42 @@ public class AutoCategoryManagerInstrumentedTest {
         assertEquals(AutoCategoryPriority.defaults().serialize(), AutoCategoryManager.getPriority(context).serialize());
     }
 
+    @Test public void acceptedRuleAndHintAreLearnedButUnchangedFallbackIsNot() {
+        for (Source source : Arrays.asList(Source.RULE, Source.HINT, Source.LOCAL)) {
+            AutoCategoryManager.clearLearned(context);
+            remember(input, new Result("购物", "超市", source), 0, "购物", "超市");
+            assertEquals(Source.LEARNED, AutoCategoryManager.classifyLocal(context, input).source);
+        }
+        AutoCategoryManager.clearLearned(context);
+        remember(input, new Result("其他", "", Source.FALLBACK), 0, "其他", "");
+        assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+    }
+
+    @Test public void noMerchantOrMissingApplicationDoesNotTrainEvenAfterACorrection() {
+        for (String text : Arrays.asList("支付宝支付", "订单金额", "20.30", "支付成功", "")) {
+            remember(new Input("com.eg.android.AlipayGphone", text, 0, "购物"),
+                    new Result("餐饮", "咖啡", Source.LOCAL), 0, "购物", "超市");
+        }
+        remember(new Input("", "瑞幸", 0, "购物"), new Result("餐饮", "咖啡", Source.AI), 0, "购物", "超市");
+        assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+    }
+
+    @Test public void confirmingAnOpenLearnedSuggestionRestoresAClearedRule() {
+        Result local = AutoCategoryManager.classifyLocal(context, input);
+        remember(input, local, 0, local.category, local.subCategory);
+        Result learned = AutoCategoryManager.classifyLocal(context, input);
+        assertEquals(Source.LEARNED, learned.source);
+        AutoCategoryManager.clearLearned(context);
+        remember(input, learned, 0, learned.category, learned.subCategory);
+        assertEquals(1, AutoCategoryManager.getLearned(context).size());
+    }
+
+    private void remember(Input input, Result initial, int type, String category, String subCategory) {
+        Transaction bill = new Transaction();
+        bill.type = type;
+        bill.category = category;
+        bill.subCategory = subCategory;
+        AutoCategoryManager.attachScreenSource(bill, input);
+        AutoCategoryManager.rememberConfirmation(context, bill, initial);
+    }
 }

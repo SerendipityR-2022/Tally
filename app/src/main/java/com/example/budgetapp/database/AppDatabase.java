@@ -10,7 +10,7 @@ import androidx.annotation.NonNull;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Database(entities = {Transaction.class, AssetAccount.class, Goal.class, RecurringRule.class}, version = 27, exportSchema = false)
+@Database(entities = {Transaction.class, AssetAccount.class, Goal.class, RecurringRule.class}, version = 28, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
     public abstract TransactionDao transactionDao();
@@ -229,6 +229,14 @@ public abstract class AppDatabase extends RoomDatabase {
         }
     };
 
+    static final Migration MIGRATION_27_28 = new Migration(27, 28) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE `transactions` ADD COLUMN `screenSourcePackage` TEXT");
+            database.execSQL("ALTER TABLE `transactions` ADD COLUMN `screenMerchantIdentity` TEXT");
+        }
+    };
+
     public static AppDatabase getDatabase(final Context context) {
         if (INSTANCE == null) {
             synchronized (AppDatabase.class) {
@@ -245,7 +253,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20,
                                     MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23,
                                     MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26,
-                                    MIGRATION_26_27
+                                    MIGRATION_26_27, MIGRATION_27_28
                             )
                             .fallbackToDestructiveMigration()
                             .build();

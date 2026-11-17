@@ -35,4 +35,34 @@ public class ScreenCategoryTextExtractorTest {
                 "商品名称", "价格", "19.90", "收货地址", "私人地址", "商户名称", "瑞幸"), "京东购物"));
     }
 
+    @Test public void alipayPrefersExplicitPayeeOverTheFirstTextAfterTheAmount() {
+        assertEquals("示例咖啡", ScreenCategoryTextExtractor.extractAlipayPayee(Arrays.asList(
+                "支付成功", "19.90", "附近推荐", "收款方", "示例咖啡", "付款方式", "账户余额"), 1));
+        assertEquals("示例书店", ScreenCategoryTextExtractor.extractAlipayPayee(Arrays.asList(
+                "支付成功", "19.90", "订单金额：￥19.90", "商户名称: 示例书店"), 1));
+    }
+
+    @Test public void alipayStillReadsAnUnlabelledPayeeUnderTheAmount() {
+        assertEquals("7-11便利店", ScreenCategoryTextExtractor.extractAlipayPayee(Arrays.asList(
+                "支付成功", "20.30", "", "7-11便利店", "付款方式", "账户余额"), 1));
+    }
+
+    @Test public void alipayOrderAndPaymentFieldsDoNotBecomeAMerchant() {
+        assertEquals("", ScreenCategoryTextExtractor.extractAlipayPayee(Arrays.asList(
+                "支付成功", "20.30", "订单金额", "￥20.30", "付款方式", "账户余额", "完成"), 1));
+        assertEquals("", ScreenCategoryTextExtractor.extractAlipayPayee(Arrays.asList(
+                "支付成功", "20.30", "收款方：", "付款方式", "账户余额", "完成"), 1));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("支付宝支付"));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("订单金额"));
+    }
+
+    @Test public void alipayKeepsAMaskedRecipientForDisplayAndLearning() {
+        assertEquals("**（张）", ScreenCategoryTextExtractor.extractAlipayPayee(Arrays.asList(
+                "转账成功", "0.01", "收款方", "**（张）", "付款方式", "账户余额"), -1));
+        assertTrue(ScreenCategoryTextExtractor.hasMerchant("**（张）"));
+        assertEquals("**张", AutoCategoryClassifier.learningIdentity("**（张）"));
+        assertNotEquals(AutoCategoryClassifier.learningIdentity("张**"), AutoCategoryClassifier.learningIdentity("**（张）"));
+        assertEquals("", ScreenCategoryTextExtractor.extractAlipayPayee(Arrays.asList(
+                "转账成功", "0.01", "收款方", "6222123412341234", "付款方式", "账户余额"), -1));
+    }
 }

@@ -104,9 +104,28 @@ public class AutoCategorySettingsActivity extends AppCompatActivity {
                         }).setNegativeButton("取消", null).show());
     }
 
+    private Runnable stopObservingLearning;
+
+    @Override protected void onStart() {
+        super.onStart();
+        stopObservingLearning = AutoCategoryManager.observeLearnedChanges(this, this::refreshLearningCount);
+    }
+
+    @Override protected void onStop() {
+        stopObservingLearning.run();
+        stopObservingLearning = null;
+        super.onStop();
+    }
+
     @Override protected void onResume() {
         super.onResume();
         refresh();
+    }
+
+    private void refreshLearningCount() {
+        ((TextView) findViewById(R.id.tv_category_learning_count)).setText(
+                getString(R.string.auto_category_learning_count, AutoCategoryManager.getLearned(this).size(),
+                        AutoCategoryManager.MAX_LEARNED));
     }
 
     private void refresh() {
@@ -116,9 +135,7 @@ public class AutoCategorySettingsActivity extends AppCompatActivity {
         subSwitch.setChecked(CategoryManager.isSubCategoryEnabled(this));
         binding = false;
         refreshPriority();
-        ((TextView) findViewById(R.id.tv_category_learning_count)).setText(
-                getString(R.string.auto_category_learning_count, AutoCategoryManager.getLearned(this).size(),
-                        AutoCategoryManager.MAX_LEARNED));
+        refreshLearningCount();
         ((TextView) findViewById(R.id.tv_category_sub_status)).setText(CategoryManager.isSubCategoryEnabled(this)
                 ? R.string.auto_category_sub_enabled : R.string.auto_category_sub_disabled);
         boolean modelReady;

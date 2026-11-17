@@ -2157,7 +2157,7 @@ public class RecordFragment extends Fragment {
                     // 【新增】更新不计入预算的状态
                     updateT.excludeFromBudget = isExcludedFromBudget[0];
 
-                    viewModel.updateTransactionWithAssetSync(existingTransaction, updateT);
+                    viewModel.updateTransactionWithAssetSync(updateT);
                 }
                 dialog.dismiss();
                 if (keepRecording && existingTransaction == null) {

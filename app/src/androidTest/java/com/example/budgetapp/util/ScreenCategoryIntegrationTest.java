@@ -174,7 +174,12 @@ public class ScreenCategoryIntegrationTest {
         assertEquals(19.90, saved.amount, 0.0001);
         assertEquals(0, saved.type);
         assertEquals(TIME, saved.date);
-        assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+        assertEquals("com.tencent.mm", saved.screenSourcePackage);
+        assertEquals("瑞幸", saved.screenMerchantIdentity);
+        awaitLearning();
+        assertEquals(1, AutoCategoryManager.getLearned(context).size());
+        assertEquals(AutoCategoryClassifier.Source.LEARNED, AutoCategoryManager.classifyLocal(context,
+                new AutoCategoryClassifier.Input("com.tencent.mm", "瑞幸", 0, "购物")).source);
     }
 
     @Test public void manualCorrectionLearnsOnlyAfterSaveAndIsReusedNextTime() throws Exception {
@@ -209,6 +214,9 @@ public class ScreenCategoryIntegrationTest {
         Transaction saved = awaitSaved();
         assertNull(saved.note);
         assertEquals("买给同事", saved.remark);
+        assertEquals("瑞幸咖啡", saved.screenMerchantIdentity);
+        awaitLearning();
+        assertEquals("瑞幸咖啡", AutoCategoryManager.getLearned(context).get(0).identity);
         assertEquals(TIME, saved.date);
     }
 
@@ -454,6 +462,64 @@ public class ScreenCategoryIntegrationTest {
         }
     }
 
+    @Test public void alipayExplicitPayeeWinsAndAConfirmedLocalCategoryIsLearned() throws Exception {
+        View root = showAlipay("支付成功", "19.90", "订单金额", "￥19.90", "收款方", "瑞幸咖啡", "付款方式", "账户余额");
+        runMain(() -> root.findViewById(R.id.btn_window_save).performClick());
+        Transaction saved = awaitSaved();
+        assertEquals(19.90, saved.amount, 0.0001);
+        assertEquals("瑞幸咖啡", saved.remark);
+        assertEquals("餐饮", saved.category);
+        assertEquals("com.eg.android.AlipayGphone", saved.screenSourcePackage);
+        assertEquals("瑞幸咖啡", saved.screenMerchantIdentity);
+        awaitLearning();
+        assertEquals(1, AutoCategoryManager.getLearned(context).size());
+    }
+
+    @Test public void alipayWithoutPayeeDoesNotLearnTheOrderAmountOrAccount() throws Exception {
+        View root = showAlipay("支付成功", "20.30", "订单金额", "￥20.30", "付款方式", "账户余额", "完成");
+        runMain(() -> root.findViewById(R.id.btn_window_save).performClick());
+        Transaction saved = awaitSaved();
+        assertEquals(20.30, saved.amount, 0.0001);
+        assertEquals("支付宝支付", saved.remark);
+        assertNull(saved.screenSourcePackage);
+        assertNull(saved.screenMerchantIdentity);
+        assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+    }
+
+    @Test public void alipayTransferSuccessShowsAndLearnsTheMaskedPayeeAfterConfirmation() throws Exception {
+        View root = showAlipay("转账成功", "0.01", "收款方", "**（张）", "付款方式", "账户余额", "完成");
+        runMain(() -> {
+            RecyclerView categories = root.findViewById(R.id.rv_window_category);
+            categories.findViewHolderForAdapterPosition(0).itemView.performClick();
+            root.findViewById(R.id.btn_window_save).performClick();
+        });
+        Transaction saved = awaitSaved();
+        assertEquals(0.01, saved.amount, 0.0001);
+        assertEquals(0, saved.type);
+        assertEquals("**（张）", saved.remark);
+        assertEquals("**张", saved.screenMerchantIdentity);
+        awaitLearning();
+        assertEquals("**张", AutoCategoryManager.getLearned(context).get(0).identity);
+        assertEquals(AutoCategoryClassifier.Source.LEARNED, AutoCategoryManager.classifyLocal(context,
+                new AutoCategoryClassifier.Input("com.eg.android.AlipayGphone", "**（张）", 0, "转账")).source);
+    }
+
+    private View showAlipay(String... fields) throws Exception {
+        String pkg = "com.eg.android.AlipayGphone";
+        List<ScreenNode> children = new java.util.ArrayList<>();
+        for (String field : fields) children.add(new ScreenNode(field, null, pkg, "android.widget.TextView", null,
+                java.util.Collections.emptyList()));
+        ScreenNode receipt = new ScreenNode(null, null, pkg, "android.view.View", null, children);
+        runMain(() -> service.analyze(receipt));
+        return awaitOverlay();
+    }
+
+    private void awaitLearning() throws Exception {
+        long until = System.currentTimeMillis() + 4000;
+        while (AutoCategoryManager.getLearned(context).isEmpty() && System.currentTimeMillis() < until) Thread.sleep(20);
+        assertFalse(AutoCategoryManager.getLearned(context).isEmpty());
+    }
+
     private View show(String note) throws Exception { return show(note, null); }
 
     private View show(String note, String merchant) throws Exception {
@@ -472,6 +538,10 @@ public class ScreenCategoryIntegrationTest {
                 }
             } catch (Exception e) { throw new AssertionError(e); }
         });
+        return awaitOverlay();
+    }
+
+    private View awaitOverlay() throws Exception {
         long until = System.currentTimeMillis() + 5000;
         AtomicReference<View> root = new AtomicReference<>();
         while (System.currentTimeMillis() < until) {

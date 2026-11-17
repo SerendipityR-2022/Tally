@@ -80,6 +80,8 @@ public class ScreenSilentAccountingIntegrationTest {
         assertEquals("¥", saved.currencySymbol);
         assertNull(saved.note);
         assertEquals("瑞幸咖啡", saved.remark);
+        assertEquals(PAYMENT_APP, saved.screenSourcePackage);
+        assertEquals("瑞幸咖啡", saved.screenMerchantIdentity);
         assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
         assertFalse(engine.hasConfirmationWindow());
         long deadline = SystemClock.elapsedRealtime() + 4000;

@@ -32,6 +32,10 @@ public class Transaction {
     // 【新增】负债/借出对象
     public String targetObject;
 
+    // Trusted source from screen accounting, independent of the editable remark.
+    public String screenSourcePackage;
+    public String screenMerchantIdentity;
+
 
     // 【新增】是否不计入预算 (默认 false，即计入预算)
     @androidx.room.ColumnInfo(defaultValue = "0")

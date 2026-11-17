@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import com.example.budgetapp.BackupManager;
+import com.example.budgetapp.database.Transaction;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -128,24 +129,52 @@ public final class AutoCategoryManager {
         }
     }
 
-    /** Learn a correction or an accepted model suggestion only after the confirmation was saved. */
-    public static synchronized void rememberConfirmation(Context context, AutoCategoryClassifier.Input input,
-            AutoCategoryClassifier.Result initial, int finalType, String category, String subCategory) {
-        if (!isLearningEnabled(context) || finalType != input.type || (finalType != 0 && finalType != 1)) return;
-        String identity = AutoCategoryClassifier.learningIdentity(input.description);
-        if (identity.isEmpty()) return;
-        boolean useSub = CategoryManager.isSubCategoryEnabled(context);
-        AutoCategoryClassifier.Result confirmed = AutoCategoryClassifier.validate(getCatalog(context, finalType),
-                category, subCategory, AutoCategoryClassifier.Source.LEARNED, useSub);
+    /** Retain a reliable source even if this bill was saved without user confirmation. */
+    public static void attachScreenSource(Transaction bill, AutoCategoryClassifier.Input input) {
+        if (bill.type != input.type || (bill.type != 0 && bill.type != 1) || input.packageName.isEmpty()
+                || !ScreenCategoryTextExtractor.hasMerchant(input.description)) return;
+        bill.screenSourcePackage = input.packageName;
+        bill.screenMerchantIdentity = AutoCategoryClassifier.learningIdentity(input.description);
+    }
+
+    /** Learn a real suggestion or a correction only after the confirmation was saved. */
+    public static void rememberConfirmation(Context context, Transaction bill, AutoCategoryClassifier.Result initial) {
+        if (initial.source == AutoCategoryClassifier.Source.FALLBACK
+                && sameClassification(bill, initial.category, initial.subCategory)) return;
+        rememberCategory(context, bill);
+    }
+
+    public static void rememberCategoryEdit(Context context, Transaction previous, Transaction updated) {
+        if (previous.type == updated.type && !sameClassification(updated, previous.category, previous.subCategory)) {
+            rememberCategory(context, updated);
+        }
+    }
+
+    private static boolean sameClassification(Transaction bill, String category, String subCategory) {
+        return value(bill.category).equals(value(category)) && value(bill.subCategory).equals(value(subCategory));
+    }
+
+    private static String value(String text) {
+        return text == null ? "" : text.trim();
+    }
+
+    private static synchronized void rememberCategory(Context context, Transaction bill) {
+        if (!isLearningEnabled(context) || (bill.type != 0 && bill.type != 1)
+                || value(bill.screenSourcePackage).isEmpty() || value(bill.screenMerchantIdentity).isEmpty()) return;
+        AutoCategoryClassifier.Result confirmed = AutoCategoryClassifier.validate(getCatalog(context, bill.type),
+                bill.category, bill.subCategory, AutoCategoryClassifier.Source.LEARNED, CategoryManager.isSubCategoryEnabled(context));
         if (confirmed == null) return;
-        boolean unchanged = confirmed.category.equals(initial.category)
-                && confirmed.subCategory.equals(initial.subCategory);
-        if (unchanged && initial.source != AutoCategoryClassifier.Source.AI) return;
         List<AutoCategoryClassifier.Learned> rules = new ArrayList<>(getLearned(context));
-        rules.removeIf(rule -> rule.type == finalType && rule.packageName.equals(input.packageName)
-                && rule.identity.equals(identity));
-        rules.add(0, new AutoCategoryClassifier.Learned(input.packageName, identity, finalType,
-                confirmed.category, confirmed.subCategory));
+        if (!rules.isEmpty()) {
+            AutoCategoryClassifier.Learned newest = rules.get(0);
+            if (newest.type == bill.type && newest.packageName.equals(bill.screenSourcePackage)
+                    && newest.identity.equals(bill.screenMerchantIdentity) && newest.category.equals(confirmed.category)
+                    && newest.subCategory.equals(confirmed.subCategory)) return;
+        }
+        rules.removeIf(rule -> rule.type == bill.type && rule.packageName.equals(bill.screenSourcePackage)
+                && rule.identity.equals(bill.screenMerchantIdentity));
+        rules.add(0, new AutoCategoryClassifier.Learned(bill.screenSourcePackage, bill.screenMerchantIdentity,
+                bill.type, confirmed.category, confirmed.subCategory));
         JSONArray array = new JSONArray();
         try {
             for (int i = 0; i < Math.min(MAX_LEARNED, rules.size()); i++) {
@@ -153,11 +182,20 @@ public final class AutoCategoryManager {
                 array.put(new JSONObject().put("package", rule.packageName).put("identity", rule.identity)
                         .put("type", rule.type).put("category", rule.category).put("subCategory", rule.subCategory));
             }
+            // The caller backs up the bill and the learned rule together after saving.
             prefs(context).edit().putString(KEY_LEARNED, array.toString()).apply();
-            BackupManager.triggerAutoUploadIfEnabled(context);
         } catch (Exception e) {
             Log.w("AutoCategoryManager", "Could not save learned category");
         }
+    }
+
+    public static Runnable observeLearnedChanges(Context context, Runnable onChange) {
+        SharedPreferences preferences = prefs(context);
+        SharedPreferences.OnSharedPreferenceChangeListener listener = (changed, key) -> {
+            if (key == null || KEY_LEARNED.equals(key)) onChange.run();
+        };
+        preferences.registerOnSharedPreferenceChangeListener(listener);
+        return () -> preferences.unregisterOnSharedPreferenceChangeListener(listener);
     }
 
     public static synchronized void clearLearned(Context context) {

@@ -17,6 +17,8 @@ import androidx.appcompat.widget.SwitchCompat;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import com.example.budgetapp.R;
+import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.util.AutoCategoryClassifier;
 import com.example.budgetapp.util.AutoCategoryManager;
 import com.example.budgetapp.util.AutoCategoryPriority;
 import org.junit.Test;
@@ -35,6 +37,34 @@ import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public class AutoCategorySettingsInstrumentedTest {
+    @Test public void learningCountRefreshesWhenABillIsConfirmedWhileSettingsRemainVisible() {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        android.content.SharedPreferences prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+        String key = "screen_category_learned_rules";
+        String original = prefs.getString(key, null);
+        boolean enabled = AutoCategoryManager.isLearningEnabled(context);
+        AutoCategoryManager.clearLearned(context);
+        AutoCategoryManager.setLearningEnabled(context, true);
+        try (ActivityScenario<AutoCategorySettingsActivity> scenario = ActivityScenario.launch(AutoCategorySettingsActivity.class)) {
+            scenario.onActivity(activity -> {
+                TextView count = activity.findViewById(R.id.tv_category_learning_count);
+                assertEquals(activity.getString(R.string.auto_category_learning_count, 0, AutoCategoryManager.MAX_LEARNED), count.getText().toString());
+                String category = AutoCategoryManager.getCatalog(context, 0).get(0).name;
+                Transaction bill = new Transaction(1000, 0, category, 1.0);
+                AutoCategoryManager.attachScreenSource(bill, new AutoCategoryClassifier.Input("test.learning", "示例店铺", 0, ""));
+                AutoCategoryManager.rememberConfirmation(context, bill,
+                        new AutoCategoryClassifier.Result(category, "", AutoCategoryClassifier.Source.LOCAL));
+            });
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+            scenario.onActivity(activity -> assertEquals(activity.getString(R.string.auto_category_learning_count, 1,
+                    AutoCategoryManager.MAX_LEARNED), ((TextView) activity.findViewById(R.id.tv_category_learning_count)).getText().toString()));
+        } finally {
+            if (original == null) prefs.edit().remove(key).commit();
+            else prefs.edit().putString(key, original).commit();
+            AutoCategoryManager.setLearningEnabled(context, enabled);
+        }
+    }
+
     @Test public void settingsInflateAndShowPersistedState() throws Exception {
         try (ActivityScenario<AutoCategorySettingsActivity> scenario = ActivityScenario.launch(AutoCategorySettingsActivity.class)) {
             scenario.onActivity(activity -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));

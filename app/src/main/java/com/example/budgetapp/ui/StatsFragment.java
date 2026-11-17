@@ -831,7 +831,7 @@ public class StatsFragment extends Fragment {
                     updateT.assetId = selectedAssetId;
                     updateT.subCategory = selectedSubCategory[0]; // 【新增】更新二级分类
                     // 【修复】使用带资产同步的方法
-                    viewModel.updateTransactionWithAssetSync(existingTransaction, updateT);
+                    viewModel.updateTransactionWithAssetSync(updateT);
                 }
                 dialog.dismiss();
                 if (keepRecording && existingTransaction == null) {

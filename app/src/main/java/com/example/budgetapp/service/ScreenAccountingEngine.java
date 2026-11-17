@@ -527,7 +527,11 @@ public class ScreenAccountingEngine extends ContextWrapper {
             }
             description = ScreenCategoryTextExtractor.extract(texts, description);
         }
-        final String merchantDescription = description;
+        dispatchConfirmWindow(root, amount, type, hint, note, assetId, symbol, transactionTime, sourcePackage, description);
+    }
+
+    private void dispatchConfirmWindow(ScreenNode root, double amount, int type, String hint,
+            String note, int assetId, String symbol, long transactionTime, String sourcePackage, String merchantDescription) {
         // Capture the actual package now (including separate Meituan apps), not a later active window.
         final String actualSourcePackage = root != null && root.getPackageName() != null
                 ? root.getPackageName().toString() : sourcePackage;
@@ -586,7 +590,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
                 boolean silent = silentAtDetection && captureSettings.isSilentAccountingEnabled();
                 if (replay != null) replay.observer.onClassified(silent);
                 if (silent) {
-                    saveSilently(amount, type, current, note, assetId, symbol, transactionTime);
+                    saveSilently(amount, type, current, note, assetId, symbol, transactionTime, input);
                 } else {
                     showResolvedConfirmWindow(amount, type, current, note, assetId, symbol, transactionTime, input);
                 }
@@ -618,7 +622,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
     }
 
     private void saveSilently(double amount, int type, AutoCategoryClassifier.Result classification,
-            String note, int matchedAssetId, String symbol, long time) {
+            String note, int matchedAssetId, String symbol, long time, AutoCategoryClassifier.Input input) {
         if (!Double.isFinite(amount) || amount <= 0) return;
         String currency = getSharedPreferences("app_prefs", MODE_PRIVATE).getBoolean("enable_currency", false)
                 ? symbol : "¥";
@@ -633,7 +637,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
                 if (asset != null && (asset.type == 0 || asset.type == 1)) accountId = asset.id;
             }
             persistTransaction(amount, type, classification.category, subCategory,
-                    AutoCategoryClassifier.cleanDescription(note), null, accountId, currency, "", time, null, -1, false, null);
+                    AutoCategoryClassifier.cleanDescription(note), null, accountId, currency, "", time, null, -1, false, input, null);
         });
     }
 
@@ -663,7 +667,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
                 lastWindowDismissTime = System.currentTimeMillis();
                 int id = config.isAssetsEnabled() ? preferredAssetId(matchedAssetId) : 0;
                 saveToDatabase(amount, type, category, selectedSubCategory, AutoCategoryClassifier.cleanDescription(note),
-                        null, id, currency, "", transactionTime, null, -1, false, null);
+                        null, id, currency, "", transactionTime, null, -1, false, null, null);
             }, () -> {
                 isWindowShowing = false;
                 lastWindowDismissTime = System.currentTimeMillis();
@@ -676,7 +680,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
             if (confirmationRequired) return;
             int finalAssetId = (matchedAssetId > 0) ? matchedAssetId : 0;
             saveToDatabase(amount, type, category, selectedSubCategory, AutoCategoryClassifier.cleanDescription(note),
-                    null, finalAssetId, initialSymbol, "", transactionTime, null, -1, false, null);
+                    null, finalAssetId, initialSymbol, "", transactionTime, null, -1, false, classificationInput, null);
             return;
         }
 
@@ -936,16 +940,12 @@ public class ScreenAccountingEngine extends ContextWrapper {
 
                     // 【核心】：带上对方资产信息
                     // 【修改】：末尾加上 isExcludedFromBudget[0]
-                    final int confirmedType = finalTypeInt;
-                    final String confirmedCategory = finalCatName;
-                    final String confirmedSubCategory = selectedSubCategory;
                     // The prefilled merchant is text, not an instruction to modify a linked debt.
                     String accountRemark = finalRemarkText.equals(suggestedRemark) ? null : finalRemarkText;
                     saveToDatabase(finalAmountValue, finalTypeInt, finalCatName, selectedSubCategory,
                             finalRemarkText, accountRemark, assetIdInt, finalSymbol, currentPhotoPath[0],
                             transactionTime, targetObject, liabilityLoanType, isExcludedFromBudget[0],
-                            () -> AutoCategoryManager.rememberConfirmation(getApplicationContext(), classificationInput,
-                                    classification, confirmedType, confirmedCategory, confirmedSubCategory));
+                            classificationInput, classification);
                     closeWindow(windowManager, floatView);
                     Toast.makeText(this, "已记账", Toast.LENGTH_SHORT).show();
                 } catch (Exception e) {
@@ -1134,10 +1134,11 @@ public class ScreenAccountingEngine extends ContextWrapper {
 
     private void saveToDatabase(double amount, int type, String category, String subCategory, String remark,
             String accountRemark, int assetId, String currencySymbol, String photoPath, long transactionTime,
-            String targetObject, int liabilityLoanType, boolean excludeFromBudget, Runnable onSaved) {
+            String targetObject, int liabilityLoanType, boolean excludeFromBudget,
+            AutoCategoryClassifier.Input input, AutoCategoryClassifier.Result confirmedSuggestion) {
         write(() -> persistTransaction(amount, type, category, subCategory,
                 remark, accountRemark, assetId, currencySymbol, photoPath, transactionTime, targetObject,
-                liabilityLoanType, excludeFromBudget, onSaved));
+                liabilityLoanType, excludeFromBudget, input, confirmedSuggestion));
     }
 
     private void write(Runnable task) {
@@ -1158,7 +1159,8 @@ public class ScreenAccountingEngine extends ContextWrapper {
     /** Common database, asset, widget and backup path; called on the write executor. */
     private void persistTransaction(double amount, int type, String category, String subCategory, String remark,
             String accountRemark, int assetId, String currencySymbol, String photoPath, long transactionTime,
-            String targetObject, int liabilityLoanType, boolean excludeFromBudget, Runnable onSaved) {
+            String targetObject, int liabilityLoanType, boolean excludeFromBudget,
+            AutoCategoryClassifier.Input input, AutoCategoryClassifier.Result confirmedSuggestion) {
         AppDatabase db = database;
         Transaction t = new Transaction();
         t.date = transactionTime;
@@ -1172,6 +1174,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
         t.photoPath = photoPath;
         t.targetObject = targetObject;
         t.excludeFromBudget = excludeFromBudget;
+        if (replay == null && input != null) AutoCategoryManager.attachScreenSource(t, input);
         db.transactionDao().insert(t);
 
         // 1. 同步目标资产(如存在)
@@ -1237,13 +1240,11 @@ public class ScreenAccountingEngine extends ContextWrapper {
             return;
         }
 
-        // 👇👇👇 一键刷新所有桌面小组件 👇👇👇
-        com.example.budgetapp.widget.WidgetUtils.updateAllWidgets(getApplicationContext());
-
-        if (onSaved != null) onSaved.run();
-
-        // 触发 WebDAV 自动同步
+        if (confirmedSuggestion != null) {
+            AutoCategoryManager.rememberConfirmation(getApplicationContext(), t, confirmedSuggestion);
+        }
         com.example.budgetapp.BackupManager.triggerAutoUploadIfEnabled(getApplicationContext());
+        com.example.budgetapp.widget.WidgetUtils.updateAllWidgets(getApplicationContext());
     }
 
     /**
@@ -2311,92 +2312,36 @@ public class ScreenAccountingEngine extends ContextWrapper {
         return false;
     }
 
-    /**
-     * 专门适配支付宝支付成功页面（基于最新节点树结构）
-     * 提取实际支付金额、收款方（作为记录标识），以及付款方式（模糊匹配资产）
-     * 【升级版】：修复无“收款方”标签时抓取失败的问题，直接从金额下方拦截商户名
-     */
+    /** Extracts the headline amount, payee and payment method from a successful Alipay payment. */
     private boolean handleAlipayPaySuccessPage(ScreenNode root) {
         if (root == null) return false;
 
         List<ScreenNode> allNodes = new ArrayList<>();
-        flattenNodes(root, allNodes); // 展平节点树
-
-        boolean isPaySuccess = false;
-        String payeeName = "";
-        String paymentMethod = "";
-        double amount = -1;
-
-        for (int i = 0; i < allNodes.size(); i++) {
-            ScreenNode node = allNodes.get(i);
-            String text = node.getText() != null ? node.getText().toString().trim() : "";
-            String desc = node.getContentDescription() != null ? node.getContentDescription().toString().trim() : "";
-
-            String content = !text.isEmpty() ? text : desc;
-
-            // 1. 识别“支付成功”页面特征
-            if ("支付成功".equals(content) || content.startsWith("支付成功")) {
-                isPaySuccess = true;
-            }
-
-            // 2. 提取金额（在“支付成功”后出现的纯数字或带小数的数字，如 "4.83"）
-            if (isPaySuccess && amount == -1) {
-                // 正则匹配：纯数字，可带1到2位小数
-                if (content.matches("^\\d+(\\.\\d{1,2})?$")) {
-                    try {
-                        amount = Double.parseDouble(content);
-
-                        // 【核心修复】：没有“收款方”标签时，商户名紧跟在纯数字金额的后面
-                        for (int j = i + 1; j < allNodes.size(); j++) {
-                            ScreenNode nextNode = allNodes.get(j);
-                            String nextText = nextNode.getText() != null ? nextNode.getText().toString().trim() : "";
-                            String nextDesc = nextNode.getContentDescription() != null ? nextNode.getContentDescription().toString().trim() : "";
-                            String nextContent = !nextText.isEmpty() ? nextText : nextDesc;
-
-                            // 排除空节点、以及带有 ￥、¥ 或 - 符号的优惠券金额干扰项
-                            if (!nextContent.isEmpty() && !nextContent.contains("￥") && !nextContent.contains("¥") && !nextContent.startsWith("-")) {
-                                payeeName = nextContent;
-                                break; // 抓到商户名立刻跳出
-                            }
-                        }
-                    } catch (Exception e) {
-                        // 解析失败继续找
-                    }
-                }
-            }
-
-            // 3. 提取资产来源 (付款方式)
-            if ("付款方式".equals(content)) {
-                // 向下遍历，跨过不可见的排版空节点，寻找第一个带有文字的真实节点
-                for (int j = i + 1; j < allNodes.size(); j++) {
-                    ScreenNode nextNode = allNodes.get(j);
-                    String nextText = nextNode.getText() != null ? nextNode.getText().toString().trim() : "";
-                    String nextDesc = nextNode.getContentDescription() != null ? nextNode.getContentDescription().toString().trim() : "";
-                    String nextContent = !nextText.isEmpty() ? nextText : nextDesc;
-                    if (!nextContent.isEmpty()) {
-                        paymentMethod = nextContent;
-                        break;
-                    }
-                }
-            }
-
-            // 4. 兼容老版本提取收款方 (如果页面有明确的“收款方”标签)
-            if ("收款方".equals(content) && payeeName.isEmpty()) {
-                for (int j = i + 1; j < allNodes.size(); j++) {
-                    ScreenNode nextNode = allNodes.get(j);
-                    String nextText = nextNode.getText() != null ? nextNode.getText().toString().trim() : "";
-                    String nextDesc = nextNode.getContentDescription() != null ? nextNode.getContentDescription().toString().trim() : "";
-                    String nextContent = !nextText.isEmpty() ? nextText : nextDesc;
-                    if (!nextContent.isEmpty()) {
-                        payeeName = nextContent;
-                        break;
-                    }
-                }
-            }
+        flattenNodes(root, allNodes);
+        List<String> texts = new ArrayList<>();
+        for (ScreenNode node : allNodes) {
+            String value = getTextOrDescription(node);
+            if (value != null && !value.trim().isEmpty()) texts.add(value.trim());
         }
 
-        // 判定：识别到支付成功且金额合法
-        if (isPaySuccess && amount > 0) {
+        boolean isPaySuccess = false;
+        boolean isTransferSuccess = false;
+        String paymentMethod = "";
+        double amount = -1;
+        int amountIndex = -1;
+        for (int i = 0; i < texts.size(); i++) {
+            String content = texts.get(i);
+            if (content.startsWith("支付成功")) isPaySuccess = true;
+            if ("转账成功".equals(content)) isTransferSuccess = true;
+            if ((isPaySuccess || isTransferSuccess) && amountIndex == -1 && content.matches("\\d+(\\.\\d{1,2})?")) {
+                amount = Double.parseDouble(content);
+                amountIndex = i;
+            }
+            if ("付款方式".equals(content) && i + 1 < texts.size()) paymentMethod = texts.get(i + 1);
+        }
+
+        String payeeName = ScreenCategoryTextExtractor.extractAlipayPayee(texts, isPaySuccess ? amountIndex : -1);
+        if ((isPaySuccess || (isTransferSuccess && !payeeName.isEmpty())) && amount > 0) {
             long now = System.currentTimeMillis();
             if (now - lastWindowDismissTime < 2500) return true;
 
@@ -2415,7 +2360,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
             SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm", Locale.getDefault());
             final String recordIdentifier = sdf.format(new Date(now)) + " " + finalPayee;
 
-            String businessHint = "购物";
+            String businessHint = isTransferSuccess ? "转账" : "购物";
 
             // 【资产匹配】：使用抓取到的付款方式去模糊匹配
             String assetKeyword = paymentMethod.isEmpty() ? "支付宝" : paymentMethod;
@@ -2424,7 +2369,9 @@ public class ScreenAccountingEngine extends ContextWrapper {
             // 触发记账弹窗 (type: 0 代表支出)
             final String finalBusinessHint = businessHint;
             long finalTimestamp = now;
-            dispatchConfirmWindow(root, finalAmount, 0, finalBusinessHint, recordIdentifier, autoAssetId, "¥", finalTimestamp, "com.eg.android.AlipayGphone");
+            dispatchConfirmWindow(root, finalAmount, 0, finalBusinessHint, recordIdentifier, autoAssetId, "¥",
+                    finalTimestamp, "com.eg.android.AlipayGphone",
+                    ScreenCategoryTextExtractor.hasMerchant(payeeName) ? payeeName : "");
 
             return true;
         }

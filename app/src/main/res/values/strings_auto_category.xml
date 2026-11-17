@@ -6,8 +6,8 @@
     <string name="auto_category_priority">先匹配确认学习；未命中时，启用 AI 才会请求模型。拖动把手可调整本地回退顺序。</string>
     <string name="auto_category_rules">管理分类关键词规则</string>
     <string name="auto_category_rules_description">与 AI 记账共用规则；屏幕记账只匹配相同收支类型，不改动金额、时间或收支类型。</string>
-    <string name="auto_category_learning">确认窗口反向学习</string>
-    <string name="auto_category_learning_description">确认窗口成功保存时，会记住你接受的 AI 分类或手动修改的分类。以后同一应用、收支类型和商户再次出现时优先使用。关闭后不记录也不匹配；取消或免确认入账不会学习。</string>
+    <string name="auto_category_learning">反向学习</string>
+    <string name="auto_category_learning_description">确认入账，或在明细中修改自动账单的分类后，会记住已识别商户的分类。同一应用和收支类型下再次识别该商户时优先使用。免确认入账本身不会新增学习记录。</string>
     <string name="auto_category_learning_count">已保存 %1$d 条学习记录（最多 %2$d 条）</string>
     <string name="auto_category_clear">清除学习记录</string>
     <string name="auto_category_clear_message">仅清除自动分类的学习记录，不删除账单、分类预设或关键词规则。此操作不可撤销。</string>

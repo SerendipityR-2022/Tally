@@ -1303,7 +1303,7 @@ public class DetailsFragment extends Fragment {
                     updateT.photoPath = currentPhotoPath[0];
                     updateT.excludeFromBudget = isExcludedFromBudget[0];
 
-                    viewModel.updateTransactionWithAssetSync(existingTransaction, updateT);
+                    viewModel.updateTransactionWithAssetSync(updateT);
                 } else {
                     // 新增交易
                     Transaction newT = new Transaction(ts, type, category, amount, "", userRemark);
