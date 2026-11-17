@@ -48,7 +48,6 @@ import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.CategoryIcon;
 import com.example.budgetapp.util.CategoryManager;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
-import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
@@ -83,7 +82,7 @@ import java.util.regex.Pattern;
 public class StatsFragment extends Fragment {
 
     private FinanceViewModel viewModel;
-    private LineChart lineChart;
+    private LedgerTrendChart lineChart;
     private LedgerCompositionChart expensePieChart;
     private LedgerCompositionChart incomePieChart;
     private LinearLayout layoutTrend;
@@ -105,7 +104,6 @@ public class StatsFragment extends Fragment {
     private LocalDate selectedDate = LocalDate.now();
     private List<Transaction> allTransactions = new ArrayList<>();
     private List<AssetAccount> assetList = new ArrayList<>();
-    private CustomMarkerView markerView;
 
     // 新增状态变量，用于记录当前打开的弹窗
     private AlertDialog currentCategoryDetailDialog;
@@ -977,13 +975,12 @@ public class StatsFragment extends Fragment {
             return isDirectionLocked && isHorizontalSwipe;
         });
 
-        // 给图表添加触摸监听器，让它们也能响应横向滑动
+        // 构成图仍可横滑翻期；趋势图独立处理数据点选择。
         View.OnTouchListener chartTouchListener = (v, event) -> {
             gestureDetector.onTouchEvent(event);
             return false;
         };
 
-        if (lineChart != null) lineChart.setOnTouchListener(chartTouchListener);
         if (expensePieChart != null) expensePieChart.setOnTouchListener(chartTouchListener);
         if (incomePieChart != null) incomePieChart.setOnTouchListener(chartTouchListener);
     }
@@ -1298,7 +1295,8 @@ public class StatsFragment extends Fragment {
             }
         }
         int elapsedBucket = currentMode == 0 ? today.getMonthValue() : currentMode == 1 ? today.getDayOfMonth() : today.getDayOfWeek().getValue();
-        renderTrend(income, expense, maxX, currentPeriod ? Math.max(lastBucket, elapsedBucket) : maxX, suffix, customLabels);
+        renderTrend(income, expense, start, maxX,
+                currentPeriod ? Math.max(lastBucket, elapsedBucket) : maxX, suffix, customLabels);
         renderComposition(expensePieChart, R.id.layout_expense_section, R.id.ledger_expense_categories,
                 expenseByCategory, expenseCounts, totalExpense, 0);
         renderComposition(incomePieChart, R.id.ledger_income_section, R.id.ledger_income_categories,
@@ -1336,17 +1334,24 @@ public class StatsFragment extends Fragment {
 
     private void label(int id, CharSequence text) { ((TextView) dashboard.findViewById(id)).setText(text); }
 
-    private void renderTrend(Map<Integer, Double> income, Map<Integer, Double> expense,
+    private void renderTrend(Map<Integer, Double> income, Map<Integer, Double> expense, LocalDate start,
                              int maxX, int buckets, String suffix, String[] customLabels) {
         boolean hasData = !income.isEmpty() || !expense.isEmpty();
         layoutTrend.setVisibility(hasData ? View.VISIBLE : View.GONE);
-        if (!hasData) return;
-        String title = trendMode == 1 ? "收入趋势" : trendMode == 2 ? "结余趋势" : "支出趋势";
+        if (!hasData) {
+            lineChart.setTrendData(null, null);
+            return;
+        }
+        String series = trendMode == 1 ? "收入" : trendMode == 2 ? "结余" : "支出";
+        String title = series + "趋势";
         label(R.id.ledger_trend_title, title);
         List<Entry> points = new ArrayList<>();
         for (int i = 1; i <= Math.min(buckets, maxX); i++) {
             double in = income.getOrDefault(i, 0.0), out = expense.getOrDefault(i, 0.0);
-            points.add(new Entry(i, (float) (trendMode == 1 ? in : trendMode == 2 ? in - out : out)));
+            double amount = trendMode == 1 ? in : trendMode == 2 ? in - out : out;
+            LocalDate day = start.plusDays(i - 1);
+            String date = currentMode == 0 ? i + "月" : day.getMonthValue() + "/" + day.getDayOfMonth();
+            points.add(new Entry(i, (float) amount, new CustomMarkerView.Label(date + " " + series, amount)));
         }
         int color = requireContext().getColor(trendMode == 1 ? R.color.ledger_income : R.color.ledger_chart_blue);
         LineDataSet set = new LineDataSet(points, title);
@@ -1360,8 +1365,7 @@ public class StatsFragment extends Fragment {
         set.setDrawFilled(trendMode != 2);
         set.setFillColor(color);
         set.setFillAlpha(33);
-        set.setHighLightColor(color);
-        set.enableDashedHighlightLine(5f, 3f, 0);
+        set.setDrawVerticalHighlightIndicator(false);
         set.setDrawHorizontalHighlightIndicator(false);
         XAxis x = lineChart.getXAxis();
         x.setAxisMinimum(1f);
@@ -1376,11 +1380,8 @@ public class StatsFragment extends Fragment {
             }
         });
         if (trendMode == 2) lineChart.getAxisLeft().resetAxisMinimum(); else lineChart.getAxisLeft().setAxisMinimum(0f);
-        lineChart.setData(new LineData(set));
-        lineChart.highlightValues(null);
-        markerView.setSourceData(income, expense, customLabels != null ? "" : suffix, customLabels);
         lineChart.setContentDescription(title);
-        lineChart.invalidate();
+        lineChart.setTrendData(new LineData(set), currentMode + ":" + start + ":" + trendMode);
     }
 
     private void renderComposition(LedgerCompositionChart chart, int panelId, int rowsId, Map<String, Double> values,
@@ -1664,13 +1665,6 @@ public class StatsFragment extends Fragment {
         x.setTextColor(muted);
         x.setGridColor(rule);
         x.setAxisLineColor(rule);
-        lineChart.setExtraOffsets(1f, 6f, 6f, 3f);
-        lineChart.setDragEnabled(false);
-        lineChart.setScaleEnabled(false);
-        lineChart.setHighlightPerDragEnabled(false);
-        markerView = new CustomMarkerView(requireContext(), R.layout.view_chart_marker);
-        markerView.setChartView(lineChart);
-        lineChart.setMarker(markerView);
     }
 
     @Override

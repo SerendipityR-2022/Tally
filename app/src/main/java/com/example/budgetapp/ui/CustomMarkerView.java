@@ -1,6 +1,9 @@
 package com.example.budgetapp.ui;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.widget.TextView;
 
 import com.example.budgetapp.R;
@@ -9,68 +12,103 @@ import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.highlight.Highlight;
 import com.github.mikephil.charting.utils.MPPointF;
 
-import java.util.HashMap;
-import java.util.Map;
+final class CustomMarkerView extends MarkerView {
+    private static final float ARROW_HEIGHT_DP = 6f;
+    private static final float ARROW_TO_POINT_DP = 6f;
+    private final LedgerTrendChart chart;
+    private final TextView title;
+    private final TextView amount;
+    private final float density;
+    private final int bubbleColor;
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path arrow = new Path();
+    private final MPPointF offset = new MPPointF();
+    private Entry boundEntry;
+    private int measuredForWidth = -1;
+    private int pointColor;
 
-public class CustomMarkerView extends MarkerView {
-    private final TextView tvDate;
-    private final TextView tvIncome;
-    private final TextView tvExpense;
-    private final TextView tvNet;
-
-    private String suffix = ""; // 单位 (月/日)
-    private String[] customLabels = null; // 用于周视图 (周一, 周二...)
-
-    // 数据源缓存
-    private Map<Integer, Double> incomeMap = new HashMap<>();
-    private Map<Integer, Double> expenseMap = new HashMap<>();
-
-    public CustomMarkerView(Context context, int layoutResource) {
-        super(context, layoutResource);
-        tvDate = findViewById(R.id.tv_marker_date);
-        tvIncome = findViewById(R.id.tv_marker_income);
-        tvExpense = findViewById(R.id.tv_marker_expense);
-        tvNet = findViewById(R.id.tv_marker_net);
+    CustomMarkerView(Context context, LedgerTrendChart chart) {
+        super(context, R.layout.view_chart_marker);
+        this.chart = chart;
+        title = findViewById(R.id.tv_marker_date);
+        amount = findViewById(R.id.tv_marker_amount);
+        density = getResources().getDisplayMetrics().density;
+        bubbleColor = context.getColor(R.color.ledger_trend_marker);
+        measureLabel(0);
     }
 
-    // 关键方法：接收外部传入的数据源
-    public void setSourceData(Map<Integer, Double> income, Map<Integer, Double> expense, String suffix, String[] customLabels) {
-        this.incomeMap = income;
-        this.expenseMap = expense;
-        this.suffix = suffix;
-        this.customLabels = customLabels;
+    float getHeadroom() { return getMeasuredHeight() + dp(ARROW_HEIGHT_DP + ARROW_TO_POINT_DP + 4f); }
+
+    String describe(Entry entry) {
+        Label label = (Label) entry.getData();
+        return label.title + "，" + label.amountText();
     }
 
-    @Override
-    public void refreshContent(Entry e, Highlight highlight) {
-        // e.getX() 得到的是 X 轴的索引 (1, 2, 3...)
-        int index = (int) e.getX();
+    @Override public void refreshContent(Entry entry, Highlight highlight) {
+        if (boundEntry != entry) {
+            Label label = (Label) entry.getData();
+            title.setText(label.title);
+            amount.setText(label.amountText());
+            boundEntry = entry;
+            measuredForWidth = -1;
+        }
+        if (measuredForWidth != chart.getWidth()) measureLabel(chart.getWidth());
+        pointColor = chart.getData().getDataSetByIndex(highlight.getDataSetIndex()).getColor();
+    }
 
-        // 1. 设置日期标题
-        if (customLabels != null && index >= 1 && index < customLabels.length) {
-            tvDate.setText(customLabels[index]); // 显示 "周一"
-        } else {
-            tvDate.setText(index + suffix); // 显示 "1月" 或 "15日"
+    private void measureLabel(int maxWidth) {
+        measure(MeasureSpec.makeMeasureSpec(maxWidth, maxWidth > 0 ? MeasureSpec.AT_MOST : MeasureSpec.UNSPECIFIED),
+                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+        layout(0, 0, getMeasuredWidth(), getMeasuredHeight());
+        measuredForWidth = maxWidth;
+    }
+
+    @Override public MPPointF getOffsetForDrawingAtPoint(float x, float y) {
+        float left = Math.max(0, Math.min(x - getWidth() / 2f, chart.getWidth() - getWidth()));
+        offset.x = left - x;
+        // The chart reserves this height so the label never covers the selected point.
+        offset.y = -getHeight() - dp(ARROW_HEIGHT_DP + ARROW_TO_POINT_DP);
+        return offset;
+    }
+
+    @Override public void draw(Canvas canvas, float x, float y) {
+        paint.setColor(pointColor);
+        paint.setAlpha(64);
+        canvas.drawCircle(x, y, dp(8f), paint);
+        paint.setAlpha(255);
+        canvas.drawCircle(x, y, dp(3.5f), paint);
+
+        MPPointF position = getOffsetForDrawingAtPoint(x, y);
+        float left = x + position.x, top = y + position.y;
+        float right = left + getWidth(), bottom = top + getHeight();
+        float corner = dp(10f), halfArrow = dp(5f);
+        float shoulder = Math.min(corner + halfArrow, getWidth() / 2f);
+        float base = Math.max(left + shoulder, Math.min(x, right - shoulder));
+        arrow.rewind();
+        arrow.moveTo(base - halfArrow, bottom - dp(1f));
+        arrow.lineTo(x, bottom + dp(ARROW_HEIGHT_DP));
+        arrow.lineTo(base + halfArrow, bottom - dp(1f));
+        arrow.close();
+        paint.setColor(bubbleColor);
+        canvas.drawRoundRect(left, top, right, bottom, corner, corner, paint);
+        canvas.drawPath(arrow, paint);
+        int checkpoint = canvas.save();
+        canvas.translate(left, top);
+        draw(canvas);
+        canvas.restoreToCount(checkpoint);
+    }
+
+    private float dp(float value) { return value * density; }
+
+    static final class Label {
+        final String title;
+        final double amount;
+
+        Label(String title, double amount) {
+            this.title = title;
+            this.amount = amount;
         }
 
-        // 2. 从 Map 中查找全部数据 (无论点击的是哪条线)
-        double in = incomeMap.getOrDefault(index, 0.0);
-        double out = expenseMap.getOrDefault(index, 0.0);
-        double net = in - out;
-
-        // 3. 设置数值显示 (【修改点】改为保留两位小数)
-        tvIncome.setText(String.format("收入: +%.2f", in));
-        tvExpense.setText(String.format("支出: -%.2f", out));
-
-        String netSign = net >= 0 ? "+" : "";
-        tvNet.setText(String.format("净收支: %s%.2f", netSign, net));
-
-        super.refreshContent(e, highlight);
-    }
-
-    @Override
-    public MPPointF getOffset() {
-        // 让气泡居中显示在点的上方
-        return new MPPointF(-(getWidth() / 2f), -getHeight());
+        String amountText() { return "¥" + LedgerTransactionRow.money(amount); }
     }
 }

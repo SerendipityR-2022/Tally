@@ -8,13 +8,16 @@ import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.os.SystemClock;
 import android.view.ContextThemeWrapper;
+import android.view.InputDevice;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.MotionEvent;
+import android.view.ViewConfiguration;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.core.view.ViewCompat;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.fragment.NavHostFragment;
 import androidx.test.core.app.ActivityScenario;
@@ -25,6 +28,9 @@ import com.example.budgetapp.R;
 import com.example.budgetapp.database.Transaction;
 import com.github.mikephil.charting.charts.BarChart;
 import com.github.mikephil.charting.charts.PieChart;
+import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.utils.MPPointF;
 import java.io.FileOutputStream;
 import java.io.File;
 import java.time.LocalDate;
@@ -154,6 +160,173 @@ public class LedgerReferenceInstrumentedTest {
             verifyComposition(scenario, root.get(), R.id.chart_pie_income, R.id.ledger_income_categories,
                     "158.00\n收入（元）", "100.00\n薪资（元）", "薪资 - 收入清单", "tally-income-composition.png");
         }
+    }
+
+    @Test public void trendPointStaysSelectedAndHoldingLetsItSlideWithoutChangingPeriod() throws Exception {
+        LocalDate first = LocalDate.now().withDayOfMonth(1);
+        LocalDate peak = first.plusDays(4);
+        LocalDate last = first.plusMonths(1).minusDays(1);
+        List<Transaction> fixture = java.util.Arrays.asList(
+                tx(first, 10, 0, "购物", 24.30, ""),
+                tx(peak, 10, 0, "餐饮", 99.79, ""),
+                tx(peak, 11, 1, "奖金", 32.41, ""),
+                tx(last, 10, 0, "交通", 47.51, ""));
+        Instrumentation test = InstrumentationRegistry.getInstrumentation();
+        String prefix = first.getMonthValue() + "/";
+
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            navigate(scenario, R.id.nav_stats);
+            AtomicReference<View> statsView = new AtomicReference<>();
+            scenario.onActivity(activity -> {
+                StatsFragment stats = (StatsFragment) active(activity);
+                stats.renderTransactions(fixture);
+                statsView.set(stats.requireView());
+            });
+            test.waitForIdleSync();
+            View root = statsView.get();
+            ScrollView scroll = root.findViewById(R.id.scroll_view_stats);
+            LedgerTrendChart chart = root.findViewById(R.id.chart_line);
+            float[][] screenPoints = new float[3][];
+            int[] scrollY = new int[1];
+            String[] period = new String[1];
+            scenario.onActivity(activity -> {
+                Rect rect = new Rect();
+                chart.getDrawingRect(rect);
+                scroll.offsetDescendantRectToMyCoords(chart, rect);
+                scroll.scrollTo(0, rect.top - 24);
+                scrollY[0] = scroll.getScrollY();
+                period[0] = text(root, R.id.tv_current_date_range);
+                screenPoints[0] = screenPoint(chart, 0);
+                screenPoints[1] = screenPoint(chart, 4);
+                screenPoints[2] = screenPoint(chart, last.getDayOfMonth() - 1);
+            });
+
+            tapScreen(test, screenPoints[1]);
+            tapScreen(test, screenPoints[1]); // A second tap on the same point keeps its label.
+            AtomicReference<Bitmap> trendScreenshot = new AtomicReference<>();
+            boolean screenshots = "true".equals(InstrumentationRegistry.getArguments().getString("trendScreens"));
+            scenario.onActivity(activity -> {
+                assertTrendPoint(chart, 5, prefix + "5 支出，¥99.79");
+                Bitmap bitmap = verifyTrendMarker(chart);
+                if (screenshots) trendScreenshot.set(bitmap); else bitmap.recycle();
+            });
+            if (screenshots) save(trendScreenshot.get(), "tally-trend-point.png");
+
+            long down = SystemClock.uptimeMillis();
+            touchScreen(test, down, MotionEvent.ACTION_DOWN, screenPoints[0][0], screenPoints[0][1]);
+            try {
+                SystemClock.sleep(ViewConfiguration.getLongPressTimeout() + 120);
+                scenario.onActivity(activity -> {
+                    assertTrendPoint(chart, 1, prefix + "1 支出，¥24.30");
+                    verifyTrendMarker(chart).recycle();
+                });
+                touchScreen(test, down, MotionEvent.ACTION_MOVE, screenPoints[1][0], screenPoints[0][1]);
+                scenario.onActivity(activity -> assertTrendPoint(chart, 5, prefix + "5 支出，¥99.79"));
+                touchScreen(test, down, MotionEvent.ACTION_MOVE, screenPoints[2][0], screenPoints[0][1]);
+            } finally {
+                touchScreen(test, down, MotionEvent.ACTION_UP, screenPoints[2][0], screenPoints[0][1]);
+            }
+            SystemClock.sleep(200); // Give any wrongly triggered period animation time to run.
+            scenario.onActivity(activity -> {
+                assertEquals(period[0], text(root, R.id.tv_current_date_range));
+                assertEquals(scrollY[0], scroll.getScrollY());
+                assertTrendPoint(chart, last.getDayOfMonth(), prefix + last.getDayOfMonth() + " 支出，¥47.51");
+                verifyTrendMarker(chart).recycle();
+                ((StatsFragment) active(activity)).renderTransactions(fixture);
+                assertTrendPoint(chart, last.getDayOfMonth(), prefix + last.getDayOfMonth() + " 支出，¥47.51");
+                root.findViewById(R.id.ledger_trend_income).performClick();
+                assertFalse(chart.valuesToHighlight());
+                screenPoints[1] = screenPoint(chart, 4);
+            });
+            tapScreen(test, screenPoints[1]);
+            scenario.onActivity(activity -> {
+                assertTrendPoint(chart, 5, prefix + "5 收入，¥32.41");
+                root.findViewById(R.id.ledger_trend_net).performClick();
+                assertFalse(chart.valuesToHighlight());
+                screenPoints[1] = screenPoint(chart, 4);
+            });
+            tapScreen(test, screenPoints[1]);
+            scenario.onActivity(activity -> assertTrendPoint(chart, 5, prefix + "5 结余，¥-67.38"));
+
+            // Swiping vertically without a hold still scrolls, even if the drag starts on the chart.
+            float[] point = screenPoints[1];
+            swipeScreen(test, point[0], point[1], point[0], point[1] - chart.getHeight() * .45f);
+            scenario.onActivity(activity -> {
+                assertTrue(scroll.getScrollY() > scrollY[0]);
+                assertEquals(period[0], text(root, R.id.tv_current_date_range));
+                scroll.fling(0);
+                scroll.scrollTo(0, 0);
+            });
+            float[] start = new float[2];
+            float[] end = new float[2];
+            scenario.onActivity(activity -> {
+                View metrics = root.findViewById(R.id.ledger_stats_metrics);
+                int[] location = new int[2];
+                metrics.getLocationOnScreen(location);
+                start[0] = location[0] + metrics.getWidth() * .2f;
+                end[0] = location[0] + metrics.getWidth() * .8f;
+                start[1] = end[1] = location[1] + metrics.getHeight() / 2f;
+            });
+            swipeScreen(test, start[0], start[1], end[0], end[1]);
+            SystemClock.sleep(500);
+            scenario.onActivity(activity -> {
+                assertNotEquals(period[0], text(root, R.id.tv_current_date_range));
+                assertFalse(chart.valuesToHighlight());
+            });
+        }
+    }
+
+    private static void assertTrendPoint(LedgerTrendChart chart, int bucket, String description) {
+        assertTrue(chart.valuesToHighlight());
+        assertEquals(bucket, chart.getHighlighted()[0].getX(), 0f);
+        assertEquals(description, ViewCompat.getStateDescription(chart));
+    }
+
+    private static Bitmap verifyTrendMarker(LedgerTrendChart chart) {
+        Bitmap bitmap = Bitmap.createBitmap(chart.getWidth(), chart.getHeight(), Bitmap.Config.ARGB_8888);
+        chart.draw(new Canvas(bitmap));
+        com.github.mikephil.charting.highlight.Highlight selection = chart.getHighlighted()[0];
+        float x = selection.getDrawX(), y = selection.getDrawY();
+        CustomMarkerView marker = (CustomMarkerView) chart.getMarker();
+        MPPointF offset = marker.getOffsetForDrawingAtPoint(x, y);
+        float left = x + offset.x, top = y + offset.y;
+        assertTrue("The label must fit even for a peak or a point at the plot edge", top >= 0 && left >= 0
+                && left + marker.getWidth() <= chart.getWidth() && top + marker.getHeight() < y);
+        assertEquals(chart.getContext().getColor(R.color.ledger_trend_marker),
+                bitmap.getPixel((int) (left + marker.getWidth() / 2f), (int) (top + 3)));
+        return bitmap;
+    }
+
+    private static float[] screenPoint(LedgerTrendChart chart, int index) {
+        Entry entry = chart.getData().getDataSetByIndex(0).getEntryForIndex(index);
+        MPPointF point = chart.getPosition(entry, YAxis.AxisDependency.LEFT);
+        int[] location = new int[2];
+        chart.getLocationOnScreen(location);
+        float[] result = {location[0] + point.x, location[1] + point.y};
+        MPPointF.recycleInstance(point);
+        return result;
+    }
+
+    private static void tapScreen(Instrumentation test, float[] point) {
+        long down = SystemClock.uptimeMillis();
+        touchScreen(test, down, MotionEvent.ACTION_DOWN, point[0], point[1]);
+        touchScreen(test, down, MotionEvent.ACTION_UP, point[0], point[1]);
+    }
+
+    private static void swipeScreen(Instrumentation test, float x, float y, float endX, float endY) {
+        long down = SystemClock.uptimeMillis();
+        touchScreen(test, down, MotionEvent.ACTION_DOWN, x, y);
+        for (int i = 1; i <= 6; i++) {
+            SystemClock.sleep(16);
+            touchScreen(test, down, MotionEvent.ACTION_MOVE, x + (endX - x) * i / 6, y + (endY - y) * i / 6);
+        }
+        touchScreen(test, down, MotionEvent.ACTION_UP, endX, endY);
+    }
+
+    private static void touchScreen(Instrumentation test, long down, int action, float x, float y) {
+        MotionEvent event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0);
+        event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        try { test.sendPointerSync(event); } finally { event.recycle(); }
     }
 
     private static void verifyComposition(ActivityScenario<MainActivity> scenario, View root, int chartId, int rowsId,

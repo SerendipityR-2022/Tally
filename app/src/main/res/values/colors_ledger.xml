@@ -13,6 +13,7 @@
     <color name="ledger_calendar_selection">#494C56</color>
     <color name="ledger_calendar_today">#B9363C</color>
     <color name="ledger_chart_blue">#416BDD</color>
+    <color name="ledger_trend_marker">#4564EB</color>
     <color name="ledger_keypad">#F1EFEA</color>
     <color name="ledger_category_selected">#E0E9FF</color>
     <color name="ledger_income">#A8353E</color>
