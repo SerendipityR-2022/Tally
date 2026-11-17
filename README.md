@@ -2,7 +2,7 @@
 
 [![Android Build](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml/badge.svg)](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml) [下载正式 APK](https://github.com/SerendipityR-2022/Tally/releases/latest)
 
-这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的社区分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。应用包名为 `com.example.budgetapp`。[稳定版 3.8.7](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.7) · [预发布版 3.8.8-rc2](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.8-rc2)
+这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的社区分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。应用包名为 `com.example.budgetapp`。[稳定版 3.8.7](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.7) · [预发布版 3.8.8-rc3](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.8-rc3)
 
 分支 APK 使用分支签名。如果手机上的同包名版本采用不同签名，需先备份账本再换装。
 
