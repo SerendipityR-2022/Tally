@@ -1,6 +1,7 @@
 package com.example.budgetapp.util;
 
 import android.content.Context;
+import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
 import android.view.MotionEvent;
@@ -16,6 +17,7 @@ import com.example.budgetapp.ai.TransactionDraft;
 import com.example.budgetapp.ai.TransactionDraftMapper;
 import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.Transaction;
+import com.example.budgetapp.service.ExperimentalAccountingService;
 import com.example.budgetapp.service.ScreenAccountingEngine;
 import org.junit.After;
 import org.junit.Before;
@@ -29,6 +31,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -401,46 +404,140 @@ public class ScreenCategoryIntegrationTest {
         verifyHttpClassification(1, false);
     }
 
-    private void verifyHttpClassification(int timeoutSeconds, boolean expectAi) throws Exception {
+    @Test public void wechatMeituanReceiptUsesAiAfterLeavingAndLearnsTheCorrection() throws Exception {
+        String pkg = KeywordManager.PKG_WECHAT;
+        CountDownLatch reply = new CountDownLatch(1);
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            CompletableFuture<JSONObject> request = new CompletableFuture<>();
+            Thread backend = serveClassification(server, request, () -> {
+                if (!reply.await(5, TimeUnit.SECONDS)) throw new java.io.IOException("Missing reader sample");
+            });
+            enableHttpAi(server, 8);
+            ScreenNode paid = receipt(pkg, true, "支付成功", "美团", "￥24.80", "付款方式", "招商银行(1234)", "完成");
+            runMain(() -> {
+                service.requireConfirmation();
+                service.analyze(paid);
+            });
+            // The next reader probe finds no payment app while the AI response is still pending.
+            runMain(this::reportIdleReaderSample);
+            JSONObject sent = request.get(4, TimeUnit.SECONDS);
+            assertEquals("美团", sent.getString("description"));
+            assertEquals("支出", sent.getString("type"));
+            assertEquals(3, sent.length());
+            reply.countDown();
+            View root = awaitOverlay();
+            String summary = ((TextView) root.findViewById(R.id.tv_window_category_result)).getText().toString();
+            assertTrue(summary, summary.contains("咖啡") && summary.contains("AI 分类"));
+            assertEquals("美团", ((TextView) root.findViewById(R.id.et_window_remark)).getText().toString());
+            runMain(() -> {
+                RecyclerView categories = root.findViewById(R.id.rv_window_category);
+                RecyclerView.ViewHolder shopping = categories.findViewHolderForAdapterPosition(1);
+                assertNotNull(shopping);
+                shopping.itemView.performClick();
+            });
+            assertTrue(AutoCategoryManager.getLearned(context).isEmpty());
+            runMain(() -> root.findViewById(R.id.btn_window_save).performClick());
+            Transaction saved = awaitSaved();
+            assertEquals("购物", saved.category);
+            assertEquals("美团", saved.remark);
+            assertEquals(pkg, saved.screenSourcePackage);
+            assertEquals("美团", saved.screenMerchantIdentity);
+            awaitLearning();
+            assertEquals(1, AutoCategoryManager.getLearned(context).size());
+            assertEquals("购物", AutoCategoryManager.getLearned(context).get(0).category);
+            backend.join(4000);
+            assertFalse("fixture did not finish", backend.isAlive());
+
+            // A new engine sees the saved match before considering a model request.
+            java.util.concurrent.atomic.AtomicInteger extraCalls = new java.util.concurrent.atomic.AtomicInteger();
+            runMain(() -> {
+                service.close();
+                FakeAiService next = new FakeAiService(context, memoryDb);
+                next.provider = () -> { extraCalls.incrementAndGet(); return null; };
+                service = next;
+                next.analyze(receipt(pkg, false, "支付成功", "美团", "￥51.20"));
+            });
+            String nextSummary = ((TextView) awaitOverlay().findViewById(R.id.tv_window_category_result)).getText().toString();
+            assertTrue(nextSummary, nextSummary.contains("购物") && nextSummary.contains("已学习"));
+            assertEquals(0, extraCalls.get());
+        } finally {
+            reply.countDown();
+        }
+    }
+
+    private void reportIdleReaderSample() {
+        ExperimentalAccountingService reader = new ExperimentalAccountingService();
+        try {
+            Field engine = ExperimentalAccountingService.class.getDeclaredField("engine");
+            engine.setAccessible(true);
+            engine.set(reader, service);
+            Field screenActive = ExperimentalAccountingService.class.getDeclaredField("screenActive");
+            screenActive.setAccessible(true);
+            screenActive.setBoolean(reader, true);
+            Method finish = ExperimentalAccountingService.class.getDeclaredMethod("finishSample", long.class,
+                    Bundle.class, ScreenNode.class, boolean.class);
+            finish.setAccessible(true);
+            Bundle idle = new Bundle();
+            idle.putInt("state", 0); // Reader protocol IDLE; no new hierarchy.
+            finish.invoke(reader, 0L, idle, null, false);
+        } catch (ReflectiveOperationException error) {
+            throw new AssertionError(error);
+        }
+    }
+
+    private interface ReplyGate { void await() throws Exception; }
+
+    private static Thread serveClassification(ServerSocket server, CompletableFuture<JSONObject> payload,
+            ReplyGate beforeReply) throws Exception {
         byte[] body = new JSONObject().put("choices", new JSONArray().put(new JSONObject().put("message",
                 new JSONObject().put("content", new JSONObject().put("category", "餐饮")
                         .put("subCategory", "咖啡").toString())))).toString().getBytes(StandardCharsets.UTF_8);
+        server.setSoTimeout(5000);
+        Thread backend = new Thread(() -> {
+            try (Socket client = server.accept()) {
+                client.setSoTimeout(5000);
+                DataInputStream input = new DataInputStream(client.getInputStream());
+                ByteArrayOutputStream header = new ByteArrayOutputStream();
+                int marker = 0;
+                while (marker != 0x0d0a0d0a && header.size() < 16000) {
+                    int next = input.readUnsignedByte();
+                    header.write(next);
+                    marker = (marker << 8) | next;
+                }
+                java.util.regex.Matcher length = java.util.regex.Pattern.compile("(?im)^Content-Length: (\\d+)")
+                        .matcher(header.toString("US-ASCII"));
+                if (!length.find()) throw new java.io.IOException("Fixture request missing body length");
+                byte[] sent = new byte[Integer.parseInt(length.group(1))];
+                input.readFully(sent);
+                payload.complete(new JSONObject(new JSONObject(new String(sent, StandardCharsets.UTF_8))
+                        .getJSONArray("messages").getJSONObject(1).getString("content")));
+                beforeReply.await();
+                client.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                        + "Connection: close\r\nContent-Length: " + body.length + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                client.getOutputStream().write(body);
+            } catch (Exception error) { payload.completeExceptionally(error); }
+        }, "classification-fixture");
+        backend.setDaemon(true);
+        backend.start();
+        return backend;
+    }
+
+    private void enableHttpAi(ServerSocket server, int timeoutSeconds) {
+        AiConfig config = new AiConfig();
+        config.enabled = true;
+        config.baseUrl = "http://127.0.0.1:" + server.getLocalPort() + "/v1";
+        config.apiKey = "local-synthetic-key";
+        config.textModel = "synthetic-classifier";
+        config.save(context);
+        AutoCategoryManager.setAiTimeoutSeconds(context, timeoutSeconds);
+        AutoCategoryManager.setAiEnabled(context, true);
+    }
+
+    private void verifyHttpClassification(int timeoutSeconds, boolean expectAi) throws Exception {
         try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
-            server.setSoTimeout(5000);
-            CompletableFuture<String> payload = new CompletableFuture<>();
-            Thread backend = new Thread(() -> {
-                try (Socket client = server.accept()) {
-                    client.setSoTimeout(5000);
-                    DataInputStream input = new DataInputStream(client.getInputStream());
-                    ByteArrayOutputStream header = new ByteArrayOutputStream();
-                    int marker = 0;
-                    while (marker != 0x0d0a0d0a && header.size() < 16000) {
-                        int next = input.readUnsignedByte();
-                        header.write(next);
-                        marker = (marker << 8) | next;
-                    }
-                    java.util.regex.Matcher length = java.util.regex.Pattern.compile("(?im)^Content-Length: (\\d+)")
-                            .matcher(header.toString("US-ASCII"));
-                    if (!length.find()) throw new java.io.IOException("Fixture request missing body length");
-                    byte[] sent = new byte[Integer.parseInt(length.group(1))];
-                    input.readFully(sent);
-                    payload.complete(new String(sent, StandardCharsets.UTF_8));
-                    SystemClock.sleep(2500); // After the short budget, before the long budget.
-                    client.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-                            + "Connection: close\r\nContent-Length: " + body.length + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
-                    client.getOutputStream().write(body);
-                } catch (Exception error) { payload.completeExceptionally(error); }
-            }, "classification-fixture");
-            backend.setDaemon(true);
-            backend.start();
-            AiConfig config = new AiConfig();
-            config.enabled = true;
-            config.baseUrl = "http://127.0.0.1:" + server.getLocalPort() + "/v1";
-            config.apiKey = "local-synthetic-key";
-            config.textModel = "synthetic-classifier";
-            config.save(context);
-            AutoCategoryManager.setAiTimeoutSeconds(context, timeoutSeconds);
-            AutoCategoryManager.setAiEnabled(context, true);
+            CompletableFuture<JSONObject> payload = new CompletableFuture<>();
+            Thread backend = serveClassification(server, payload, () -> SystemClock.sleep(2500));
+            enableHttpAi(server, timeoutSeconds);
             AiCategoryRuleManager.addRule(context, new CategoryRule("瑞幸", "购物", "超市", 0));
             View root = show("11-15 12:34 瑞幸咖啡");
             String summary = ((TextView) root.findViewById(R.id.tv_window_category_result)).getText().toString();
@@ -453,8 +550,7 @@ public class ScreenCategoryIntegrationTest {
             InstrumentationRegistry.getInstrumentation().waitForIdleSync();
             assertEquals(1, memoryDb.transactionDao().getAllTransactionsSync().size());
             assertNull(get("windowRootView"));
-            JSONObject sent = new JSONObject(new JSONObject(payload.get(2, TimeUnit.SECONDS))
-                    .getJSONArray("messages").getJSONObject(1).getString("content"));
+            JSONObject sent = payload.get(2, TimeUnit.SECONDS);
             assertEquals("瑞幸咖啡", sent.getString("description"));
             assertEquals(3, sent.length());
             assertFalse(sent.has("amount"));
@@ -505,13 +601,16 @@ public class ScreenCategoryIntegrationTest {
     }
 
     private View showAlipay(String... fields) throws Exception {
-        String pkg = "com.eg.android.AlipayGphone";
-        List<ScreenNode> children = new java.util.ArrayList<>();
-        for (String field : fields) children.add(new ScreenNode(field, null, pkg, "android.widget.TextView", null,
-                java.util.Collections.emptyList()));
-        ScreenNode receipt = new ScreenNode(null, null, pkg, "android.view.View", null, children);
-        runMain(() -> service.analyze(receipt));
+        runMain(() -> service.analyze(receipt(KeywordManager.PKG_ALIPAY, false, fields)));
         return awaitOverlay();
+    }
+
+    private static ScreenNode receipt(String pkg, boolean useDescription, String... fields) {
+        List<ScreenNode> children = new java.util.ArrayList<>();
+        for (String field : fields) children.add(new ScreenNode(useDescription ? null : field,
+                useDescription ? field : null, pkg, "android.widget.TextView", null,
+                java.util.Collections.emptyList()));
+        return new ScreenNode(null, null, pkg, "android.view.View", null, children);
     }
 
     private void awaitLearning() throws Exception {

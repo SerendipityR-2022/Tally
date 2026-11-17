@@ -133,9 +133,9 @@ public final class AutoCategoryManager {
     /** Retain a reliable source even if this bill was saved without user confirmation. */
     public static void attachScreenSource(Transaction bill, AutoCategoryClassifier.Input input) {
         if (bill.type != input.type || (bill.type != 0 && bill.type != 1) || input.packageName.isEmpty()
-                || !ScreenCategoryTextExtractor.hasMerchant(input.description)) return;
+                || input.merchantIdentity.isEmpty()) return;
         bill.screenSourcePackage = input.packageName;
-        bill.screenMerchantIdentity = AutoCategoryClassifier.learningIdentity(input.description);
+        bill.screenMerchantIdentity = input.merchantIdentity;
     }
 
     /** Learn a real suggestion or a correction only after the confirmation was saved. */

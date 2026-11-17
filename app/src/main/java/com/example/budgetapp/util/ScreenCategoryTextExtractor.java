@@ -19,39 +19,51 @@ public final class ScreenCategoryTextExtractor {
     private ScreenCategoryTextExtractor() { }
 
     public static boolean hasMerchant(String description) {
+        return hasMerchant(description, "");
+    }
+
+    public static boolean hasMerchant(String description, String sourcePackage) {
+        return !merchantIdentity(description, sourcePackage).isEmpty();
+    }
+
+    static String merchantIdentity(String description, String sourcePackage) {
         String value = AutoCategoryClassifier.cleanDescription(description);
-        return !isLabel(value) && !AMOUNT.matcher(value).matches()
-                && !AutoCategoryClassifier.learningIdentity(value).isEmpty();
+        if (value.isEmpty() || isUnsafeValue(value) || AMOUNT.matcher(value).matches()) return "";
+        return AutoCategoryClassifier.learningIdentity(value, sourcePackage);
     }
 
     public static String extract(List<String> texts, String existingDescription) {
+        return extract(texts, existingDescription, "");
+    }
+
+    public static String extract(List<String> texts, String existingDescription, String sourcePackage) {
         // Preserve proven page-specific extraction, if it is not just a platform placeholder.
-        if (hasMerchant(existingDescription)) return AutoCategoryClassifier.cleanDescription(existingDescription);
-        String product = extractLabelled(texts, PRODUCT_LABELS);
-        return product.isEmpty() ? extractLabelled(texts, PAYEE_LABELS) : product;
+        if (hasMerchant(existingDescription, sourcePackage)) return AutoCategoryClassifier.cleanDescription(existingDescription);
+        String product = extractLabelled(texts, PRODUCT_LABELS, sourcePackage);
+        return product.isEmpty() ? extractLabelled(texts, PAYEE_LABELS, sourcePackage) : product;
     }
 
     /** Alipay receipts without a label may show the payee directly under the headline amount. */
     public static String extractAlipayPayee(List<String> texts, int amountIndex) {
-        String labelled = extractLabelled(texts, PAYEE_LABELS);
+        String labelled = extractLabelled(texts, PAYEE_LABELS, KeywordManager.PKG_ALIPAY);
         if (!labelled.isEmpty()) return labelled;
         if (amountIndex < 0) return "";
         for (int i = amountIndex + 1; i < texts.size(); i++) {
             String value = texts.get(i) == null ? "" : texts.get(i).trim();
             if (value.isEmpty() || AMOUNT.matcher(value).matches()) continue;
             // Stop at a detail row or action instead of borrowing a value from another field.
-            return merchantValue(value);
+            return merchantValue(value, KeywordManager.PKG_ALIPAY);
         }
         return "";
     }
 
-    private static String extractLabelled(List<String> texts, String[] labels) {
+    private static String extractLabelled(List<String> texts, String[] labels, String sourcePackage) {
         for (String label : labels) {
             for (int i = 0; i < texts.size(); i++) {
                 String text = texts.get(i) == null ? "" : texts.get(i).trim();
                 String inline = inlineValue(text, label);
                 if (inline != null) {
-                    String value = merchantValue(inline);
+                    String value = merchantValue(inline, sourcePackage);
                     if (!value.isEmpty()) return value;
                 }
                 if (text.equals(label) || text.equals(label + ":") || text.equals(label + "：")) {
@@ -60,7 +72,7 @@ public final class ScreenCategoryTextExtractor {
                         String value = texts.get(j) == null ? "" : texts.get(j).trim();
                         if (value.isEmpty()) continue;
                         if (isLabel(value)) break;
-                        value = merchantValue(value);
+                        value = merchantValue(value, sourcePackage);
                         if (!value.isEmpty()) return value;
                         break;
                     }
@@ -89,10 +101,15 @@ public final class ScreenCategoryTextExtractor {
         return false;
     }
 
-    private static String merchantValue(String value) {
+    private static boolean isUnsafeValue(String value) {
         String privateValue = value.replace("*", "").replace("＊", "");
-        if (value.length() > 120 || value.contains("\n") || isLabel(value) || PRIVATE_VALUE.matcher(privateValue).find()) return "";
+        return value.length() > 120 || value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0
+                || isLabel(value) || PRIVATE_VALUE.matcher(privateValue).find();
+    }
+
+    private static String merchantValue(String value, String sourcePackage) {
+        if (isUnsafeValue(value)) return "";
         String cleaned = PRICE.matcher(AutoCategoryClassifier.cleanDescription(value)).replaceAll("").trim();
-        return hasMerchant(cleaned) ? cleaned : "";
+        return hasMerchant(cleaned, sourcePackage) ? cleaned : "";
     }
 }

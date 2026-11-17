@@ -1,9 +1,12 @@
 package com.example.budgetapp.util;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Pure Java classification policy shared by every screen-payment adapter. */
@@ -23,12 +26,14 @@ public final class AutoCategoryClassifier {
     public static final class Input {
         public final String packageName;
         public final String description;
+        public final String merchantIdentity;
         public final int type;
         public final String hint;
 
         public Input(String packageName, String description, int type, String hint) {
             this.packageName = value(packageName);
             this.description = cleanDescription(description);
+            this.merchantIdentity = ScreenCategoryTextExtractor.merchantIdentity(this.description, this.packageName);
             this.type = type;
             this.hint = value(hint);
         }
@@ -74,6 +79,12 @@ public final class AutoCategoryClassifier {
     private static final Pattern LEARNING_NORMALIZE = Pattern.compile("[\\p{Z}\\s\\p{P}\\p{S}&&[^*]]+");
     private static final Pattern LEADING_TIME = Pattern.compile("^\\s*(?:(?:\\d{4}[-/.年])?\\d{1,2}[-/.月]\\d{1,2}日?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?\\s*|\\d{1,2}:\\d{2}(?::\\d{2})?\\s*)");
     private static final Pattern BACKGROUND_SUFFIX = Pattern.compile("\\s*[（(]后台[）)]\\s*$");
+    private static final Set<String> PLACEHOLDERS = new HashSet<>(Arrays.asList(
+            "微信", "支付宝", "云闪付", "自动记账", "微信账单", "支付宝账单", "微信支付", "支付宝支付", "云闪付交易",
+            "支付成功", "付款成功", "商家转账", "转账", "红包", "微信扫码付款", "微信转账收款", "微信商家转账",
+            "京东购物", "拼多多购物", "淘宝购物", "抖音购物", "美团消费", "抖省省消费", "通义千问支付"));
+    private static final Set<String> COMMERCE_NAMES = new HashSet<>(Arrays.asList(
+            "京东", "淘宝", "拼多多", "抖音", "美团", "抖省省", "通义千问"));
 
     private static final class Words {
         final String[] labels, keywords;
@@ -133,7 +144,7 @@ public final class AutoCategoryClassifier {
     public static Result classifyLocal(Input input, List<Category> catalog, List<Rule> rules,
             List<Learned> learned, boolean useSubCategories, AutoCategoryPriority priority) {
         String text = normalize(input.description);
-        String identity = learningIdentity(input.description);
+        String identity = input.merchantIdentity;
         for (Source source : priority.getSources()) {
             switch (source) {
                 case RULE:
@@ -290,14 +301,17 @@ public final class AutoCategoryClassifier {
 
     /** Exact, app- and type-scoped merchant identity; never learn generic/time-only screens. */
     public static String learningIdentity(String description) {
+        return learningIdentity(description, "");
+    }
+
+    static String learningIdentity(String description, String sourcePackage) {
         // Keep redaction markers: **（张） and 张** are different merchant identities.
         String identity = LEARNING_NORMALIZE.matcher(cleanDescription(description).toLowerCase(Locale.ROOT)
                 .replace('＊', '*')).replaceAll("");
-        if (identity.length() < 2 || identity.matches("[0-9*]+")) return "";
-        String[] generic = {"微信", "支付宝", "京东", "淘宝", "拼多多", "抖音", "美团", "云闪付", "抖省省", "通义千问",
-                "自动记账", "微信账单", "支付宝账单", "微信支付", "支付宝支付", "支付成功", "付款成功", "商家转账", "转账", "红包",
-                "京东购物", "拼多多购物", "淘宝购物", "抖音购物", "美团消费", "抖省省消费", "通义千问支付"};
-        for (String item : generic) if (identity.equals(normalize(item))) return "";
+        if (identity.length() < 2 || identity.matches("[0-9*]+") || PLACEHOLDERS.contains(identity)) return "";
+        // A commerce app name can be the payee on an independent payment receipt, e.g. 美团 in 微信支付.
+        if (COMMERCE_NAMES.contains(identity) && !KeywordManager.PKG_WECHAT.equals(sourcePackage)
+                && !KeywordManager.PKG_ALIPAY.equals(sourcePackage) && !KeywordManager.PKG_UNIONPAY.equals(sourcePackage)) return "";
         return identity;
     }
 

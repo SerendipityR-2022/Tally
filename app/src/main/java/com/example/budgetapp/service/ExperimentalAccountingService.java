@@ -680,7 +680,7 @@ public final class ExperimentalAccountingService extends Service {
             case IDLE:
                 emptyScreens = 0;
                 status = R.string.experimental_status_ready;
-                if (!engine.hasConfirmationWindow() && engine.isBusy()) engine.pause();
+                // Leaving a payment page does not invalidate a receipt already recognized by the engine.
                 break;
             case UNREADABLE:
                 if (++emptyScreens >= 3) status = R.string.experimental_status_unreadable;

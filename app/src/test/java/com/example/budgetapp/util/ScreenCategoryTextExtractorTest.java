@@ -26,6 +26,19 @@ public class ScreenCategoryTextExtractorTest {
             assertFalse(text, ScreenCategoryTextExtractor.hasMerchant(text));
         }
     }
+
+    @Test public void aCommerceNameCanBeTheMerchantOnAnIndependentPaymentReceipt() {
+        String wechat = KeywordManager.PKG_WECHAT;
+        assertEquals("美团", ScreenCategoryTextExtractor.extract(Arrays.asList("支付成功", "美团", "￥24.80"),
+                "11-17 12:34 美团", wechat));
+        assertEquals("美团", ScreenCategoryTextExtractor.extract(Arrays.asList("收款方：美团", "支付方式：零钱"),
+                "微信支付", wechat));
+        assertEquals("美团", ScreenCategoryTextExtractor.extractAlipayPayee(Arrays.asList("收款方", "美团"), -1));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("美团", KeywordManager.PKG_MEITUAN));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("美团消费", wechat));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("微信支付", wechat));
+        assertFalse(ScreenCategoryTextExtractor.hasMerchant("招商银行(1234)", wechat));
+    }
     @Test public void preservesMerchantDigitsButRejectsLongAccountIdentifiers() {
         assertEquals("7-11便利店", ScreenCategoryTextExtractor.extract(Arrays.asList("商户名称", "7-11便利店"), ""));
         assertEquals("", ScreenCategoryTextExtractor.extract(Arrays.asList("商户名称", "6222123412341234"), ""));

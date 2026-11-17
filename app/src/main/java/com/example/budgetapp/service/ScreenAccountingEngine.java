@@ -516,8 +516,9 @@ public class ScreenAccountingEngine extends ContextWrapper {
 
     private void dispatchConfirmWindow(ScreenNode root, double amount, int type, String hint,
             String note, int assetId, String symbol, long transactionTime, String sourcePackage) {
+        final String actualSourcePackage = capturedPackage(root, sourcePackage);
         String description = AutoCategoryClassifier.cleanDescription(note);
-        if (!ScreenCategoryTextExtractor.hasMerchant(description)) {
+        if (!ScreenCategoryTextExtractor.hasMerchant(description, actualSourcePackage)) {
             List<ScreenNode> nodes = new ArrayList<>();
             flattenNodes(root, nodes);
             List<String> texts = new ArrayList<>();
@@ -525,21 +526,24 @@ public class ScreenAccountingEngine extends ContextWrapper {
                 String value = getTextOrDescription(node);
                 if (value != null) texts.add(value);
             }
-            description = ScreenCategoryTextExtractor.extract(texts, description);
+            description = ScreenCategoryTextExtractor.extract(texts, description, actualSourcePackage);
         }
-        dispatchConfirmWindow(root, amount, type, hint, note, assetId, symbol, transactionTime, sourcePackage, description);
+        enqueueConfirmWindow(amount, type, hint, note, assetId, symbol, transactionTime, actualSourcePackage, description);
     }
 
-    private void dispatchConfirmWindow(ScreenNode root, double amount, int type, String hint,
-            String note, int assetId, String symbol, long transactionTime, String sourcePackage, String merchantDescription) {
-        // Capture the actual package now (including separate Meituan apps), not a later active window.
-        final String actualSourcePackage = root != null && root.getPackageName() != null
-                ? root.getPackageName().toString() : sourcePackage;
+    private static String capturedPackage(ScreenNode root, String fallback) {
+        String pkg = root != null ? root.getPackageName() : null;
+        return pkg != null && !pkg.isEmpty() ? pkg : fallback;
+    }
+
+    private void enqueueConfirmWindow(double amount, int type, String hint, String note, int assetId,
+            String symbol, long transactionTime, String sourcePackage, String merchantDescription) {
+        // Classification uses only the captured payment's data; the foreground window may have changed.
         final long dispatchGeneration = classificationGeneration;
         handler.post(() -> {
             if (!isServiceDestroyed && dispatchGeneration == classificationGeneration) {
                 showConfirmWindow(amount, type, hint, note, assetId, symbol,
-                        transactionTime, actualSourcePackage, merchantDescription);
+                        transactionTime, sourcePackage, merchantDescription);
             }
         });
     }
@@ -567,7 +571,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
         final AutoCategoryClassifier.Result local = AutoCategoryManager.classifyLocal(this, input);
         final boolean useSub = CategoryManager.isSubCategoryEnabled(this);
         final AiConfig aiConfig = replay == null && local.source != AutoCategoryClassifier.Source.LEARNED
-                && !input.description.isEmpty() ? loadScreenCategoryAiConfig() : null;
+                && !input.merchantIdentity.isEmpty() ? loadScreenCategoryAiConfig() : null;
         boolean enableAi = aiConfig != null;
         final List<AutoCategoryClassifier.Category> catalog = enableAi
                 ? AutoCategoryManager.getCatalog(this, type) : java.util.Collections.emptyList();
@@ -2369,9 +2373,8 @@ public class ScreenAccountingEngine extends ContextWrapper {
             // 触发记账弹窗 (type: 0 代表支出)
             final String finalBusinessHint = businessHint;
             long finalTimestamp = now;
-            dispatchConfirmWindow(root, finalAmount, 0, finalBusinessHint, recordIdentifier, autoAssetId, "¥",
-                    finalTimestamp, "com.eg.android.AlipayGphone",
-                    ScreenCategoryTextExtractor.hasMerchant(payeeName) ? payeeName : "");
+            enqueueConfirmWindow(finalAmount, 0, finalBusinessHint, recordIdentifier, autoAssetId, "¥",
+                    finalTimestamp, capturedPackage(root, KeywordManager.PKG_ALIPAY), payeeName);
 
             return true;
         }
