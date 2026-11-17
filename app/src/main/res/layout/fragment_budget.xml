@@ -52,7 +52,7 @@
                         <TextView android:id="@+id/tv_header_monthly_budget" style="@style/TallySummaryMetricValue" android:text="0.00" />
                     </LinearLayout>
                     <LinearLayout style="@style/TallySummaryMetric">
-                        <TextView style="@style/TallySummaryMetricLabel" android:text="日可用预算" />
+                        <TextView android:id="@+id/tv_header_daily_label" style="@style/TallySummaryMetricLabel" android:text="@string/budget_daily_available" />
                         <TextView android:id="@+id/tv_header_daily_available" style="@style/TallySummaryMetricValue" android:text="0.00" />
                     </LinearLayout>
                 </LinearLayout>

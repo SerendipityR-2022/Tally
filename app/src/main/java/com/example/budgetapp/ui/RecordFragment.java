@@ -116,7 +116,7 @@ public class RecordFragment extends Fragment {
     private int currentFilterMode = 0;
 
     private androidx.cardview.widget.CardView cardBudgetStatus;
-    private TextView tvBudgetTitle, tvBudgetText;
+    private TextView tvBudgetTitle, tvBudgetText, tvBudgetReserved;
     private android.widget.ProgressBar pbBudget;
     private DailyBudgetPlan dailyBudgetPlan;
 
@@ -324,6 +324,7 @@ public class RecordFragment extends Fragment {
         cardBudgetStatus = view.findViewById(R.id.card_budget_status);
         tvBudgetTitle = view.findViewById(R.id.tv_budget_title);
         tvBudgetText = view.findViewById(R.id.tv_budget_text);
+        tvBudgetReserved = view.findViewById(R.id.tv_budget_reserved);
         pbBudget = view.findViewById(R.id.pb_budget);
 
         // 初始化账单滑动卡片
@@ -567,6 +568,19 @@ public class RecordFragment extends Fragment {
         if (dailyBudgetPlan == null) return;
         int day = date.getDayOfMonth();
         double budget = dailyBudgetPlan.limitOn(day);
+        if (dailyBudgetPlan.isForecastDay(day)) {
+            tvBudgetTitle.setText(getString(R.string.record_budget_day_available, date.getMonthValue(), day));
+            tvBudgetText.setText(getString(R.string.budget_amount, budget));
+            tvBudgetText.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary));
+            double reserved = dailyBudgetPlan.reservedOn(day);
+            tvBudgetReserved.setText(getString(R.string.record_budget_reserved, reserved));
+            tvBudgetReserved.setVisibility(reserved > 0 ? View.VISIBLE : View.GONE);
+            pbBudget.setVisibility(View.GONE);
+            return;
+        }
+
+        tvBudgetReserved.setVisibility(View.GONE);
+        pbBudget.setVisibility(View.VISIBLE);
         double spending = dailyBudgetPlan.spendingOn(day);
         boolean overBudget = dailyBudgetPlan.isOverBudget(day);
 

@@ -11,7 +11,7 @@
     <string name="settings_show_budget_shortcut">明细页显示「预算」按钮</string>
     <string name="settings_show_bill_card">记账页显示账单卡片</string>
     <string name="settings_dynamic_daily_budget">动态日均预算</string>
-    <string name="settings_dynamic_daily_budget_description">记账页按历史支出调整每日额度，未来日期平分剩余预算</string>
+    <string name="settings_dynamic_daily_budget_description">按历史支出调整每日额度，先预留待付账单再平分余额</string>
     <string name="settings_daily_budget_average">当月平均每日预算：%1$.2f</string>
     <string name="settings_daily_budget_initial">当月首日预算：%1$.2f</string>
     <string name="settings_calendar_display">日历默认显示</string>

@@ -33,6 +33,7 @@ import com.example.budgetapp.util.DailyBudgetPlan;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.matcher.RootMatchers.isDialog;
@@ -58,10 +60,12 @@ import static androidx.test.espresso.matcher.ViewMatchers.withId;
 public class LedgerUiRegressionTest {
     private static final YearMonth BUDGET_FIXTURE_MONTH = YearMonth.of(2001, 6);
     private static final String BUDGET_FIXTURE_OVERRIDE = "budget_2001_6";
+    private static final String CURRENT_BUDGET_OVERRIDE = "budget_" + LocalDate.now().getYear()
+            + "_" + LocalDate.now().getMonthValue();
     private static final String[] PREF_KEYS = {"default_page", "is_budget_enabled", "is_detailed_budget_enabled",
             "enable_details_module", "key_enable_assets_module", "theme_mode", DefaultPageActivity.KEY_DETAILS_BUDGET_SHORTCUT,
             DailyBudgetPlan.PREF_DYNAMIC, "monthly_budget", "budget_start_time", BUDGET_FIXTURE_OVERRIDE,
-            "bill_card_replace_budget", DefaultPageActivity.KEY_BILL_CARD};
+            "bill_card_replace_budget", DefaultPageActivity.KEY_BILL_CARD, CURRENT_BUDGET_OVERRIDE};
     private final Map<String, Object> original = new HashMap<>();
     private SharedPreferences prefs;
 
@@ -182,11 +186,7 @@ public class LedgerUiRegressionTest {
                 fixtures.add(expense);
             }
             try (ActivityScenario<MainActivity> main = ActivityScenario.launch(MainActivity.class)) {
-                main.onActivity(activity -> active(activity).requireView().findViewById(R.id.tv_month_title).performClick());
-                setPicker(R.id.np_year, BUDGET_FIXTURE_MONTH.getYear());
-                setPicker(R.id.np_month, BUDGET_FIXTURE_MONTH.getMonthValue());
-                setPicker(R.id.np_day, 2);
-                onView(withId(R.id.btn_confirm)).inRoot(isDialog()).perform(click());
+                pickRecordDate(main, BUDGET_FIXTURE_MONTH.atDay(2));
                 awaitBudgetAmount(main, 50.50, 50.00);
                 main.onActivity(activity -> assertTrue(isSecondDayOverBudget(activity)));
 
@@ -211,6 +211,69 @@ public class LedgerUiRegressionTest {
         }
     }
 
+    @Test public void budgetAndRecordShowTheSameFutureAllowanceAfterReservingKnownBills() {
+        LocalDate today = LocalDate.now();
+        LocalDate tomorrow = today.plusDays(1);
+        YearMonth month = YearMonth.from(today);
+        assumeTrue("This scenario needs a remaining day in the current month", month.equals(YearMonth.from(tomorrow)));
+        ZoneId zone = ZoneId.systemDefault();
+        long tomorrowStart = tomorrow.atStartOfDay(zone).toInstant().toEpochMilli();
+        long endOfTomorrow = tomorrow.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        long firstDay = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        long nextMonth = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        TransactionDao dao = AppDatabase.getDatabase(context).transactionDao();
+        double existing = 0, existingTomorrow = 0;
+        for (Transaction tx : dao.getTransactionsIncludingUnsettledSync(firstDay, nextMonth - 1)) {
+            if (tx.type != 0 || tx.excludeFromBudget || "资产互转".equals(tx.category)) continue;
+            existing += tx.amount;
+            if (tx.date >= tomorrowStart && tx.date < endOfTomorrow) existingTomorrow += tx.amount;
+        }
+        // Leave 1500 of the configured budget available for these synthetic transactions.
+        float budget = (float) (existing + 1500);
+        prefs.edit().putInt("default_page", 0).putBoolean(DailyBudgetPlan.PREF_DYNAMIC, true).remove("budget_start_time")
+                .putFloat(CURRENT_BUDGET_OVERRIDE, budget).putBoolean("bill_card_replace_budget", false).commit();
+
+        Transaction spent = new Transaction(today.atStartOfDay(zone).toInstant().toEpochMilli(), 0, "餐饮", 20);
+        Transaction future = new Transaction(tomorrowStart, 0, "房屋", 270);
+        Transaction pending = new Transaction(tomorrowStart, 0, "通讯", 80);
+        pending.isSettled = false;
+        pending.scheduledExecuteTime = tomorrowStart;
+        pending.recurringRuleId = -42;
+        List<Transaction> fixtures = new ArrayList<>();
+        try {
+            for (Transaction expense : Arrays.asList(spent, future, pending)) {
+                expense.id = ThreadLocalRandom.current().nextInt(Integer.MIN_VALUE, -10);
+                dao.insert(expense);
+                fixtures.add(expense);
+            }
+            String expectedDaily = context.getString(R.string.budget_amount,
+                    (budget - existing - 370) / (today.lengthOfMonth() - today.getDayOfMonth()));
+            String expectedReserved = context.getString(R.string.record_budget_reserved, existingTomorrow + 350);
+            try (ActivityScenario<MainActivity> main = ActivityScenario.launch(MainActivity.class)) {
+                pickRecordDate(main, tomorrow);
+                awaitText(main, R.id.tv_budget_text, expectedDaily);
+                awaitText(main, R.id.tv_budget_reserved, expectedReserved);
+                main.onActivity(activity -> assertEquals(View.GONE,
+                        active(activity).requireView().findViewById(R.id.pb_budget).getVisibility()));
+
+                select(main, R.id.nav_budget);
+                awaitText(main, R.id.tv_header_daily_available, expectedDaily);
+                awaitText(main, R.id.tv_header_daily_label, context.getString(R.string.budget_daily_from_tomorrow));
+            }
+        } finally {
+            for (Transaction expense : fixtures) dao.delete(expense);
+        }
+    }
+
+    private static void pickRecordDate(ActivityScenario<MainActivity> main, LocalDate date) {
+        main.onActivity(activity -> active(activity).requireView().findViewById(R.id.tv_month_title).performClick());
+        setPicker(R.id.np_year, date.getYear());
+        setPicker(R.id.np_month, date.getMonthValue());
+        setPicker(R.id.np_day, date.getDayOfMonth());
+        onView(withId(R.id.btn_confirm)).inRoot(isDialog()).perform(click());
+    }
+
     private static void setPicker(int id, int value) {
         onView(withId(id)).inRoot(isDialog()).check((view, error) -> {
             if (error != null) throw error;
@@ -219,20 +282,23 @@ public class LedgerUiRegressionTest {
     }
 
     private static void awaitBudgetAmount(ActivityScenario<MainActivity> main, double used, double limit) {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        awaitText(main, R.id.tv_budget_text, context.getString(R.string.record_budget_amounts, used, limit));
+    }
+
+    private static void awaitText(ActivityScenario<MainActivity> main, int id, String expected) {
         AtomicReference<String> actual = new AtomicReference<>();
-        AtomicReference<String> expected = new AtomicReference<>();
         long until = SystemClock.uptimeMillis() + 3000;
         do {
             main.onActivity(activity -> {
                 View root = active(activity).requireView();
-                TextView text = root.findViewById(R.id.tv_budget_text);
-                expected.set(activity.getString(R.string.record_budget_amounts, used, limit));
+                TextView text = root.findViewById(id);
                 actual.set(text.isShown() ? text.getText().toString() : "");
             });
-            if (expected.get().equals(actual.get())) break;
+            if (expected.equals(actual.get())) break;
             SystemClock.sleep(25);
         } while (SystemClock.uptimeMillis() < until);
-        assertEquals(expected.get(), actual.get());
+        assertEquals(expected, actual.get());
         idle();
     }
 

@@ -31,19 +31,22 @@ import com.example.budgetapp.R;
 import com.example.budgetapp.database.Goal;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.util.CategoryManager;
+import com.example.budgetapp.util.DailyBudgetPlan;
 import com.example.budgetapp.viewmodel.FinanceViewModel;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class BudgetFragment extends Fragment {
 
     private FinanceViewModel viewModel;
-    private TextView tvTotalSurplus, tvHeaderMonthlyBudget, tvHeaderDailyAvailable;
+    private TextView tvTotalSurplus, tvHeaderMonthlyBudget, tvHeaderDailyAvailable, tvHeaderDailyLabel;
 
     // ViewPager 与 页面组件
     private ViewPager2 viewPager;
@@ -53,8 +56,6 @@ public class BudgetFragment extends Fragment {
     private boolean isDetailedEnabled = false;
     private TabLayoutMediator budgetTabs;
 
-    private double currentMonthSurplus = 0;
-    
     // FAB 滚动隐藏相关
     private LinearLayout fabContainer;
     private FabScrollListener fabScrollListener;
@@ -72,6 +73,7 @@ public class BudgetFragment extends Fragment {
         tvTotalSurplus = view.findViewById(R.id.tv_total_surplus);
         tvHeaderMonthlyBudget = view.findViewById(R.id.tv_header_monthly_budget);
         tvHeaderDailyAvailable = view.findViewById(R.id.tv_header_daily_available);
+        tvHeaderDailyLabel = view.findViewById(R.id.tv_header_daily_label);
 
         view.findViewById(R.id.layout_monthly_budget).setOnClickListener(v -> showSetMonthBudgetDialog());
         view.findViewById(R.id.btn_add_goal).setOnClickListener(v -> showAddGoalDialog());
@@ -438,14 +440,18 @@ public class BudgetFragment extends Fragment {
         }
     }
 
-    // ================= 以下为原封不动保留的代码 =================
-
     private void calculateMonthHeader(List<Transaction> transactions) {
         if (getContext() == null) return;
         SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-        LocalDate today = LocalDate.now();
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDate today = LocalDate.now(zone);
+        YearMonth month = YearMonth.from(today);
+        boolean dynamic = prefs.getBoolean(DailyBudgetPlan.PREF_DYNAMIC, false);
+        boolean lastDay = today.getDayOfMonth() == month.lengthOfMonth();
+        tvHeaderDailyLabel.setText(!dynamic ? R.string.budget_daily_available
+                : lastDay ? R.string.budget_remaining_today : R.string.budget_daily_from_tomorrow);
 
-        float monthlyBudget = 0;
+        double monthlyBudget = 0;
 
         // 获取当月总预算
         if (isDetailedEnabled) {
@@ -459,54 +465,31 @@ public class BudgetFragment extends Fragment {
             monthlyBudget = prefs.getFloat(monthKey, defaultBudget);
         }
 
-        if (monthlyBudget > 0 && prefs.getLong("budget_start_time", 0) == 0) {
+        if (Double.isFinite(monthlyBudget) && monthlyBudget > 0 && prefs.getLong("budget_start_time", 0) == 0) {
             prefs.edit().putLong("budget_start_time", System.currentTimeMillis()).apply();
         }
 
-        tvHeaderMonthlyBudget.setText(String.format("%.2f", monthlyBudget));
+        tvHeaderMonthlyBudget.setText(getString(R.string.budget_amount, monthlyBudget));
 
-        if (monthlyBudget <= 0) {
-            currentMonthSurplus = 0;
+        if (!Double.isFinite(monthlyBudget) || monthlyBudget <= 0) {
             tvTotalSurplus.setText("未设置预算");
             tvTotalSurplus.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
-            tvHeaderDailyAvailable.setText("0.00");
+            tvHeaderDailyAvailable.setText(getString(R.string.budget_amount, 0.0));
             return;
         }
 
-        double actualExpenseSoFar = 0;
-
-        // 【修复1】修正时间边界：涵盖整个月，防止丢失未来日期（但属本月）的账单
-        long startOfMonth = today.withDayOfMonth(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-        // 本月最后一天加1天，获取下个月零点作为结束边界 (减 1 毫秒即本月末)
-        long endOfMonth = today.withDayOfMonth(today.lengthOfMonth()).plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1;
-
-        if (transactions != null) {
-            for (Transaction t : transactions) {
-                // 【修改点】：增加不计入预算和资产互转的过滤
-                boolean isTransfer = "资产互转".equals(t.category);
-                if (t.date >= startOfMonth && t.date <= endOfMonth && t.type == 0 && !isTransfer && !t.excludeFromBudget) {
-                    actualExpenseSoFar += t.amount;
-                }
-            }
-        }
-
-        // 【修复3】总结余应该是真实剩余预算 = 总预算 - 实际总支出
-        double monthRemaining = monthlyBudget - actualExpenseSoFar;
+        DailyBudgetPlan plan = new DailyBudgetPlan(month, today, zone, monthlyBudget, dynamic,
+                transactions == null ? Collections.emptyList() : transactions);
+        double monthRemaining = plan.remainingAfterKnownExpenses();
         String sign = monthRemaining >= 0 ? "+" : ""; // 按照原逻辑保留加号
         tvTotalSurplus.setText(String.format("%s%.2f", sign, monthRemaining));
         tvTotalSurplus.setTextColor(ContextCompat.getColor(requireContext(),
                 monthRemaining >= 0 ? R.color.text_primary : R.color.budget_progress_exceed));
 
-        // 【修复2】更合理的“今日可用”计算：推荐采用“剩余平摊法”
-        int remainingDays = today.lengthOfMonth() - today.getDayOfMonth() + 1;
-        // 如果整体预算超支，今日可用为0；否则平摊到剩余天数
-        double dailyAvailable = monthRemaining > 0 ? (monthRemaining / remainingDays) : 0;
-
-        // 如果你坚持要用原作者的“进度结余法”，可以替换为这句:
-        // double expectedExpenseSoFar = today.getDayOfMonth() * ((double) monthlyBudget / today.lengthOfMonth());
-        // double dailyAvailable = expectedExpenseSoFar - actualExpenseSoFar;
-
-        tvHeaderDailyAvailable.setText(String.format("%.2f", Math.max(0, dailyAvailable)));
+        int remainingDaysIncludingToday = month.lengthOfMonth() - today.getDayOfMonth() + 1;
+        double dailyAvailable = dynamic && !lastDay ? plan.futureDailyBudget()
+                : Math.max(0, monthRemaining) / remainingDaysIncludingToday;
+        tvHeaderDailyAvailable.setText(getString(R.string.budget_amount, dailyAvailable));
     }
 
     private void showSetMonthBudgetDialog() {
