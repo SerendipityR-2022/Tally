@@ -195,14 +195,14 @@
                 <LinearLayout android:id="@+id/ledger_income_categories" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:orientation="vertical" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/ledger_month_compare" android:layout_width="match_parent" android:layout_height="wrap_content"
+            <LinearLayout android:id="@+id/ledger_expense_compare" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginHorizontal="16dp" android:layout_marginBottom="12dp" android:orientation="vertical"
-                android:padding="16dp" android:background="@drawable/bg_ledger_panel">
-                <TextView android:id="@+id/ledger_month_compare_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:padding="16dp" android:background="@drawable/bg_ledger_panel" android:visibility="gone">
+                <TextView android:id="@+id/ledger_expense_compare_title" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:drawableStart="@drawable/ic_ledger_bars" android:drawableTint="@color/ledger_chart_blue"
-                    android:drawablePadding="8dp" android:gravity="center_vertical" android:text="月支出对比"
+                    android:drawablePadding="8dp" android:gravity="center_vertical"
                     android:textColor="@color/ledger_text" android:textSize="16sp" android:fontFamily="sans-serif-medium" />
-                <com.github.mikephil.charting.charts.BarChart android:id="@+id/ledger_month_chart"
+                <com.github.mikephil.charting.charts.BarChart android:id="@+id/ledger_expense_compare_chart"
                     android:layout_width="match_parent" android:layout_height="165dp" android:layout_marginTop="8dp" />
             </LinearLayout>
             <LinearLayout android:id="@+id/ledger_ranking" android:layout_width="match_parent" android:layout_height="wrap_content"

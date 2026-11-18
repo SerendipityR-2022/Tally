@@ -111,7 +111,7 @@ public class LedgerReferenceInstrumentedTest {
                 LinearLayout ranking = root.findViewById(R.id.ledger_ranked_transactions);
                 assertEquals(4, ranking.getChildCount());
                 assertEquals("购物", text(ranking.getChildAt(0), R.id.ledger_tx_title));
-                BarChart monthly = root.findViewById(R.id.ledger_month_chart);
+                BarChart monthly = root.findViewById(R.id.ledger_expense_compare_chart);
                 assertEquals(228.6f, monthly.getData().getDataSetByIndex(0).getEntryForIndex(4).getY(), 0.01f);
             });
             test.waitForIdleSync();

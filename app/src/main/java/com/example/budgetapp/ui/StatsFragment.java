@@ -80,6 +80,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class StatsFragment extends Fragment {
+    private static final int COMPARISON_PERIODS = 5;
 
     private FinanceViewModel viewModel;
     private LedgerTrendChart lineChart;
@@ -1061,7 +1062,7 @@ public class StatsFragment extends Fragment {
     private void changeDate(int offset) {
         if (dashboard == null) return;
         View[] animateViews = {dashboard.findViewById(R.id.ledger_stats_metrics), layoutTrend, layoutExpense,
-                dashboard.findViewById(R.id.ledger_income_section), dashboard.findViewById(R.id.ledger_month_compare),
+                dashboard.findViewById(R.id.ledger_income_section), dashboard.findViewById(R.id.ledger_expense_compare),
                 dashboard.findViewById(R.id.ledger_ranking)};
 
         float screenWidth = scrollView.getWidth();
@@ -1239,27 +1240,21 @@ public class StatsFragment extends Fragment {
 
     private void processYearlyData() {
         int year = selectedDate.getYear();
-        aggregateData(t -> {
-            LocalDate date = Instant.ofEpochMilli(t.date).atZone(ZoneId.systemDefault()).toLocalDate();
-            return date.getYear() == year ? date.getMonthValue() : -1;
-        }, 12, "月", null);
+        aggregateData(date -> date.getYear() == year ? date.getMonthValue() : -1, 12, "月", null);
     }
 
     private void processMonthlyData() {
         int year = selectedDate.getYear();
         int month = selectedDate.getMonthValue();
         int daysInMonth = selectedDate.lengthOfMonth();
-        aggregateData(t -> {
-            LocalDate date = Instant.ofEpochMilli(t.date).atZone(ZoneId.systemDefault()).toLocalDate();
-            return (date.getYear() == year && date.getMonthValue() == month) ? date.getDayOfMonth() : -1;
-        }, daysInMonth, "日", null);
+        aggregateData(date -> date.getYear() == year && date.getMonthValue() == month ? date.getDayOfMonth() : -1,
+                daysInMonth, "日", null);
     }
 
     private void processWeeklyData() {
         LocalDate startOfWeek = selectedDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate endOfWeek = selectedDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
-        aggregateData(t -> {
-            LocalDate date = Instant.ofEpochMilli(t.date).atZone(ZoneId.systemDefault()).toLocalDate();
+        aggregateData(date -> {
             if (!date.isBefore(startOfWeek) && !date.isAfter(endOfWeek)) {
                 return date.getDayOfWeek().getValue();
             }
@@ -1267,33 +1262,31 @@ public class StatsFragment extends Fragment {
         }, 7, "", new String[]{"", "周一", "周二", "周三", "周四", "周五", "周六", "周日"});
     }
 
-    interface IndexExtractor { int getIndex(Transaction t); }
+    private interface IndexExtractor { int getIndex(LocalDate day); }
 
     private void aggregateData(IndexExtractor extractor, int maxX, String suffix, String[] customLabels) {
         if (dashboard == null) return;
         Map<Integer, Double> income = new HashMap<>(), expense = new HashMap<>();
         Map<String, Double> expenseByCategory = new HashMap<>(), incomeByCategory = new HashMap<>();
         Map<String, Integer> expenseCounts = new HashMap<>(), incomeCounts = new HashMap<>();
-        Map<YearMonth, Double> monthly = new HashMap<>();
+        Map<LocalDate, Double> comparison = new HashMap<>();
         List<Transaction> spending = new ArrayList<>();
         LocalDate start = periodStart(selectedDate);
-        LocalDate end = nextPeriod(start).minusDays(1);
-        LocalDate previousStart = periodStart(start.minusDays(1));
+        LocalDate end = shiftPeriod(start, 1).minusDays(1);
+        LocalDate previousStart = shiftPeriod(start, -1);
+        LocalDate comparisonStart = shiftPeriod(start, 1 - COMPARISON_PERIODS);
         LocalDate today = LocalDate.now();
+        ZoneId zone = ZoneId.systemDefault();
         boolean currentPeriod = !today.isBefore(start) && !today.isAfter(end);
-        YearMonth anchorMonth = YearMonth.from(selectedDate);
-        YearMonth comparisonStart = anchorMonth.minusMonths(4);
-        double previousExpense = 0, totalExpense = 0, totalIncome = 0;
+        double totalExpense = 0, totalIncome = 0;
         int lastBucket = 0;
         for (Transaction tx : allTransactions) {
             if (!tx.isSettled || "资产互转".equals(tx.category) || (tx.type != 0 && tx.type != 1)) continue;
-            LocalDate day = Instant.ofEpochMilli(tx.date).atZone(ZoneId.systemDefault()).toLocalDate();
-            if (tx.type == 0) {
-                YearMonth month = YearMonth.from(day);
-                if (!month.isBefore(comparisonStart) && !month.isAfter(anchorMonth)) monthly.merge(month, tx.amount, Double::sum);
-                if (!day.isBefore(previousStart) && day.isBefore(start)) previousExpense += tx.amount;
+            LocalDate day = Instant.ofEpochMilli(tx.date).atZone(zone).toLocalDate();
+            if (tx.type == 0 && !day.isBefore(comparisonStart) && !day.isAfter(end)) {
+                comparison.merge(periodStart(day), tx.amount, Double::sum);
             }
-            int index = extractor.getIndex(tx);
+            int index = extractor.getIndex(day);
             if (index < 0) continue;
             lastBucket = Math.max(lastBucket, index);
             String category = android.text.TextUtils.isEmpty(tx.category) ? "未分类" : CategoryManager.canonicalCategory(tx.type, tx.category);
@@ -1317,19 +1310,19 @@ public class StatsFragment extends Fragment {
                 expenseByCategory, expenseCounts, totalExpense, 0);
         renderComposition(incomePieChart, R.id.ledger_income_section, R.id.ledger_income_categories,
                 incomeByCategory, incomeCounts, totalIncome, 1);
-        renderMonthlyComparison(anchorMonth, monthly);
+        String unit = currentMode == 0 ? "年" : currentMode == 1 ? "月" : "周";
+        renderExpenseComparison(unit + "支出对比", comparisonStart, comparison);
         renderRanking(spending);
         boolean hasData = !expense.isEmpty() || !income.isEmpty();
-        emptyState.setVisibility(hasData || !monthly.isEmpty() ? View.GONE : View.VISIBLE);
+        emptyState.setVisibility(hasData || !comparison.isEmpty() ? View.GONE : View.VISIBLE);
 
-        String unit = currentMode == 0 ? "年" : currentMode == 1 ? "月" : "周";
         label(R.id.ledger_metric_expense_label, (currentPeriod ? "本" + unit : "当期") + "支出");
         label(R.id.ledger_metric_comparison_label, "较上" + unit);
         label(R.id.ledger_metric_expense, LedgerTransactionRow.money(totalExpense));
         long days = Math.max(1, ChronoUnit.DAYS.between(start, currentPeriod ? today : end) + 1);
         label(R.id.ledger_metric_daily, LedgerTransactionRow.money(totalExpense / days));
         label(R.id.ledger_metric_balance, LedgerTransactionRow.money(totalIncome - totalExpense));
-        double difference = totalExpense - previousExpense;
+        double difference = totalExpense - comparison.getOrDefault(previousStart, 0.0);
         label(R.id.ledger_metric_comparison, (difference >= 0.005 ? "+" : "") + LedgerTransactionRow.money(difference));
         dividerOvertime.setVisibility(View.GONE);
         tvOvertimeContent.setVisibility(View.GONE);
@@ -1342,10 +1335,10 @@ public class StatsFragment extends Fragment {
         return date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
     }
 
-    private LocalDate nextPeriod(LocalDate date) {
-        if (currentMode == 0) return date.plusYears(1);
-        if (currentMode == 1) return date.plusMonths(1);
-        return date.plusWeeks(1);
+    private LocalDate shiftPeriod(LocalDate date, int offset) {
+        if (currentMode == 0) return date.plusYears(offset);
+        if (currentMode == 1) return date.plusMonths(offset);
+        return date.plusWeeks(offset);
     }
 
     private void label(int id, CharSequence text) { ((TextView) dashboard.findViewById(id)).setText(text); }
@@ -1448,26 +1441,39 @@ public class StatsFragment extends Fragment {
         chart.setComposition(slices, colors, total, totalLabel, currentMode + ":" + periodStart(selectedDate));
     }
 
-    private void renderMonthlyComparison(YearMonth anchor, Map<YearMonth, Double> values) {
-        dashboard.findViewById(R.id.ledger_month_compare).setVisibility(values.isEmpty() ? View.GONE : View.VISIBLE);
+    private void renderExpenseComparison(String title, LocalDate firstPeriod, Map<LocalDate, Double> values) {
+        label(R.id.ledger_expense_compare_title, title);
+        dashboard.findViewById(R.id.ledger_expense_compare).setVisibility(values.isEmpty() ? View.GONE : View.VISIBLE);
         if (values.isEmpty()) return;
         Context c = requireContext();
-        com.github.mikephil.charting.charts.BarChart chart = dashboard.findViewById(R.id.ledger_month_chart);
+        com.github.mikephil.charting.charts.BarChart chart = dashboard.findViewById(R.id.ledger_expense_compare_chart);
         int muted = c.getColor(R.color.ledger_muted);
         int active = c.getColor(R.color.ledger_chart_blue);
+        int faded = androidx.core.graphics.ColorUtils.setAlphaComponent(active, 112);
         List<com.github.mikephil.charting.data.BarEntry> bars = new ArrayList<>();
-        String[] labels = new String[5];
-        StringBuilder description = new StringBuilder("月支出对比");
-        for (int i = 0; i < 5; i++) {
-            YearMonth period = anchor.minusMonths(4 - i);
-            labels[i] = period.getMonthValue() + "月";
+        String[] labels = new String[COMPARISON_PERIODS];
+        int[] colors = new int[COMPARISON_PERIODS];
+        StringBuilder description = new StringBuilder(title);
+        for (int i = 0; i < COMPARISON_PERIODS; i++) {
+            LocalDate period = shiftPeriod(firstPeriod, i);
+            String periodDescription;
+            if (currentMode == 0) {
+                labels[i] = period.getYear() + "年";
+                periodDescription = labels[i];
+            } else if (currentMode == 1) {
+                labels[i] = period.getMonthValue() + "月";
+                periodDescription = period.getYear() + "年" + labels[i];
+            } else {
+                labels[i] = period.getMonthValue() + "/" + period.getDayOfMonth();
+                periodDescription = period + " 至 " + period.plusDays(6);
+            }
             double amount = values.getOrDefault(period, 0.0);
             bars.add(new com.github.mikephil.charting.data.BarEntry(i, (float) amount));
-            description.append("，").append(period).append(" ").append(LedgerTransactionRow.money(amount));
+            colors[i] = i == COMPARISON_PERIODS - 1 ? active : faded;
+            description.append("，").append(periodDescription).append(" ").append(LedgerTransactionRow.money(amount));
         }
         com.github.mikephil.charting.data.BarDataSet data = new com.github.mikephil.charting.data.BarDataSet(bars, "");
-        int faded = androidx.core.graphics.ColorUtils.setAlphaComponent(active, 112);
-        data.setColors(faded, faded, faded, faded, active);
+        data.setColors(colors);
         data.setValueTextColor(muted);
         data.setValueTextSize(10f);
         data.setValueFormatter(new ValueFormatter() {
@@ -1491,7 +1497,7 @@ public class StatsFragment extends Fragment {
         x.setGranularity(1f);
         x.setDrawGridLines(false);
         x.setTextColor(muted);
-        x.setLabelCount(5);
+        x.setLabelCount(COMPARISON_PERIODS);
         x.setValueFormatter(new ValueFormatter() {
             @Override public String getFormattedValue(float value) {
                 int i = Math.round(value);
@@ -1697,7 +1703,7 @@ public class StatsFragment extends Fragment {
         else dashboard.setBackgroundResource(R.color.ledger_canvas);
         int alpha = isCustomBg ? 235 : 255;
         for (int id : new int[]{R.id.rg_time_scope, R.id.ledger_stats_metrics, R.id.layout_trend_section,
-                R.id.layout_expense_section, R.id.ledger_income_section, R.id.ledger_month_compare, R.id.ledger_ranking}) {
+                R.id.layout_expense_section, R.id.ledger_income_section, R.id.ledger_expense_compare, R.id.ledger_ranking}) {
             View panel = dashboard.findViewById(id);
             if (panel.getBackground() != null) panel.getBackground().mutate().setAlpha(alpha);
         }

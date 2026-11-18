@@ -32,6 +32,8 @@ import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.database.TransactionDao;
 import com.example.budgetapp.util.DailyBudgetPlan;
 import com.example.budgetapp.util.MonthlyBudgetHistory;
+import com.github.mikephil.charting.charts.BarChart;
+import com.github.mikephil.charting.interfaces.datasets.IBarDataSet;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -380,6 +382,84 @@ public class LedgerUiRegressionTest {
             if (error != null) throw error;
             ((NumberPicker) view).setValue(value);
         });
+    }
+
+    @Test public void statisticsExpenseComparisonUsesSelectedPeriodsAcrossNewYear() {
+        Transaction pending = statsBill(2025, 1, 2, 0, "购物", 5000);
+        pending.isSettled = false;
+        List<Transaction> bills = Arrays.asList(
+                statsBill(2023, 12, 31, 0, "购物", 90), statsBill(2024, 1, 1, 0, "交通", 70),
+                statsBill(2024, 11, 30, 0, "餐饮", 11), statsBill(2024, 12, 1, 0, "购物", 50),
+                statsBill(2024, 12, 16, 0, "餐饮", 19), statsBill(2024, 12, 29, 0, "购物", 13),
+                statsBill(2024, 12, 30, 0, "交通", 30), statsBill(2025, 1, 1, 0, "餐饮", 80),
+                statsBill(2025, 1, 5, 0, "餐饮", 20), statsBill(2025, 1, 6, 0, "购物", 300),
+                statsBill(2025, 12, 31, 0, "交通", 17), statsBill(2026, 1, 1, 0, "交通", 45),
+                statsBill(2025, 1, 2, 1, "薪资", 900), statsBill(2025, 1, 2, 2, "资产互转", 1500), pending);
+
+        try (ActivityScenario<MainActivity> main = ActivityScenario.launch(MainActivity.class)) {
+            select(main, R.id.nav_stats);
+            main.onActivity(activity -> active(activity).requireView().findViewById(R.id.tv_current_date_range).performClick());
+            setPicker(R.id.np_year, 2025);
+            setPicker(R.id.np_month, 1);
+            setPicker(R.id.np_day, 1);
+            onView(withId(R.id.btn_confirm)).inRoot(isDialog()).perform(click());
+            main.onActivity(activity -> {
+                StatsFragment stats = (StatsFragment) active(activity);
+                View root = stats.requireView();
+                stats.renderTransactions(bills);
+                assertExpenseComparison(root, "月支出对比", "1月", 0, 0, 11, 112, 400);
+                root.findViewById(R.id.rb_year).performClick();
+                assertExpenseComparison(root, "年支出对比", "2025年", 0, 0, 90, 193, 417);
+                root.findViewById(R.id.rb_week).performClick();
+                assertExpenseComparison(root, "周支出对比", "12/30", 0, 0, 19, 13, 130);
+                BarChart chart = root.findViewById(R.id.ledger_expense_compare_chart);
+                assertTrue(chart.getContentDescription().toString().contains("2024-12-30 至 2025-01-05 130.00"));
+                root.findViewById(R.id.btn_prev).performClick();
+            });
+            awaitLastExpenseComparisonPeriod(main, "12/23");
+            main.onActivity(activity -> {
+                View root = active(activity).requireView();
+                assertExpenseComparison(root, "周支出对比", "12/23", 61, 0, 0, 19, 13);
+                root.findViewById(R.id.btn_next).performClick();
+            });
+            awaitLastExpenseComparisonPeriod(main, "12/30");
+            main.onActivity(activity -> {
+                View root = active(activity).requireView();
+                assertExpenseComparison(root, "周支出对比", "12/30", 0, 0, 19, 13, 130);
+                root.findViewById(R.id.rb_month).performClick();
+                assertExpenseComparison(root, "月支出对比", "1月", 0, 0, 11, 112, 400);
+            });
+        }
+    }
+
+    private static Transaction statsBill(int year, int month, int day, int type, String category, double amount) {
+        long time = LocalDate.of(year, month, day).atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        return new Transaction(time, type, category, amount);
+    }
+
+    private static void assertExpenseComparison(View root, String title, String lastLabel, float... totals) {
+        assertEquals(View.VISIBLE, root.findViewById(R.id.ledger_expense_compare).getVisibility());
+        assertEquals(title, ((TextView) root.findViewById(R.id.ledger_expense_compare_title)).getText().toString());
+        BarChart chart = root.findViewById(R.id.ledger_expense_compare_chart);
+        IBarDataSet data = chart.getData().getDataSetByIndex(0);
+        assertEquals(totals.length, data.getEntryCount());
+        assertEquals(lastLabel, chart.getXAxis().getValueFormatter().getFormattedValue(totals.length - 1));
+        for (int i = 0; i < totals.length; i++) assertEquals(totals[i], data.getEntryForIndex(i).getY(), 0.001f);
+    }
+
+    private static void awaitLastExpenseComparisonPeriod(ActivityScenario<MainActivity> main, String expected) {
+        AtomicReference<String> actual = new AtomicReference<>();
+        long deadline = SystemClock.uptimeMillis() + 2500;
+        do {
+            main.onActivity(activity -> {
+                BarChart chart = active(activity).requireView().findViewById(R.id.ledger_expense_compare_chart);
+                int count = chart.getData().getDataSetByIndex(0).getEntryCount();
+                actual.set(chart.getXAxis().getValueFormatter().getFormattedValue(count - 1));
+            });
+            if (expected.equals(actual.get())) return;
+            SystemClock.sleep(25);
+        } while (SystemClock.uptimeMillis() < deadline);
+        assertEquals(expected, actual.get());
     }
 
     private static void awaitBudgetAmount(ActivityScenario<MainActivity> main, double used, double limit) {
