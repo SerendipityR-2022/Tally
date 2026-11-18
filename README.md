@@ -1,15 +1,15 @@
-# Tally · 3.8.7
+# Tally · 3.8.8
 
 [![Android Build](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml/badge.svg)](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml) [下载正式 APK](https://github.com/SerendipityR-2022/Tally/releases/latest)
 
 > [!IMPORTANT]
 > **这是一个纯 Vibe Coding 的个人分支。** 我做这个分支是为了满足个人需求，让 Tally 更符合我的审美和使用习惯。我没有移动应用开发经验，可能无法回复或处理 Issue，还请见谅。
 
-这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的个人分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。应用包名为 `com.example.budgetapp`。[稳定版 3.8.7](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.7) · [预发布版 3.8.8-rc5](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.8-rc5)
+这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的个人分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。应用包名为 `com.example.budgetapp`。[稳定版 3.8.8](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.8)
 
 分支 APK 使用分支签名。如果手机上的同包名版本采用不同签名，需先备份账本再换装。
 
-3.8.8 候选版增加学习记录管理、按应用默认关联资产和动态日均预算，统一了收支构成图，并改进趋势图拖动和微信支付分类。RC5 修复视觉模型的连接测试和 AI 配置恢复，并让含订单号的微信交易详情也能使用 AI 分类。
+3.8.8 增加学习记录管理、按应用默认关联资产和动态日均预算，统一了收支构成图，并改进趋势图拖动和微信支付分类。此版还修复了 AI 配置恢复、视觉模型连接测试，以及新增或编辑账单时日期未随选择更新的问题。
 
 ## 分支改动
 

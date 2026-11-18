@@ -1733,7 +1733,7 @@ public class RecordFragment extends Fragment {
 
         Runnable updateDateDisplay = () -> sheet.updateDate(calendar);
         updateDateDisplay.run();
-        sheet.bindDateActions(() -> showTransactionDateTimePicker(calendar, updateDateDisplay),
+        sheet.bindDateActions(() -> showTransactionDatePicker(calendar, updateDateDisplay),
                 () -> showTransactionTimePickerDialog(calendar, updateDateDisplay));
         if (existingTransaction == null) sheet.bindAccountActions(categoryAdapter, viewModel, calendar, assetList);
 
@@ -2106,9 +2106,9 @@ public class RecordFragment extends Fragment {
     }
 
     /**
-     * 显示日期选择器，选择完日期后自动弹出时间选择器
+     * 显示日期选择器，确认后更新记账表单的日期。
      */
-    private void showTransactionDateTimePicker(java.util.Calendar calendar, Runnable updateDisplay) {
+    private void showTransactionDatePicker(java.util.Calendar calendar, Runnable updateDisplay) {
         if (getContext() == null) return;
 
         LedgerPickerDialog dialog = new LedgerPickerDialog(getContext(), R.layout.dialog_bottom_date_picker);
@@ -2174,8 +2174,8 @@ public class RecordFragment extends Fragment {
             calendar.set(java.util.Calendar.YEAR, npYear.getValue());
             calendar.set(java.util.Calendar.MONTH, npMonth.getValue() - 1);
             calendar.set(java.util.Calendar.DAY_OF_MONTH, npDay.getValue());
+            updateDisplay.run();
             dialog.dismiss();
-
         });
 
         dialog.show();
