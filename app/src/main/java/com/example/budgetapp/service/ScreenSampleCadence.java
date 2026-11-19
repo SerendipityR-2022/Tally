@@ -24,6 +24,37 @@ final class ScreenSampleCadence {
 
     private ScreenSampleCadence() { }
 
+    /** Immutable timing shared by the sampler and the accessibility event thread. */
+    static final class TreeTiming {
+        static final TreeTiming EMPTY = new TreeTiming(-1, -1);
+        final long lastReadAt;
+        private final long initialRetryUntil;
+
+        TreeTiming(long lastReadAt, long initialRetryUntil) {
+            this.lastReadAt = lastReadAt;
+            this.initialRetryUntil = initialRetryUntil;
+        }
+
+        boolean allowsInitialRetry(long now) {
+            return now < initialRetryUntil;
+        }
+
+        long contentSampleAt(long now) {
+            long settledAt = now + EVENT_SETTLE_MS;
+            if (lastReadAt < 0) return settledAt;
+            long fastAt = Math.max(settledAt, lastReadAt + INITIAL_TREE_INTERVAL_MS);
+            if (allowsInitialRetry(fastAt)) return fastAt;
+            return Math.max(settledAt, lastReadAt + MIN_TREE_INTERVAL_MS);
+        }
+    }
+
+    static boolean needsForegroundHint(boolean taskEvents, String lastHint, boolean taskChanged,
+            long lastFocusAt, long now, boolean verifiedTarget) {
+        return !taskEvents || lastHint == null || taskChanged || lastFocusAt < 0
+                || now - lastFocusAt >= IDLE_WATCHDOG_MS
+                || (!lastHint.isEmpty() && !verifiedTarget);
+    }
+
     static long treeDelay(long lastTreeAt, long now, boolean changed) {
         return treeDelay(lastTreeAt, now, changed, 0, 0);
     }

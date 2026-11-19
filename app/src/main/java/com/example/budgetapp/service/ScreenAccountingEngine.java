@@ -167,9 +167,14 @@ public class ScreenAccountingEngine extends ContextWrapper {
     // 更新金额匹配正则：捕获金额前的1-3位非数字符号
     private final Pattern amountWithSymbolPattern = Pattern.compile("([^0-9\\s]{1,3})?\\s*([0-9,]+(\\.\\d{1,2})?)");
 
-    /** Must be called on the main thread with an immutable, detached screen snapshot. */
-    public void analyze(ScreenNode rootNode) {
-        if (rootNode == null || isBusy() || !isEnabledForExecution() || !presentationGuard.getAsBoolean()) return;
+    /** Offers a detached snapshot on main. Returns whether it passed the input guard. */
+    public boolean analyze(ScreenNode rootNode) {
+        if (rootNode == null || isBusy() || !isEnabledForExecution() || !presentationGuard.getAsBoolean()) return false;
+        analyzeSnapshot(rootNode);
+        return true;
+    }
+
+    private void analyzeSnapshot(ScreenNode rootNode) {
         try {
             String packageName = rootNode.getPackageName() != null ? rootNode.getPackageName().toString() : "";
 

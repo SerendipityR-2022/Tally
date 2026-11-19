@@ -4,6 +4,8 @@ import org.junit.Test;
 
 import static com.example.budgetapp.service.ScreenSampleCadence.*;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class ScreenSampleCadenceTest {
     @Test public void newForegroundHintTriggersImmediateAuthoritativeFocusCheck() {
@@ -79,5 +81,32 @@ public class ScreenSampleCadenceTest {
         assertEquals(3900, treeDelay(0, 100, false, 0, 0, true));
         assertEquals(470, treeDelay(0, 180, true, 0, 0, false));
         assertEquals(0, treeDelay(-1, 100, true, 0, 0, true));
+    }
+
+    @Test public void contentBurstsShareTheNextEligibleTreeReadWithoutAddingAnEarlyProbe() {
+        TreeTiming timing = new TreeTiming(1000, -1);
+        assertEquals(1650, timing.contentSampleAt(1001));
+        assertEquals(1650, timing.contentSampleAt(1200));
+        assertEquals(1650, timing.contentSampleAt(1500));
+        assertEquals(1770, timing.contentSampleAt(1700));
+        assertEquals(1070, TreeTiming.EMPTY.contentSampleAt(1000));
+    }
+
+    @Test public void aFirstFrameCanFollowUpFastOnlyWhileItsWindowIsStillSettling() {
+        TreeTiming timing = new TreeTiming(500, 1200);
+        assertEquals(680, timing.contentSampleAt(510));
+        assertEquals(970, timing.contentSampleAt(900));
+        TreeTiming lateFirstFrame = new TreeTiming(1100, 1200);
+        assertEquals(1750, lateFirstFrame.contentSampleAt(1110));
+    }
+
+    @Test public void steadyRefreshesReuseTheTaskHintButWindowChangesAndFallbacksRequery() {
+        assertFalse(needsForegroundHint(true, "payment/.Receipt", false, 0, 650, true));
+        assertTrue(needsForegroundHint(true, "payment/.Receipt", true, 0, 650, true));
+        assertTrue(needsForegroundHint(true, "payment/.Receipt", false, 0, 650, false));
+        assertTrue(needsForegroundHint(false, "payment/.Receipt", false, 0, 650, true));
+        assertTrue(needsForegroundHint(true, null, false, 0, 650, true));
+        assertFalse(needsForegroundHint(true, "", false, 0, IDLE_WATCHDOG_MS - 1, false));
+        assertTrue(needsForegroundHint(true, "", false, 0, IDLE_WATCHDOG_MS, false));
     }
 }

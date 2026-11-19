@@ -59,11 +59,7 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
     private final AtomicLong focusRevision = new AtomicLong();
     private final AtomicBoolean wakeQueued = new AtomicBoolean();
     private final AtomicBoolean focusWakeQueued = new AtomicBoolean();
-    private final TaskForegroundObserver taskObserver = new TaskForegroundObserver(() -> {
-        focusRevision.incrementAndGet();
-        revision.incrementAndGet();
-        notifyChanged(focusWakeQueued);
-    });
+    private final TaskForegroundObserver taskObserver = new TaskForegroundObserver(this::onWindowChanged);
     private volatile IScreenCaptureListener listener;
     private IBinder.DeathRecipient clientDeath;
     private volatile String watchedPackage;
@@ -74,7 +70,7 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
     private boolean taskHintUnavailable;
     private ScreenCapturePolicy.FocusedWindow verifiedFocus;
     private long lastFocusAt = -1;
-    private long lastTreeAt = -1;
+    private volatile TreeTiming treeTiming = TreeTiming.EMPTY;
     private long sampledRevision;
     private long checkedFocusRevision;
     private int quietSamples;
@@ -153,11 +149,16 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
             focusWakeQueued.set(false);
             boolean taskEvents = taskObserver.start();
             long observedFocusRevision = focusRevision.get();
-            String hint = foregroundHint();
-            boolean hintChanged = !Objects.equals(lastHint, hint) || checkedFocusRevision != observedFocusRevision;
-            lastHint = hint;
             long now = SystemClock.uptimeMillis();
             boolean target = verifiedFocus != null;
+            boolean taskChanged = checkedFocusRevision != observedFocusRevision;
+            // Reuse the scheduling hint on steady content refreshes. WindowManager still
+            // verifies the actual foreground window before and after every tree read.
+            String hint = needsForegroundHint(taskEvents, lastHint, taskChanged, lastFocusAt, now, target)
+                    ? foregroundHint() : lastHint;
+            boolean hintChanged = taskChanged || !Objects.equals(lastHint, hint);
+            lastHint = hint;
+            now = SystemClock.uptimeMillis();
             boolean hintIsTarget = hint != null && !hint.isEmpty();
             int probe = probeDelay(taskEvents, hint != null, hintIsTarget, target);
             if (!allowHierarchy && target) probe = Math.min(probe, TARGET_PROBE_MS);
@@ -172,8 +173,8 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
             ScreenCapturePolicy.FocusedWindow focus = windowFocus.read(userId, hintIsTarget);
             checkedFocusRevision = observedFocusRevision;
             lastFocusAt = SystemClock.uptimeMillis();
-            if (!screenAvailable()) return pause();
             if (focus == null || !isAllowed(focus.packageName)) {
+                if (!screenAvailable()) return pause();
                 if (verifiedFocus != null || automation != null) releaseReader();
                 verifiedFocus = null;
                 return result(IDLE, probeDelay(taskEvents, hint != null, hintIsTarget, false), null, null);
@@ -183,7 +184,11 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
             untilTree = allowHierarchy ? nextTree(now) : Long.MAX_VALUE;
             // While confirmation/classification is busy, retain a bounded resume check.
             probe = allowHierarchy ? probeDelay(taskEvents, hint != null, hintIsTarget, true) : TARGET_PROBE_MS;
-            if (untilTree > 0) return result(TARGET, nextDelay(probe, untilTree), null, null);
+            if (untilTree > 0) {
+                if (!screenAvailable()) return pause();
+                return result(TARGET, nextDelay(probe, untilTree), null, null);
+            }
+            // readHierarchy checks availability again immediately before fetching the root.
             return readHierarchy(focus, probe, null);
         } catch (ReflectiveOperationException e) {
             Log.w(TAG, "Unable to initialize UiAutomation", e);
@@ -196,7 +201,7 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
 
     private void rememberFocus(ScreenCapturePolicy.FocusedWindow focus) {
         if (!focus.matches(verifiedFocus)) {
-            lastTreeAt = -1;
+            treeTiming = TreeTiming.EMPTY;
             lastDigest = null;
             quietSamples = unreadableSamples = 0;
             windowEnteredAt = SystemClock.uptimeMillis();
@@ -304,7 +309,7 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
                 rememberFocus(focus);
                 long now = SystemClock.uptimeMillis();
                 // Even when an OEM drops content events, re-read a stable diagnostic window promptly.
-                if (nextTree(now) == 0 || now - lastTreeAt >= DIAGNOSTIC_QUIET_TREE_MS) {
+                if (nextTree(now) == 0 || now - treeTiming.lastReadAt >= DIAGNOSTIC_QUIET_TREE_MS) {
                     long readStarted = SystemClock.elapsedRealtime();
                     Bundle sample = readHierarchy(focus, DIAGNOSTIC_PROBE_MS, run);
                     int state = sample.getInt(STATE);
@@ -348,8 +353,9 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
     private long nextTree(long now) {
         // A just-opened window can expose its old/loading tree before the receipt is drawn. Allow
         // one early follow-up, then retain the normal rate limit even during continuous animation.
-        boolean initialRetry = windowSamples == 1 && now - windowEnteredAt < WINDOW_SETTLE_MS;
-        return treeDelay(lastTreeAt, now, revision.get() != sampledRevision, quietSamples, unreadableSamples, initialRetry);
+        TreeTiming timing = treeTiming;
+        return treeDelay(timing.lastReadAt, now, revision.get() != sampledRevision,
+                quietSamples, unreadableSamples, timing.allowsInitialRetry(now));
     }
 
     private Bundle readHierarchy(ScreenCapturePolicy.FocusedWindow focus, int probe, ReaderDiagnosticSession run)
@@ -382,11 +388,12 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
             if (run != null) run.note("Target authorization or deadline changed");
             return focusChanged(null);
         }
+        windowSamples = Math.min(2, windowSamples + 1);
+        treeTiming = new TreeTiming(SystemClock.uptimeMillis(),
+                windowSamples == 1 ? windowEnteredAt + WINDOW_SETTLE_MS : -1);
         wakeQueued.set(false);
         long observedRevision = revision.get();
         boolean contentChanged = observedRevision != sampledRevision;
-        lastTreeAt = SystemClock.uptimeMillis();
-        windowSamples = Math.min(2, windowSamples + 1);
         phase(run, "reader.root.active");
         long rootStarted = run == null ? 0 : SystemClock.elapsedRealtime();
         AccessibilityNodeInfo root = automation.getRootInActiveWindow();
@@ -525,7 +532,7 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
         if (now != null && isAllowed(now.packageName)) {
             // Throw away the raced snapshot, but reuse UiAutomation for the next verified window.
             verifiedFocus = now;
-            lastTreeAt = -1;
+            treeTiming = TreeTiming.EMPTY;
             lastDigest = null;
             quietSamples = unreadableSamples = 0;
             windowEnteredAt = SystemClock.uptimeMillis();
@@ -633,16 +640,27 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
             String watching = watchedPackage;
             if (watching == null || !watching.contentEquals(event.getPackageName() == null ? "" : event.getPackageName())) return;
             ReaderDiagnosticSession run = diagnostic;
-            if (run != null && diagnosticHandler != null) run.event(SystemClock.elapsedRealtime(), event.getEventType(),
+            boolean diagnosticActive = diagnosticHandler != null;
+            if (run != null && diagnosticActive) run.event(SystemClock.elapsedRealtime(), event.getEventType(),
                     event.getWindowId(), event.getContentChangeTypes(), event.getClassName());
-            revision.incrementAndGet();
-            notifyChanged(wakeQueued);
+            if (diagnosticActive || event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                revision.incrementAndGet();
+                notifyChanged(wakeQueued, treeTiming.contentSampleAt(SystemClock.uptimeMillis()));
+            } else {
+                onWindowChanged();
+            }
         } finally {
             event.recycle();
         }
     }
 
-    private void notifyChanged(AtomicBoolean queued) {
+    private void onWindowChanged() {
+        focusRevision.incrementAndGet();
+        revision.incrementAndGet();
+        notifyChanged(focusWakeQueued, SystemClock.uptimeMillis() + EVENT_SETTLE_MS);
+    }
+
+    private void notifyChanged(AtomicBoolean queued, long sampleAt) {
         Handler handler = diagnosticHandler;
         if (handler != null) {
             if (queued.compareAndSet(false, true)) {
@@ -653,7 +671,7 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
         }
         IScreenCaptureListener target = listener;
         if (target == null || !queued.compareAndSet(false, true)) return;
-        try { target.onScreenChanged(); }
+        try { target.onScreenChanged(sampleAt); }
         catch (RemoteException ignored) {
             queued.set(false);
             // The death recipient releases reader state if the owning app has gone away.
@@ -676,7 +694,7 @@ public final class ScreenCaptureUserService extends IScreenCaptureService.Stub {
 
     private void releaseReader() {
         watchedPackage = null;
-        lastTreeAt = -1;
+        treeTiming = TreeTiming.EMPTY;
         lastDigest = null;
         quietSamples = unreadableSamples = 0;
         windowSamples = 0;

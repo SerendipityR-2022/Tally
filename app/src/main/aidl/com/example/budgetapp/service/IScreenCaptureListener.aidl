@@ -1,6 +1,6 @@
 package com.example.budgetapp.service;
 
-/** A coalesced wake-up signal only, with no package names or window contents. */
+/** A coalesced sampling deadline in SystemClock.uptimeMillis(), with no screen data. */
 oneway interface IScreenCaptureListener {
-    void onScreenChanged();
+    void onScreenChanged(long sampleAt);
 }

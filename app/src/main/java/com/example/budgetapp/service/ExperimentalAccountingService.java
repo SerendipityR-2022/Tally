@@ -52,8 +52,8 @@ public final class ExperimentalAccountingService extends Service {
     private static final String TAG = "TallyScreenReader";
     private static final String CHANNEL = "experimental_screen_accounting";
     private static final int NOTIFICATION = 1003;
-    // Discard cached UserServices that still expose the removed reader-mode transaction.
-    private static final int READER_VERSION = 14;
+    // Cached readers must use the same Binder callback signature.
+    private static final int READER_VERSION = 15;
     private static final String ACTION_STOP = "com.example.budgetapp.STOP_EXPERIMENTAL_ACCOUNTING";
     private static volatile int status = R.string.experimental_status_stopped;
     private static volatile boolean running;
@@ -100,7 +100,7 @@ public final class ExperimentalAccountingService extends Service {
     // Scheduling state lives on main. Only the serial worker touches the remote reader.
     private boolean screenActive;
     private boolean inFlight;
-    private boolean eventWhileReading;
+    private long pendingSampleAt = Long.MAX_VALUE;
     private long scheduledAt = Long.MAX_VALUE;
     private int failures;
     private int emptyScreens;
@@ -366,11 +366,11 @@ public final class ExperimentalAccountingService extends Service {
             io.execute(() -> {
                 try {
                     int uid = reader.initialize(new IScreenCaptureListener.Stub() {
-                        @Override public void onScreenChanged() {
+                        @Override public void onScreenChanged(long sampleAt) {
                             int caller = Binder.getCallingUid();
                             if (caller != 0 && caller != 2000) return;
                             main.post(() -> {
-                                if (remote == reader) requestSample(EVENT_SETTLE_MS);
+                                if (remote == reader) requestSampleAt(sampleAt);
                             });
                         }
                     });
@@ -442,7 +442,7 @@ public final class ExperimentalAccountingService extends Service {
         screenActive = false;
         screenGeneration++;
         failures = emptyScreens = 0;
-        eventWhileReading = false;
+        pendingSampleAt = Long.MAX_VALUE;
         scheduledAt = Long.MAX_VALUE;
         main.removeCallbacks(sampleTask);
         main.removeCallbacks(sampleTimeout);
@@ -457,12 +457,15 @@ public final class ExperimentalAccountingService extends Service {
     }
 
     private void requestSample(int delay) {
+        requestSampleAt(SystemClock.uptimeMillis() + delay);
+    }
+
+    private void requestSampleAt(long when) {
         if (!screenActive || destroyed || failed || !running || remote == null) return;
         if (inFlight) {
-            eventWhileReading = true;
+            pendingSampleAt = Math.min(pendingSampleAt, when);
             return;
         }
-        long when = SystemClock.uptimeMillis() + delay;
         if (when >= scheduledAt) return;
         scheduledAt = when;
         main.removeCallbacks(sampleTask);
@@ -620,7 +623,7 @@ public final class ExperimentalAccountingService extends Service {
         final boolean allowHierarchy = !engine.isBusy();
         final long generation = screenGeneration;
         inFlight = true;
-        eventWhileReading = false;
+        pendingSampleAt = Long.MAX_VALUE;
         main.postDelayed(sampleTimeout, 20000);
         io.execute(() -> {
             try {
@@ -687,17 +690,16 @@ public final class ExperimentalAccountingService extends Service {
                 if (++emptyScreens >= 3) status = R.string.experimental_status_unreadable;
                 break;
             case TARGET:
-                if (snapshot != null && canCaptureNow() && !engine.isBusy()) {
+                if (snapshot != null && engine.analyze(snapshot)) {
                     emptyScreens = 0;
                     status = R.string.experimental_status_active;
-                    engine.analyze(snapshot);
                 }
                 break;
             default: break;
         }
         int delay = Math.max(EVENT_SETTLE_MS, Math.min(IDLE_WATCHDOG_MS, result.getInt(DELAY, IDLE_PROBE_MS)));
         if (engine.isBusy()) delay = Math.min(delay, TARGET_PROBE_MS);
-        requestSample(eventWhileReading ? Math.min(delay, EVENT_SETTLE_MS) : delay);
+        requestSampleAt(Math.min(SystemClock.uptimeMillis() + delay, pendingSampleAt));
     }
 
     private void fail(int message) {

@@ -2,6 +2,7 @@ package com.example.budgetapp.util;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
+import android.os.IBinder;
 import android.view.accessibility.AccessibilityManager;
 
 import java.io.BufferedReader;
@@ -32,16 +33,12 @@ public class ShizukuManager {
      * 判断当前 App 是否获得了 Shizuku 的权限
      */
     public static boolean hasShizukuPermission() {
-        if (!isShizukuAvailable()) {
-            return false;
-        }
         try {
-            if (Shizuku.isPreV11()) {
-                return false;
-            }
+            IBinder binder = Shizuku.getBinder();
+            if (binder == null || Shizuku.isPreV11()) return false;
             // The SDK caches a successful grant, so check the server for current permission.
-            IShizukuService service = IShizukuService.Stub.asInterface(Shizuku.getBinder());
-            return service != null && service.checkSelfPermission();
+            // A dead Binder fails this call directly; a separate ping adds another round trip.
+            return IShizukuService.Stub.asInterface(binder).checkSelfPermission();
         } catch (Exception t) {
             return false;
         }
