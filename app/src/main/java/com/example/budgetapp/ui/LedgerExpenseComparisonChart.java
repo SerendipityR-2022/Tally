@@ -24,6 +24,7 @@ public final class LedgerExpenseComparisonChart extends BarChart {
     void setComparisonData(BarData data, String[] labels, boolean weekly) {
         weekLabels = weekly ? labels : null;
         setMinOffset(weekly ? WEEK_SIDE_MARGIN_DP : 15f);
+        setExtraBottomOffset(weekly ? 5f : 0f);
         XAxis axis = getXAxis();
         axis.setTypeface(weekly ? CONDENSED : null);
         if (weekly) {
