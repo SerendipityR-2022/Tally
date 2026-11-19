@@ -1,19 +1,23 @@
-# Tally · 3.8.9-rc2
+# Tally · 3.8.9-rc3
 
-[![Android Build](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml/badge.svg)](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml) [下载正式 APK](https://github.com/SerendipityR-2022/Tally/releases/latest)
+[![Android Build](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml/badge.svg)](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml)
+
+[**下载预发布版 3.8.9-rc3（推荐）**](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.9-rc3) · [下载稳定版](https://github.com/SerendipityR-2022/Tally/releases/latest)
 
 > [!IMPORTANT]
 > **这是一个纯 Vibe Coding 的个人分支。** 我做这个分支是为了满足个人需求，让 Tally 更符合我的审美和使用习惯。我没有移动应用开发经验，可能无法回复或处理 Issue，还请见谅。
 
-这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的个人分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。应用包名为 `com.example.budgetapp`。[稳定版 3.8.8](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.8)
+这是柏芸的 [Tally 3.8.5](https://github.com/cypressincloud/Tally/releases/tag/3.8.5) 的个人分支，保留原版账本、预算、资产、续费提醒、多币种、照片备份和 WebDAV 等功能。应用包名为 `com.example.budgetapp`。
 
 分支 APK 使用分支签名。如果手机上的同包名版本采用不同签名，需先备份账本再换装。
 
-3.8.8 增加学习记录管理、按应用默认关联资产和动态日均预算，统一了收支构成图，并改进趋势图拖动和微信支付分类。此版还修复了 AI 配置恢复、视觉模型连接测试，以及新增或编辑账单时日期未随选择更新的问题。
+**3.8.9-rc3** 包含前两版预发布的改动，并减少 Shizuku 实验模式在动态页面上的重复采样和系统查询。
 
 [预发布版 3.8.9-rc1](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.9-rc1) 支持识别已支付的微信群收款，修复部分微信扫码付款详情的收款人提取和 AI 分类，并可在记账助手中开启结果通知。无障碍和实验模式均支持调试采集；应用选择可搜索名称或包名，导出的 XML 带时间戳。
 
 [预发布版 3.8.9-rc2](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.9-rc2) 新增 6×2「周记账统计」桌面组件；统计页的周支出对比按完整日期区间显示。
+
+稳定版 3.8.8 增加学习记录管理、按应用默认关联资产和动态日均预算，统一了收支构成图，并改进趋势图拖动和微信支付分类。此版还修复了 AI 配置恢复、视觉模型连接测试，以及新增或编辑账单时日期未随选择更新的问题。
 
 ## 分支改动
 
@@ -41,19 +45,21 @@
 - **微信节点混淆**：仅使用 Shizuku 实验模式，目前无法解决微信对返回节点的混淆。可以在保留 Tally 实验模式的同时，开启 GKD 的「无障碍模式」。实测这样可让微信暂时停止混淆、返回可读取的节点，效果可能因系统和微信版本而异。也可以直接将 Tally 切换到原生无障碍模式。
 - **读屏连接冲突**：其他同样通过 Shell 调用 `UiAutomation` 的工具可能与 Tally 争用连接，例如 GKD 的「自动化模式」。如果实验模式提示连接失败或读不到节点，先关闭 GKD 的「自动化模式」或其他同类服务，再重试。
 
-## 基准：与原版对照
+## 基准：原生无障碍与 Shizuku 实验模式
 
-各列采用该模式最近一次实测：原版沿用原生无障碍对照，分支采用 **2026 年 11 月 17 日**的 Shizuku 伴生测试。测试运行于 Android 14 模拟器，使用合成支付页；各批次结果只作参考。CPU 数值为应用进程及其读屏相关进程的 CPU 时间（ms/s），不是耗电量。
+**2026 年 11 月 19 日**，在同一台 Android 14 模拟器使用合成支付页和 Perfetto 测量。原生无障碍为同机上一轮数据；降幅按本轮 Shizuku 优化前后计算。单位为 ms CPU/s，统计 Tally 主进程和伴生读取进程。该数据不能换算成真机耗电。
 
-| 场景 / 指标 | 原版 · 原生无障碍<br>2026-11-16 | 本分支 · Shizuku 实验模式<br>2026-11-17 |
-| --- | ---: | ---: |
-| 亮屏桌面 CPU | 0.4954 | 0.0362 |
-| 静态支付页 CPU | 0.0174 | 0.3128 |
-| 熄屏 CPU | 0.0000 | 0.0138 |
-| 支付页每 50 ms 刷新 CPU | 2.8215 | 11.6414 |
-| 应用内切入支付页，确认窗中位耗时 | 601.54 ms；12/12 | 138.19 ms；12/12 |
-| 从桌面切入支付页，确认窗中位耗时 | 543.34 ms；12/12 | 141.80 ms；12/12 |
-| 应用内 550 ms 短页，确认窗中位耗时 | 599.80 ms；12/12 | 135.56 ms；12/12 |
+| 场景 | 原生无障碍 | Shizuku 优化前（rc2） | Shizuku 优化后（rc3） | 优化前后 |
+| --- | ---: | ---: | ---: | ---: |
+| 支付页每 50 ms 刷新 | 2.457 | 10.558 | 8.676 | **−17.8%** |
+| 支付页每 700 ms 刷新 | 4.173 | 8.231 | 6.653 | **−19.2%** |
+| 亮屏桌面 | 1.182 | 0.037 | 0.039 | +0.002 ms/s |
+| 静态支付页 | 0.011 | 0.320 | 0.307 | −0.013 ms/s |
+| 熄屏 | 0.000 | 0.015 | 0.021 | +0.006 ms/s |
+
+动态场景各采样两次；桌面、静态页和熄屏在本轮各采样一次。优化后，50 ms 场景的采样请求从 3.06 降到 1.53 次/秒，700 ms 场景从 2.89 降到 1.47 次/秒，节点查询频率基本相同。50 ms 场景中，原生模式因等待页面稳定而未查询节点，实验模式仍限频读取。
+
+550 ms 短收据单独复测，Shizuku 优化前后均识别 **9/9**（从桌面打开 4 次、应用内切换 4 次、熄屏恢复后 1 次）。从页面绘制到确认窗出现的中位时间分别为 **137.84 ms** 和 **137.98 ms**。原生模式没有可比的短收据计时。
 
 <details>
 <summary>软件截图（展开查看）</summary>
