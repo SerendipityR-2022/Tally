@@ -52,7 +52,8 @@ public class WeeklyWidgetInstrumentedTest {
             assertEquals("¥ 0.00", text(shown, R.id.weekly_today_expense));
             assertEquals("¥ 36.00", text(shown, R.id.weekly_today_income));
             View hidden = WeeklySummaryWidget.views(context, 0, ledger, true, chart).apply(context, parent);
-            assertEquals("••••", text(hidden, R.id.weekly_today_income));
+            assertEquals("******", text(hidden, R.id.weekly_today_expense));
+            assertEquals("******", text(hidden, R.id.weekly_today_income));
             ImageView hiddenChart = hidden.findViewById(R.id.weekly_chart_bars);
             assertTrue(((BitmapDrawable) hiddenChart.getDrawable()).getBitmap().sameAs(chart));
             assertFalse(hiddenChart.getContentDescription().toString().contains("36.00"));

@@ -168,7 +168,7 @@ public final class WeeklySummaryWidget extends AppWidgetProvider {
     private static String money(double amount) { return "¥ " + TransactionDisplay.money(amount); }
 
     private static CharSequence amountLabel(double amount, boolean hidden) {
-        if (hidden) return "••••";
+        if (hidden) return "******";
         SpannableString text = new SpannableString(money(amount));
         text.setSpan(new RelativeSizeSpan(0.75f), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         return text;

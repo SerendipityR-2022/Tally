@@ -13,7 +13,7 @@
 
 [预发布版 3.8.9-rc1](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.9-rc1) 支持识别已支付的微信群收款，修复部分微信扫码付款详情的收款人提取和 AI 分类，并可在记账助手中开启结果通知。无障碍和实验模式均支持调试采集；应用选择可搜索名称或包名，导出的 XML 带时间戳。
 
-[预发布版 3.8.9-rc2](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.9-rc2) 新增 4×2「周记账统计」桌面组件；统计页的周支出对比按完整日期区间显示。
+[预发布版 3.8.9-rc2](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.9-rc2) 新增 6×2「周记账统计」桌面组件；统计页的周支出对比按完整日期区间显示。
 
 ## 分支改动
 
