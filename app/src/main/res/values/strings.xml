@@ -18,6 +18,10 @@
     </string-array>
     <string name="hide_in_recents">在最近任务中隐藏</string>
     <string name="silent_accounting_title">无需手动确认</string>
+    <string name="screen_accounting_result_switch">在通知栏中显示记账结果</string>
+    <string name="screen_accounting_result_channel">自动记账结果</string>
+    <string name="screen_accounting_result_success">记账成功</string>
+    <string name="screen_accounting_result_permission">请在系统设置中允许「自动记账结果」通知。</string>
     <string name="silent_accounting_description">识别结果直接入账，不弹出确认窗</string>
     <string name="accessibility_source">普通模式使用无障碍，也可在下方改用 Shizuku</string>
     <string name="accessibility_permission_message">普通模式需要开启「记账屏幕同步助手」。也可在记账助手启用实验模式，授权 Shizuku 后无需无障碍权限。</string>

@@ -129,7 +129,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="记账助手"
-                        android:tag="屏幕自动记账 无障碍 Shizuku 实验模式 保活 直接入账 无需手动确认 自动记账日志 历史 调试 转账红包关键词" />
+                        android:tag="屏幕自动记账 无障碍 Shizuku 实验模式 保活 直接入账 无需手动确认 通知栏 记账结果 自动记账日志 历史 调试 转账红包关键词" />
                     <com.example.budgetapp.ui.SettingsRow
                         android:id="@+id/btn_ai_setting"
                         android:layout_width="match_parent"

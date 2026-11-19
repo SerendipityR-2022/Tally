@@ -2,6 +2,7 @@ package com.example.budgetapp.ui;
 
 import android.content.Intent;
 import android.Manifest;
+import android.app.NotificationManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -36,6 +37,7 @@ import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.KeywordManager;
 import com.example.budgetapp.util.ShizukuManager;
 import com.example.budgetapp.service.ExperimentalAccountingService;
+import com.example.budgetapp.service.ScreenAccountingResultNotification;
 import com.example.budgetapp.util.ScreenCaptureSettings;
 
 import java.util.ArrayList;
@@ -65,11 +67,13 @@ public class AssistantManagerActivity extends AppCompatActivity {
     private static final int REQUEST_EXPERIMENTAL = 1002;
     private static final int REQUEST_OVERLAY = 1003;
     private static final int REQUEST_NOTIFICATIONS = 1004;
+    private static final int REQUEST_RESULT_NOTIFICATION = 1005;
 
     private ScreenCaptureSettings captureSettings;
     private SwitchCompat switchShizukuKeepAlive;
     private SwitchCompat switchExperimental;
     private SwitchCompat switchSilentAccounting;
+    private SwitchCompat switchResultNotification;
     private TextView tvShizukuStatus;
     private TextView tvExperimentalStatus;
     private TextView tvAutoTrackSource;
@@ -198,6 +202,22 @@ public class AssistantManagerActivity extends AppCompatActivity {
             captureSettings.setSilentAccountingEnabled(checked);
             updateShizukuStatusDisplay();
         });
+        switchResultNotification = findViewById(R.id.switchAccountingResultNotification);
+        switchResultNotification.setChecked(captureSettings.isResultNotificationEnabled());
+        switchResultNotification.setOnCheckedChangeListener((button, checked) -> {
+            if (rendering) return;
+            if (!checked || ScreenAccountingResultNotification.isAllowed(this)) {
+                captureSettings.setResultNotificationEnabled(checked);
+                return;
+            }
+            updateShizukuStatusDisplay();
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_RESULT_NOTIFICATION);
+            } else {
+                showResultNotificationSettings();
+            }
+        });
 
         switchAutoTrack.setChecked(config.isEnabled());
 
@@ -277,6 +297,7 @@ public class AssistantManagerActivity extends AppCompatActivity {
             switchShizukuKeepAlive.setChecked(captureSettings.isKeepAliveEnabled());
             switchExperimental.setChecked(experimental);
             switchSilentAccounting.setChecked(captureSettings.isSilentAccountingEnabled());
+            switchResultNotification.setChecked(captureSettings.isResultNotificationEnabled());
             switchAutoTrack.setChecked(config.isEnabled() && (experimental
                     ? authorized && (ExperimentalAccountingService.isRunning()
                         || ExperimentalAccountingService.isConnecting()) : accessibility));
@@ -337,7 +358,7 @@ public class AssistantManagerActivity extends AppCompatActivity {
             return;
         }
         if (!ExperimentalAccountingService.overlayRequirementMet(this)) {
-            showExperimentalPermissionDialog(R.string.experimental_overlay_required,
+            showPermissionSettingsDialog(R.string.experimental_title, R.string.experimental_overlay_required,
                     new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())), REQUEST_OVERLAY);
             return;
         }
@@ -346,7 +367,7 @@ public class AssistantManagerActivity extends AppCompatActivity {
                     != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
             } else {
-                showExperimentalPermissionDialog(R.string.experimental_notifications_required,
+                showPermissionSettingsDialog(R.string.experimental_title, R.string.experimental_notifications_required,
                         new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()),
                         REQUEST_NOTIFICATIONS);
             }
@@ -360,8 +381,19 @@ public class AssistantManagerActivity extends AppCompatActivity {
         updateShizukuStatusDisplay();
     }
 
-    private void showExperimentalPermissionDialog(int message, Intent intent, int requestCode) {
-        new AlertDialog.Builder(this).setTitle(R.string.experimental_title).setMessage(message)
+    private void showResultNotificationSettings() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        String channel = ScreenAccountingResultNotification.CHANNEL_ID;
+        Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+        if (manager != null && manager.areNotificationsEnabled() && manager.getNotificationChannel(channel) != null) {
+            intent.setAction(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_CHANNEL_ID, channel);
+        }
+        showPermissionSettingsDialog(R.string.screen_accounting_result_channel, R.string.screen_accounting_result_permission,
+                intent.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()), REQUEST_RESULT_NOTIFICATION);
+    }
+
+    private void showPermissionSettingsDialog(int title, int message, Intent intent, int requestCode) {
+        new AlertDialog.Builder(this).setTitle(title).setMessage(message)
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(R.string.experimental_go_to_settings, (dialog, which) -> {
                     try { startActivityForResult(intent, requestCode); }
@@ -371,6 +403,10 @@ public class AssistantManagerActivity extends AppCompatActivity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_RESULT_NOTIFICATION) {
+            enableResultNotificationIfAllowed();
+            return;
+        }
         if ((requestCode == REQUEST_OVERLAY && ExperimentalAccountingService.overlayRequirementMet(this))
                 || (requestCode == REQUEST_NOTIFICATIONS && ExperimentalAccountingService.notificationsAllowed(this))) {
             continueExperimentalWhenResumed();
@@ -379,9 +415,20 @@ public class AssistantManagerActivity extends AppCompatActivity {
 
     @Override public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == REQUEST_RESULT_NOTIFICATION) {
+            if (!enableResultNotificationIfAllowed() && results.length > 0) showResultNotificationSettings();
+            return;
+        }
         if (requestCode != REQUEST_NOTIFICATIONS) return;
         if (ExperimentalAccountingService.notificationsAllowed(this)) continueExperimentalWhenResumed();
         else Toast.makeText(this, R.string.experimental_notifications_required, Toast.LENGTH_LONG).show();
+    }
+
+    private boolean enableResultNotificationIfAllowed() {
+        if (!ScreenAccountingResultNotification.isAllowed(this)) return false;
+        captureSettings.setResultNotificationEnabled(true);
+        updateShizukuStatusDisplay();
+        return true;
     }
 
     private void showShizukuNotRunningDialog() {

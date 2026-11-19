@@ -10,6 +10,7 @@ public final class ScreenCaptureSettings {
     private static final String LEGACY_READER_MODE = "experimental_reader_mode";
     public static final String KEY_KEEP_ALIVE = "shizuku_keep_alive_enabled";
     private static final String KEY_SILENT_ACCOUNTING = "silent_accounting_enabled";
+    private static final String KEY_RESULT_NOTIFICATION = "result_notification_enabled";
     private final SharedPreferences prefs;
 
     public ScreenCaptureSettings(Context context) {
@@ -21,6 +22,10 @@ public final class ScreenCaptureSettings {
     public boolean isSilentAccountingEnabled() { return prefs.getBoolean(KEY_SILENT_ACCOUNTING, false); }
     public void setSilentAccountingEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_SILENT_ACCOUNTING, enabled).apply();
+    }
+    public boolean isResultNotificationEnabled() { return prefs.getBoolean(KEY_RESULT_NOTIFICATION, false); }
+    public void setResultNotificationEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_RESULT_NOTIFICATION, enabled).apply();
     }
     public boolean isKeepAliveEnabled() { return prefs.getBoolean(KEY_KEEP_ALIVE, false); }
     public void setKeepAliveEnabled(boolean enabled) {

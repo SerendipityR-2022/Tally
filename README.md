@@ -1,4 +1,4 @@
-# Tally · 3.8.8
+# Tally · 3.8.9-rc1
 
 [![Android Build](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml/badge.svg)](https://github.com/SerendipityR-2022/Tally/actions/workflows/android.yml) [下载正式 APK](https://github.com/SerendipityR-2022/Tally/releases/latest)
 
@@ -10,6 +10,8 @@
 分支 APK 使用分支签名。如果手机上的同包名版本采用不同签名，需先备份账本再换装。
 
 3.8.8 增加学习记录管理、按应用默认关联资产和动态日均预算，统一了收支构成图，并改进趋势图拖动和微信支付分类。此版还修复了 AI 配置恢复、视觉模型连接测试，以及新增或编辑账单时日期未随选择更新的问题。
+
+[预发布版 3.8.9-rc1](https://github.com/SerendipityR-2022/Tally/releases/tag/3.8.9-rc1) 支持识别已支付的微信群收款，修复部分微信扫码付款详情的收款人提取和 AI 分类，并可在记账助手中开启结果通知。无障碍和实验模式均支持调试采集；应用选择可搜索名称或包名，导出的 XML 带时间戳。
 
 ## 分支改动
 

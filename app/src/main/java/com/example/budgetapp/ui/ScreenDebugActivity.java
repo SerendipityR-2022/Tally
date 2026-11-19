@@ -4,8 +4,6 @@ import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -33,22 +31,23 @@ import com.example.budgetapp.service.ScreenAccountingEngine;
 import com.example.budgetapp.service.ScreenDebugCapture;
 import com.example.budgetapp.util.KeywordManager;
 import com.example.budgetapp.util.ScreenCapturePolicy;
+import com.example.budgetapp.util.ScreenCaptureSettings;
 import com.example.budgetapp.util.ScreenHierarchyCodec;
 import com.example.budgetapp.util.ScreenNode;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.accessibility.selecttospeak.SelectToSpeakService;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -59,6 +58,8 @@ public final class ScreenDebugActivity extends AppCompatActivity {
     private static final int PREVIEW_LIMIT = 7000;
     private static final int LOG_CLIPBOARD_LIMIT = 160 * 1024;
     private static final int LOG_WAIT_MS = 15000;
+    private static final DateTimeFormatter XML_EXPORT_TIMESTAMP =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS", Locale.ROOT);
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService files = Executors.newSingleThreadExecutor();
     private TextInputEditText target, keyword;
@@ -66,6 +67,7 @@ public final class ScreenDebugActivity extends AppCompatActivity {
     private Spinner direction;
     private MaterialButton start, copy, save, copyLog, saveLog, verify, verifyDraft, addRule, clear;
     private PendingLog logExport;
+    private ScreenCaptureSettings captureSettings;
     private ScreenDebugCapture.Run pendingLogRun;
     private long logWaitUntil;
     private boolean preparingLog, logToFile;
@@ -103,6 +105,7 @@ public final class ScreenDebugActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         logExport = new ViewModelProvider(this).get(PendingLog.class);
+        captureSettings = new ScreenCaptureSettings(this);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         setContentView(R.layout.activity_screen_debug);
@@ -162,7 +165,10 @@ public final class ScreenDebugActivity extends AppCompatActivity {
     }
 
     private void render() {
-        updateText(service, getString(ExperimentalAccountingService.getStatus()));
+        int serviceStatus = captureSettings.isEnabled() ? ExperimentalAccountingService.getStatus()
+                : SelectToSpeakService.isConnected() ? R.string.screen_debug_accessibility_ready
+                : R.string.screen_debug_accessibility_off;
+        updateText(service, getString(serviceStatus));
         ScreenDebugCapture.Run run = ScreenDebugCapture.latest();
         boolean active = run != null && run.isActive();
         String xml = run == null ? null : run.getXml();
@@ -175,8 +181,9 @@ public final class ScreenDebugActivity extends AppCompatActivity {
         saveLog.setEnabled(!preparingLog);
         copyLog.setEnabled(!preparingLog);
         start.setEnabled(!preparingLog);
-        counters.setVisibility(run == null ? View.GONE : View.VISIBLE);
-        if (run != null) updateText(counters, captureCounters(run));
+        boolean showCounters = run != null && run.source != ScreenDebugCapture.Source.IMPORTED;
+        counters.setVisibility(showCounters ? View.VISIBLE : View.GONE);
+        if (showCounters) updateText(counters, captureCounters(run));
         copy.setEnabled(xml != null && !preparingLog);
         save.setEnabled(xml != null && !preparingLog);
         clear.setEnabled(run != null && !preparingLog);
@@ -210,25 +217,17 @@ public final class ScreenDebugActivity extends AppCompatActivity {
     }
 
     private String captureCounters(ScreenDebugCapture.Run run) {
-        return getString(R.string.screen_debug_counters,
+        return getString(run.source == ScreenDebugCapture.Source.ACCESSIBILITY
+                        ? R.string.screen_debug_accessibility_counters : R.string.screen_debug_counters,
                 run.getProbed(), run.getFocused(), run.getNoFocus(), run.getUnreadable(), run.getErrors());
     }
 
     private void chooseApp() {
-        PackageManager pm = getPackageManager();
-        List<ResolveInfo> info = new ArrayList<>(pm.queryIntentActivities(
-                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0));
-        Collections.sort(info, Comparator.comparing(item -> item.loadLabel(pm).toString(), String.CASE_INSENSITIVE_ORDER));
-        Set<String> seen = new HashSet<>();
-        List<String> packages = new ArrayList<>(), labels = new ArrayList<>();
-        for (ResolveInfo app : info) {
-            String pkg = app.activityInfo.packageName;
-            if (!ScreenCapturePolicy.canInspect(pkg, getPackageName()) || !seen.add(pkg)) continue;
-            packages.add(pkg);
-            labels.add(app.loadLabel(pm) + "\n" + pkg);
-        }
-        new AlertDialog.Builder(this).setTitle(R.string.screen_debug_choose)
-                .setItems(labels.toArray(new String[0]), (d, i) -> target.setText(packages.get(i))).show();
+        String selected = target.getText() == null ? "" : target.getText().toString().trim();
+        ScreenDebugAppPicker.show(this, files, selected, pkg -> {
+            target.setText(pkg);
+            target.clearFocus();
+        });
     }
 
     private void captureOrStop() {
@@ -251,34 +250,48 @@ public final class ScreenDebugActivity extends AppCompatActivity {
 
     private void beginCapture(String pkg, Intent launch) {
         if (preparingLog) return;
+        if (!captureSettings.isEnabled()) {
+            ScreenDebugCapture.Run run = SelectToSpeakService.startDiagnostic(pkg);
+            if (run == null) {
+                toast(R.string.screen_debug_accessibility_required);
+                return;
+            }
+            resetReplay();
+            launchCaptureTarget(run, launch);
+            return;
+        }
         if (!ExperimentalAccountingService.isRunning()) {
             boolean starting = ExperimentalAccountingService.isConnecting()
                     || ExperimentalAccountingService.startFromUser(this);
             toast(starting ? R.string.screen_debug_reader_connecting : R.string.screen_debug_not_running);
+            return;
         }
         resetReplay();
-        ScreenDebugCapture.Run run = ScreenDebugCapture.start(pkg);
-        ExperimentalAccountingService.armDiagnostic(run, () -> {
-            if (isFinishing() || isDestroyed()
-                    || !getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
-                if (ScreenDebugCapture.latest() == run) ScreenDebugCapture.stop();
-                return;
-            }
-            render();
-            if (launch == null) {
-                run.note("host.ui.launch_target", "No launchable activity; waiting for manual app switch");
-                toast(R.string.screen_debug_manual_open);
-                return;
-            }
-            try {
-                run.note("host.ui.launch_target", "Opening " + pkg);
-                startActivity(launch);
-            } catch (ActivityNotFoundException | SecurityException e) {
-                run.error("host.ui.launch_target", e);
-                toast(R.string.screen_debug_manual_open);
-            }
-        });
+        ScreenDebugCapture.Run run = ScreenDebugCapture.start(pkg, ScreenDebugCapture.Source.EXPERIMENTAL);
+        ExperimentalAccountingService.armDiagnostic(run, () -> launchCaptureTarget(run, launch));
         render();
+    }
+
+    private void launchCaptureTarget(ScreenDebugCapture.Run run, Intent launch) {
+        if (isFinishing() || isDestroyed()
+                || !getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            if (ScreenDebugCapture.latest() == run) ScreenDebugCapture.stop();
+            return;
+        }
+        render();
+        if (!run.isActive()) return;
+        if (launch == null) {
+            run.note("host.ui.launch_target", "No launchable activity; waiting for manual app switch");
+            toast(R.string.screen_debug_manual_open);
+            return;
+        }
+        try {
+            run.note("host.ui.launch_target", "Opening " + run.selected);
+            startActivity(launch);
+        } catch (ActivityNotFoundException | SecurityException e) {
+            run.error("host.ui.launch_target", e);
+            toast(R.string.screen_debug_manual_open);
+        }
     }
 
     private String selectedPackage() {
@@ -372,7 +385,7 @@ public final class ScreenDebugActivity extends AppCompatActivity {
         ScreenDebugCapture.Run run = finishedCapture();
         if (run == null) return;
         exportXml = run.getXml();
-        export.launch(run.selected + "-screen.xml");
+        export.launch(run.selected + "-screen-" + XML_EXPORT_TIMESTAMP.format(LocalDateTime.now()) + ".xml");
     }
 
     private void saveFile(Uri uri) {

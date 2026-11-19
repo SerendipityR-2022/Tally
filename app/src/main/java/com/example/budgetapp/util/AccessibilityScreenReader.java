@@ -20,6 +20,10 @@ public final class AccessibilityScreenReader {
     }
 
     public static ScreenNode copyForShizuku(AccessibilityNodeInfo root, String expectedPackage, ScreenNodeCopyReport report) {
+        return copyScoped(root, expectedPackage, report);
+    }
+
+    public static ScreenNode copyScoped(AccessibilityNodeInfo root, String expectedPackage, ScreenNodeCopyReport report) {
         if (report != null && root == null) report.missingRoot();
         return copy(root, 0, new int[]{0}, expectedPackage, report);
     }

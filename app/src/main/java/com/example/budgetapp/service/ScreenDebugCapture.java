@@ -11,34 +11,44 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
 import android.os.SystemClock;
+import android.view.accessibility.AccessibilityNodeInfo;
 import com.example.budgetapp.BuildConfig;
+import com.example.budgetapp.util.AccessibilityScreenReader;
+import com.example.budgetapp.util.ScreenCaptureSettings;
+import com.example.budgetapp.util.ScreenHierarchyCodec;
 import com.example.budgetapp.util.ScreenNode;
+import com.example.budgetapp.util.ScreenNodeCopyReport;
 import java.time.Instant;
 
 import static com.example.budgetapp.service.ScreenSampleCadence.HIERARCHY;
 
-/** Main-process view of a user-controlled diagnostic. The reader owns capture timing. */
+/** Shared state for a user-controlled diagnostic from either screen reader. */
 public final class ScreenDebugCapture {
     static final DiagnosticTrace CONNECTION = new DiagnosticTrace(64 * 1024);
     private static long sequence;
-    private static Run latest;
+    private static volatile Run latest;
 
     private ScreenDebugCapture() { }
 
+    public enum Source { ACCESSIBILITY, EXPERIMENTAL, IMPORTED }
+
     public static final class Run {
         public final String selected;
+        public final Source source;
         final long id, deadline;
         final DiagnosticTrace host = new DiagnosticTrace(256 * 1024);
         boolean armed, rejected, lost, locked, reportInFlight, finalReadRequested, finalRead;
         int seenFrame, finalReadFailures;
-        private boolean stopped, readerComplete, imported;
+        private volatile boolean stopped;
+        private boolean readerComplete;
         private int probes, focused, noFocus, unreadable, errors, transportErrors, readerFrames, expectedTraceChars;
         private final StringBuilder readerTrace = new StringBuilder();
         private ScreenNode snapshot;
         private String xml, nodeSummary;
 
-        private Run(String selected) {
+        private Run(String selected, Source source) {
             this.selected = selected;
+            this.source = source;
             id = ++sequence;
             deadline = SystemClock.elapsedRealtime() + ReaderDiagnosticSession.MAX_DURATION_MS;
         }
@@ -60,6 +70,46 @@ public final class ScreenDebugCapture {
         public void note(String stage, String message) { host.event(stage, message); }
         public void error(String stage, Throwable error) { host.error(stage, error); }
         int traceLength() { return readerTrace.length(); }
+
+        public void readAccessibilityFrame(AccessibilityNodeInfo root) {
+            if (source != Source.ACCESSIBILITY || !isActive()) return;
+            probes++;
+            if (root == null) {
+                noFocus++;
+                return;
+            }
+            try {
+                CharSequence pkg = root.getPackageName();
+                if (pkg == null || !selected.contentEquals(pkg)) return;
+                focused++;
+                ScreenNodeCopyReport copyReport = new ScreenNodeCopyReport();
+                ScreenNode node = AccessibilityScreenReader.copyScoped(root, selected, copyReport);
+                nodeSummary = copyReport.summary();
+                if (node == null) {
+                    unreadable++;
+                    return;
+                }
+                String newXml = ScreenHierarchyCodec.encode(node);
+                if (!newXml.equals(xml) && isActive()) {
+                    snapshot = node;
+                    xml = newXml;
+                    note("accessibility.frame", "Accepted frame " + (++readerFrames) + ", XML chars=" + xml.length());
+                }
+            } catch (RuntimeException | LinkageError error) {
+                reportError("accessibility.read", error);
+            }
+        }
+
+        public void finishAccessibility(boolean locked, String reason) {
+            if (source != Source.ACCESSIBILITY || finalRead) return;
+            stopped = finalRead = true;
+            this.locked = locked;
+            note("accessibility.stop", reason);
+        }
+
+        public void accessibilityUnavailable() {
+            if (source == Source.ACCESSIBILITY) reportUnavailable("Accessibility service disconnected");
+        }
 
         void report(Bundle result, StringBuilder delta, String newXml, ScreenNode node) {
             readerTrace.append(delta);
@@ -108,14 +158,18 @@ public final class ScreenDebugCapture {
 
     public static Run latest() { return latest; }
 
-    static Run active() {
+    private static Run active(Source source) {
         Run r = latest;
-        return r != null && r.isActive() ? r : null;
+        return r != null && r.source == source && r.isActive() ? r : null;
     }
 
-    public static Run start(String pkg) {
+    static Run activeExperimental() { return active(Source.EXPERIMENTAL); }
+    public static boolean isAccessibilityCaptureActive() { return active(Source.ACCESSIBILITY) != null; }
+
+    public static Run start(String pkg, Source source) {
         stop();
-        latest = new Run(pkg);
+        latest = new Run(pkg, source);
+        if (source == Source.ACCESSIBILITY) latest.armed = true;
         latest.note("host.start", "Capture requested for " + pkg);
         return latest;
     }
@@ -123,6 +177,10 @@ public final class ScreenDebugCapture {
     public static void stop() {
         Run run = latest;
         if (run == null || run.finalRead) return;
+        if (run.source == Source.ACCESSIBILITY) {
+            run.finishAccessibility(false, "Stopped by the user");
+            return;
+        }
         if (!run.finalReadRequested) run.note("host.stop", "Stop/final report requested");
         run.stopped = true;
         ExperimentalAccountingService.fetchDiagnostic(run, true);
@@ -132,8 +190,8 @@ public final class ScreenDebugCapture {
 
     public static void showImported(String pkg, String xml, ScreenNode node) {
         stop();
-        Run run = new Run(pkg);
-        run.stopped = run.finalRead = run.imported = true;
+        Run run = new Run(pkg, Source.IMPORTED);
+        run.stopped = run.finalRead = true;
         run.xml = xml;
         run.snapshot = node;
         run.note("host.import", "Loaded XML for " + pkg + ", XML chars=" + xml.length());
@@ -161,6 +219,8 @@ public final class ScreenDebugCapture {
     }
 
     public static String createLog(Context context, Run run) {
+        Source source = run != null ? run.source : new ScreenCaptureSettings(context).isEnabled()
+                ? Source.EXPERIMENTAL : Source.ACCESSIBILITY;
         StringBuilder log = new StringBuilder();
         log.append("Tally screen accounting diagnostics\nTally ").append(BuildConfig.VERSION_NAME)
                 .append(" (").append(BuildConfig.VERSION_CODE).append(")")
@@ -169,14 +229,17 @@ public final class ScreenDebugCapture {
                 .append(", security patch ").append(Build.VERSION.SECURITY_PATCH).append(")")
                 .append("\nDevice: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
                 .append("\nAndroid build: ").append(Build.DISPLAY)
-                .append("\nReader mode: Companion UiAutomation")
-                .append("\nHost PID: ").append(Process.myPid())
-                .append("\nService: ").append(context.getString(ExperimentalAccountingService.getStatus())).append('\n');
-        try {
-            PackageInfo manager = context.getPackageManager().getPackageInfo("moe.shizuku.privileged.api", 0);
-            log.append("Shizuku manager (moe.shizuku.privileged.api): ").append(manager.versionName).append('\n');
-        } catch (PackageManager.NameNotFoundException | RuntimeException e) {
-            log.append("Shizuku manager package version unavailable\n");
+                .append("\nReader mode: ").append(source == Source.EXPERIMENTAL ? "Companion UiAutomation"
+                        : source == Source.ACCESSIBILITY ? "Accessibility service" : "Imported XML")
+                .append("\nHost PID: ").append(Process.myPid()).append('\n');
+        if (source == Source.EXPERIMENTAL) {
+            log.append("Service: ").append(context.getString(ExperimentalAccountingService.getStatus())).append('\n');
+            try {
+                PackageInfo manager = context.getPackageManager().getPackageInfo("moe.shizuku.privileged.api", 0);
+                log.append("Shizuku manager (moe.shizuku.privileged.api): ").append(manager.versionName).append('\n');
+            } catch (PackageManager.NameNotFoundException | RuntimeException e) {
+                log.append("Shizuku manager package version unavailable\n");
+            }
         }
         if (run == null) {
             log.append("Capture: no session in this app process\n");
@@ -189,17 +252,19 @@ public final class ScreenDebugCapture {
                     .append("; XML available: ").append(run.xml != null)
                     .append("\nLatest node diagnosis: ").append(run.nodeSummary == null ? "not available" : run.nodeSummary)
                     .append("\nArm rejected: ").append(run.rejected).append("; screen locked: ").append(run.locked)
-                    .append("; reader lost: ").append(run.lost)
-                    .append("\nReader trace: ").append(run.imported ? "not applicable (imported XML)"
-                            : run.readerComplete ? "final report received" : run.finalRead && !run.armed
-                                    ? "reader did not start; see host entries" : "partial or unavailable; see host entries")
-                    .append("; received ").append(run.readerTrace.length()).append(" chars (last reported: ")
-                    .append(run.expectedTraceChars).append(")\n");
+                    .append("; reader lost: ").append(run.lost).append('\n');
+            if (source == Source.EXPERIMENTAL) {
+                log.append("Reader trace: ").append(run.readerComplete ? "final report received"
+                                : run.finalRead && !run.armed ? "reader did not start; see host entries"
+                                : "partial or unavailable; see host entries")
+                        .append("; received ").append(run.readerTrace.length()).append(" chars (last reported: ")
+                        .append(run.expectedTraceChars).append(")\n");
+            }
         }
-        log.append("\n--- Tally / Shizuku service lifecycle ---\n").append(CONNECTION.content());
+        if (source == Source.EXPERIMENTAL) log.append("\n--- Tally / Shizuku service lifecycle ---\n").append(CONNECTION.content());
         if (run != null) {
-            log.append("\n--- Tally capture and rule replay ---\n").append(run.host.content())
-                    .append("\n--- Shizuku reader ---\n").append(run.readerTrace);
+            log.append("\n--- Tally capture and rule replay ---\n").append(run.host.content());
+            if (source == Source.EXPERIMENTAL) log.append("\n--- Shizuku reader ---\n").append(run.readerTrace);
         }
         return log.toString();
     }

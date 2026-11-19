@@ -124,6 +124,38 @@
                                 app:thumbTint="@null"
                                 app:trackTint="@null" />
                         </LinearLayout>
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:background="@color/divider"
+                            android:layout_marginHorizontal="20dp" />
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:padding="20dp">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/screen_accounting_result_switch"
+                                android:textSize="16sp"
+                                android:textColor="?android:attr/textColorPrimary" />
+                            <androidx.appcompat.widget.SwitchCompat
+                                android:id="@+id/switchAccountingResultNotification"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:minHeight="48dp"
+                                android:saveEnabled="false"
+                                android:contentDescription="@string/screen_accounting_result_switch"
+                                android:thumb="@drawable/switch_thumb_custom"
+                                android:background="@null"
+                                app:track="@drawable/switch_track_custom"
+                                app:showText="false"
+                                app:thumbTint="@null"
+                                app:trackTint="@null" />
+                        </LinearLayout>
                     </LinearLayout>
                 </androidx.cardview.widget.CardView>
                 <androidx.cardview.widget.CardView

@@ -132,6 +132,13 @@ public class ScreenAccountingEngine extends ContextWrapper {
 
 
     private static final String TAG = "AutoTrackService";
+    private static final String WECHAT_GROUP_TITLE_SUFFIX = "发起的群收款";
+    private static final Pattern WECHAT_GROUP_SHARE = Pattern.compile(".*每份金额\\s*[:：]?\\s*(.*)");
+    private static final Pattern WECHAT_GROUP_MONEY = Pattern.compile(
+            "[¥￥]\\s*(?:\\d+|\\d{1,3}(?:,\\d{3})+)(?:\\.\\d{1,2})?");
+    private static final Pattern WECHAT_GROUP_PAID_COUNT = Pattern.compile("\\d+\\s*人已支付");
+    private static final Pattern WECHAT_QR_PAYEE = Pattern.compile(
+            "^(?:扫二维码付款|扫码付款)\\s*(?:[-－–—:：]\\s*)?给\\s*(.+)$");
 
     private final AppDatabase database;
     private final AssistantConfig config;
@@ -195,6 +202,10 @@ public class ScreenAccountingEngine extends ContextWrapper {
 
             // ======= 微信专属页面拦截 =======
             if ("com.tencent.mm".equals(packageName)) {
+                List<ScreenNode> wechatNodes = new ArrayList<>();
+                flattenNodes(rootNode, wechatNodes);
+                if (handleWeChatGroupCollectionPage(wechatNodes)) return;
+
                 // 0. 专门适配微信红包/支付特殊页面
                 if (handleWeChatRedPacketSpecialPage(rootNode)) return;
 
@@ -205,7 +216,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
                 if (handleWeChatTransferPendingPage(rootNode)) return;
 
                 // 2. 微信扫二维码付款 / 个人转账账单详情
-                if (handleWeChatQRCodeTransferPage(rootNode)) return;
+                if (handleWeChatQRCodeTransferPage(rootNode, wechatNodes)) return;
 
                 // 3. 适配微信内第三方小程序/服务商的支付成功页 (全 Desc 结构)
                 if (handleWeChatMerchantAppPaySuccessPage(rootNode)) return;
@@ -1244,6 +1255,9 @@ public class ScreenAccountingEngine extends ContextWrapper {
             return;
         }
 
+        if (captureSettings.isResultNotificationEnabled()) {
+            ScreenAccountingResultNotification.post(getApplicationContext(), t);
+        }
         if (confirmedSuggestion != null) {
             AutoCategoryManager.rememberConfirmation(getApplicationContext(), t, confirmedSuggestion);
         }
@@ -2477,18 +2491,68 @@ public class ScreenAccountingEngine extends ContextWrapper {
         return false;
     }
 
+    private boolean handleWeChatGroupCollectionPage(List<ScreenNode> nodes) {
+        String title = null;
+        List<String> header = new ArrayList<>();
+        boolean hasMemberCount = false;
+        for (ScreenNode node : nodes) {
+            String content = getTextOrDescription(node);
+            if (title != null && "android.widget.ImageView".equals(node.getClassName())) break;
+            if (content == null || (content = content.trim()).isEmpty()) continue;
+            if (title == null) {
+                if (content.endsWith(WECHAT_GROUP_TITLE_SUFFIX) && !content.equals(WECHAT_GROUP_TITLE_SUFFIX)) {
+                    title = content;
+                }
+            } else if (WECHAT_GROUP_PAID_COUNT.matcher(content).matches()) {
+                hasMemberCount = true;
+                break;
+            } else {
+                header.add(content);
+            }
+        }
+        if (title == null) return false;
+
+        int statusIndex = header.size() - 1;
+        for (int i = 0; i < header.size(); i++) {
+            Matcher share = WECHAT_GROUP_SHARE.matcher(header.get(i));
+            if (!share.matches()) continue;
+            // Only the payer's own status in the header authorizes an expense.
+            if (!hasMemberCount || !"已支付".equals(header.get(statusIndex))) return true;
+            String shareAmount = share.group(1).trim();
+            int amountIndex = i;
+            if (shareAmount.isEmpty()) {
+                if (++amountIndex >= statusIndex) return true;
+                shareAmount = header.get(amountIndex);
+            }
+            if (amountIndex >= statusIndex || statusIndex - amountIndex > 2
+                    || !WECHAT_GROUP_MONEY.matcher(shareAmount).matches()) return true;
+            double amount = Double.parseDouble(shareAmount.substring(1).replace(",", "").trim());
+            if (!Double.isFinite(amount) || amount <= 0) return true;
+
+            String remark = statusIndex - amountIndex == 2 ? header.get(amountIndex + 1) : "";
+            long now = System.currentTimeMillis();
+            String signature = "wx_group-" + title + header.subList(0, statusIndex);
+            if (now - lastWindowDismissTime < 2500
+                    || (now - lastRecordTime < 300000 && signature.equals(lastContentSignature))) return true;
+            lastRecordTime = now;
+            lastContentSignature = signature;
+            String pkg = KeywordManager.PKG_WECHAT;
+            int assetId = AutoAssetManager.matchAsset(this, pkg, "微信");
+            enqueueConfirmWindow(amount, 0, "转账", remark.isEmpty() ? "微信群收款" : remark,
+                    assetId, "¥", now, pkg, remark);
+            return true;
+        }
+        return false;
+    }
+
     /**
      * 【专版专杀】专门适配微信“扫二维码付款”或“个人转账”的账单详情页
      * 核心特征为含有“转账单号”、“收款方备注”等标签
      */
-    private boolean handleWeChatQRCodeTransferPage(ScreenNode root) {
-        if (root == null) return false;
-
-        List<ScreenNode> allNodes = new ArrayList<>();
-        flattenNodes(root, allNodes); // 展平节点树
-
+    private boolean handleWeChatQRCodeTransferPage(ScreenNode root, List<ScreenNode> allNodes) {
         boolean isTargetPage = false;
         String targetAccount = "";
+        String qrPayee = "";
         String timeString = "";
         String paymentMethod = "";
         double amount = -1;
@@ -2504,6 +2568,10 @@ public class ScreenAccountingEngine extends ContextWrapper {
             if ("转账单号".equals(content)) {
                 isTargetPage = true;
             }
+            if (qrPayee.isEmpty()) {
+                Matcher payee = WECHAT_QR_PAYEE.matcher(content);
+                if (payee.matches()) qrPayee = payee.group(1).trim();
+            }
 
             // 2. 提取金额和收支类型 (精准锁定格式如 "-2.00")
             if (content.matches("^[-+]?\\d+\\.\\d{2}$") && amount == -1) {
@@ -2517,7 +2585,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
                         amount = parsedAmount;
                     }
 
-                    // 3. 提取交易对象 (就在金额节点的正上方，例如 "扫二维码付款-给郭宝生")
+                    // 3. 保留旧页面在金额上方显示的交易对象作为兜底
                     if (i > 0) {
                         ScreenNode prevNode = allNodes.get(i - 1);
                         String prevText = prevNode.getText() != null ? prevNode.getText().toString().trim() : "";
@@ -2565,7 +2633,8 @@ public class ScreenAccountingEngine extends ContextWrapper {
             long now = System.currentTimeMillis();
             if (now - lastWindowDismissTime < 2500) return true;
 
-            // 兜底默认值
+            // 扫码页的「扫二维码付款-给…」可能在金额前，也可能在金额后。
+            if (!qrPayee.isEmpty()) targetAccount = qrPayee;
             if (targetAccount.isEmpty()) targetAccount = "微信扫码付款";
 
             // 防重复录入签名
@@ -2595,7 +2664,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
                 displayTime = displayFormat.format(new java.util.Date(now));
             }
 
-            // 构造记录标识，如："03-29 11:12 扫二维码付款-给郭宝生"
+            // 保留真实收款人作为备注及分类依据。
             final String recordIdentifier = displayTime + " " + targetAccount;
 
             final double finalAmount = amount;
@@ -2603,7 +2672,7 @@ public class ScreenAccountingEngine extends ContextWrapper {
             final long finalTimestamp = parsedTimestamp;
 
             // 仅识别付款／转账的业务提示，不在页面适配器内判断商户分类
-            String businessHint = targetAccount.contains("付款") ? "购物" : "转账";
+            String businessHint = !qrPayee.isEmpty() || targetAccount.contains("付款") ? "购物" : "转账";
 
             // 使用抓取到的支付方式（如“零钱”）去模糊匹配资产
             String assetKeyword = paymentMethod.isEmpty() ? "微信" : paymentMethod;

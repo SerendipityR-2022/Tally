@@ -1,8 +1,11 @@
 package com.example.budgetapp.util;
 
+import android.app.Notification;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.service.notification.StatusBarNotification;
 import android.view.View;
 import android.view.MotionEvent;
 import android.os.SystemClock;
@@ -19,6 +22,7 @@ import com.example.budgetapp.database.AppDatabase;
 import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.service.ExperimentalAccountingService;
 import com.example.budgetapp.service.ScreenAccountingEngine;
+import com.example.budgetapp.service.ScreenAccountingResultNotification;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -430,6 +434,99 @@ public class ScreenCategoryIntegrationTest {
             backend.join(4000);
             assertFalse(backend.isAlive());
         }
+    }
+
+    @Test public void wechatQrReceiptUsesThePayeeBelowTheAmountForAiAndTheSavedRemark() throws Exception {
+        String pkg = KeywordManager.PKG_WECHAT;
+        String payee = "示例熟食店";
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            CompletableFuture<JSONObject> request = new CompletableFuture<>();
+            Thread backend = serveClassification(server, request, () -> { });
+            enableHttpAi(server, 5);
+            ScreenNode detail = receipt(pkg, false, payee, "主页", "交易详情", "交易详情", "-9.00", "",
+                    "扫二维码付款-给" + payee, "当前状态", "支付成功", "收款方备注", "二维码收款",
+                    "支付方式", "零钱", "转账时间", "2026年1月1日 18:27:03",
+                    "转账单号", "100000000000001", "交易服务", "发起群收款");
+            runMain(() -> service.analyze(detail));
+
+            JSONObject sent = request.get(5, TimeUnit.SECONDS);
+            assertEquals(payee, sent.getString("description"));
+            assertEquals("支出", sent.getString("type"));
+            assertEquals("购物", sent.getString("businessHint"));
+            assertEquals(3, sent.length());
+            View root = awaitOverlay();
+            runMain(() -> root.findViewById(R.id.btn_window_save).performClick());
+            Transaction saved = awaitSaved();
+            assertEquals(0, saved.type);
+            assertEquals(9.00, saved.amount, 0.001);
+            assertEquals("餐饮", saved.category);
+            assertEquals(payee, saved.remark);
+            assertEquals(payee, saved.screenMerchantIdentity);
+            assertEquals(new java.text.SimpleDateFormat("yyyy年M月d日 HH:mm:ss", java.util.Locale.CHINA)
+                    .parse("2026年1月1日 18:27:03").getTime(), saved.date);
+            backend.join(4000);
+            assertFalse(backend.isAlive());
+        }
+    }
+
+    @Test public void resultNotificationShowsTheSavedValuesForBothConfirmationModes() throws Exception {
+        assumeTrue("Grant notifications to check real notifications",
+                ScreenAccountingResultNotification.isAllowed(context));
+        NotificationManager notifications = context.getSystemService(NotificationManager.class);
+        ScreenCaptureSettings settings = new ScreenCaptureSettings(context);
+        assertFalse(settings.isResultNotificationEnabled());
+        settings.setResultNotificationEnabled(true);
+        String manualSummary = "−¥20.40  ·  购物  ·  测试修改后的备注";
+        String silentSummary = "−¥26.70  ·  餐饮 / 咖啡  ·  瑞幸咖啡";
+        try {
+            View overlay = show("原始备注");
+            assertNull(findResultNotification(notifications, manualSummary));
+            runMain(() -> {
+                ((TextView) overlay.findViewById(R.id.et_window_amount)).setText("20.40");
+                ((TextView) overlay.findViewById(R.id.et_window_remark)).setText("测试修改后的备注");
+                overlay.findViewById(R.id.btn_window_save).performClick();
+            });
+            assertEquals("记账成功", awaitResultNotification(notifications, manualSummary).getNotification()
+                    .extras.getCharSequence(Notification.EXTRA_TITLE).toString());
+
+            settings.setSilentAccountingEnabled(true);
+            runMain(() -> {
+                service.close();
+                service = new FakeAiService(context, memoryDb);
+                service.analyze(receipt("com.unionpay", false, "支付成功", "瑞幸咖啡", "¥26.70"));
+            });
+            assertEquals("记账成功", awaitResultNotification(notifications, silentSummary).getNotification()
+                    .extras.getCharSequence(Notification.EXTRA_TITLE).toString());
+            assertNotNull(findResultNotification(notifications, manualSummary));
+            assertFalse(service.hasConfirmationWindow());
+            assertEquals(2, memoryDb.transactionDao().getAllTransactionsSync().size());
+        } finally {
+            for (String summary : Arrays.asList(manualSummary, silentSummary)) {
+                StatusBarNotification notification = findResultNotification(notifications, summary);
+                if (notification != null) notifications.cancel(notification.getTag(), notification.getId());
+            }
+        }
+    }
+
+    private static StatusBarNotification awaitResultNotification(NotificationManager notifications, String summary) {
+        long until = SystemClock.elapsedRealtime() + 4000;
+        do {
+            StatusBarNotification posted = findResultNotification(notifications, summary);
+            if (posted != null) return posted;
+            SystemClock.sleep(20);
+        } while (SystemClock.elapsedRealtime() < until);
+        throw new AssertionError("Missing accounting result notification: " + summary);
+    }
+
+    private static StatusBarNotification findResultNotification(NotificationManager notifications, String summary) {
+        for (StatusBarNotification posted : notifications.getActiveNotifications()) {
+            Notification notification = posted.getNotification();
+            if (ScreenAccountingResultNotification.CHANNEL_ID.equals(notification.getChannelId())
+                    && summary.equals(String.valueOf(notification.extras.getCharSequence(Notification.EXTRA_TEXT)))) {
+                return posted;
+            }
+        }
+        return null;
     }
 
     @Test public void oneSecondBudgetKeepsTheLocalResultAfterALateHttpResponse() throws Exception {

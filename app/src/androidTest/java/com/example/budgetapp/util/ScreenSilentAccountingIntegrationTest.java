@@ -110,6 +110,34 @@ public class ScreenSilentAccountingIntegrationTest {
         assertFalse(engine.hasConfirmationWindow());
     }
 
+    @Test public void wechatGroupCollectionUsesOnlyThePayersOwnCompletedShare() {
+        settings.setSilentAccountingEnabled(true);
+        runMain(() -> engine.analyze(wechatGroupCollection("待支付", "5人已支付")));
+        SystemClock.sleep(250);
+        assertTrue(db.transactionDao().getAllTransactionsSync().isEmpty());
+
+        runMain(() -> engine.analyze(wechatGroupCollection("已支付", "5人已支付")));
+        Transaction saved = awaitSaved();
+        assertEquals(9.34, saved.amount, 0.001);
+        assertEquals(0, saved.type);
+        assertEquals("洗衣粉", saved.remark);
+        assertEquals(KeywordManager.PKG_WECHAT, saved.screenSourcePackage);
+
+        runMain(() -> engine.analyze(wechatGroupCollection("已支付", "6人已支付")));
+        SystemClock.sleep(250);
+        assertEquals(1, db.transactionDao().getAllTransactionsSync().size());
+    }
+
+    private static ScreenNode wechatGroupCollection(String status, String paidCount) {
+        String pkg = KeywordManager.PKG_WECHAT;
+        List<ScreenNode> children = new ArrayList<>();
+        for (String description : Arrays.asList("发起人发起的群收款", "¥56.04", "共", "，均摊为6份，每份金额",
+                "¥9.34", "洗衣粉", status, paidCount, "成员甲", "已支付", "¥9.34")) {
+            children.add(new ScreenNode(null, description, pkg, "android.view.View", null, Collections.emptyList()));
+        }
+        return new ScreenNode(null, null, pkg, "android.widget.ScrollView", null, children);
+    }
+
     @Test public void appDefaultRuleWorksWithoutTextAndTheActualMeituanAppUsesIt() {
         String takeout = "com.sankuai.meituan.takeoutnew";
         settings.setSilentAccountingEnabled(true);

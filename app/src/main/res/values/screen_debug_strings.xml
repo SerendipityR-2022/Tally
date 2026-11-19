@@ -3,12 +3,19 @@
     <string name="screen_debug_guide">选择应用后开始采集，打开支付结果页，再返回这里。采集最多 90 秒，期间暂停自动记账。</string>
     <string name="screen_debug_package">目标应用包名</string>
     <string name="screen_debug_choose">选择应用</string>
+    <string name="screen_debug_app_search">搜索应用名称或包名</string>
+    <string name="screen_debug_apps_loading">正在读取应用…</string>
+    <string name="screen_debug_app_no_match">未找到匹配的应用</string>
+    <string name="screen_debug_app_selected">当前选择</string>
     <string name="screen_debug_start">开始采集</string>
     <string name="screen_debug_stop">停止采集</string>
     <string name="screen_debug_demo">打开模拟支付</string>
     <string name="screen_debug_demo_missing">请先安装独立的模拟支付应用。</string>
     <string name="screen_debug_bad_package">请输入有效的目标包名，不能选择 Tally 自己。</string>
     <string name="screen_debug_not_running">请先在记账助手启用 Shizuku 实验模式。</string>
+    <string name="screen_debug_accessibility_ready">无障碍读屏已连接</string>
+    <string name="screen_debug_accessibility_off">无障碍读屏未连接</string>
+    <string name="screen_debug_accessibility_required">请先在系统设置中启用 Tally 无障碍记账。</string>
     <string name="screen_debug_manual_open">已开始采集，请手动切换到目标应用。</string>
     <string name="screen_debug_ready">还没有采集结果</string>
     <string name="screen_debug_reader_connecting">Shizuku 正在连接，显示就绪后再开始采集。</string>
@@ -21,6 +28,7 @@
     <string name="screen_debug_focus_unknown">系统没有返回可核验的前台窗口。</string>
     <string name="screen_debug_focus_no_nodes">已找到目标窗口，尚未取得页面节点。</string>
     <string name="screen_debug_counters">Shizuku 探测 %1$d 次 · 目标窗口 %2$d 次 · 焦点未核验 %3$d 次 · 节点不可读 %4$d 次 · 错误 %5$d 次</string>
+    <string name="screen_debug_accessibility_counters">无障碍探测 %1$d 次 · 目标窗口 %2$d 次 · 焦点未核验 %3$d 次 · 节点不可读 %4$d 次 · 错误 %5$d 次</string>
     <string name="screen_debug_capture_errors">采集遇到错误。保存完整日志可查看失败步骤和异常。</string>
     <string name="screen_debug_save_log">保存完整日志</string>
     <string name="screen_debug_copy_log">复制日志</string>
@@ -41,7 +49,7 @@
     <string name="screen_debug_draft">自定义触发关键词</string>
     <string name="screen_debug_verify_draft">验证关键词草稿</string>
     <string name="screen_debug_add_rule">加入已验证的关键词</string>
-    <string name="screen_debug_publish">把「%2$s」加入 %1$s 的关键词规则？发布后，Shizuku 会在此应用的前台页面应用该规则。</string>
+    <string name="screen_debug_publish">把「%2$s」加入 %1$s 的关键词规则？自动记账会在此应用的前台页面使用该规则。</string>
     <string name="screen_debug_rule_limit">无法添加：自定义自动记账应用已达上限。</string>
     <string name="screen_debug_rule_added">已加入关键词规则库</string>
     <string name="screen_debug_rule_hint">按当前设置模拟本地分类、确认和入账，只写入测试账本。模拟支付使用美团规则。</string>

@@ -448,7 +448,7 @@ public final class ExperimentalAccountingService extends Service {
         main.removeCallbacks(sampleTimeout);
         if (engine != null) engine.pause();
         final IScreenCaptureService reader = remote;
-        ScreenDebugCapture.Run run = ScreenDebugCapture.active();
+        ScreenDebugCapture.Run run = ScreenDebugCapture.activeExperimental();
         if (run != null) run.note("host.screen", "Screen off or locked; asking reader to stop");
         if (reader != null) io.execute(() -> {
             try { reader.releaseAutomation(); }
@@ -470,6 +470,7 @@ public final class ExperimentalAccountingService extends Service {
     }
 
     public static void armDiagnostic(ScreenDebugCapture.Run run, Runnable onArmed) {
+        if (run.source != ScreenDebugCapture.Source.EXPERIMENTAL) return;
         ExperimentalAccountingService service = instance;
         if (service == null) {
             run.reject("No experimental foreground service", false);
@@ -511,7 +512,7 @@ public final class ExperimentalAccountingService extends Service {
                     if (run.finalRead) return;
                     run.armed = true; // Even a rejected start can have a reader-side error report.
                     if (!started) run.reject("Reader could not start; retrieving reader error report", true);
-                    if (remote != reader || !runningOnScreen() || ScreenDebugCapture.active() != run) {
+                    if (remote != reader || !runningOnScreen() || ScreenDebugCapture.activeExperimental() != run) {
                         fetchReaderReport(run, true);
                         return;
                     }
@@ -537,7 +538,7 @@ public final class ExperimentalAccountingService extends Service {
     }
 
     public static void fetchDiagnostic(ScreenDebugCapture.Run run, boolean stop) {
-        if (run == null || run.finalRead) return;
+        if (run == null || run.source != ScreenDebugCapture.Source.EXPERIMENTAL || run.finalRead) return;
         if (instance != null) instance.fetchReaderReport(run, stop);
         else if (stop) run.reportUnavailable("Foreground service is no longer available");
     }
@@ -613,7 +614,7 @@ public final class ExperimentalAccountingService extends Service {
 
     private void startSample() {
         scheduledAt = Long.MAX_VALUE;
-        if (!runningOnScreen() || ScreenDebugCapture.active() != null) return;
+        if (!runningOnScreen() || ScreenDebugCapture.activeExperimental() != null) return;
         final IScreenCaptureService reader = remote;
         final String[] approved = rulePackages;
         final boolean allowHierarchy = !engine.isBusy();
@@ -638,7 +639,7 @@ public final class ExperimentalAccountingService extends Service {
                 if (result != null) result.remove(HIERARCHY);
                 ScreenNode copy = snapshot;
                 main.post(() -> {
-                    boolean normal = ScreenDebugCapture.active() == null && copy != null
+                    boolean normal = ScreenDebugCapture.activeExperimental() == null && copy != null
                             && (ScreenCapturePolicy.isTargetPackage(copy.getPackageName())
                             || Arrays.binarySearch(rulePackages, copy.getPackageName()) >= 0);
                     finishSample(generation, result, normal ? copy : null, false);
@@ -721,7 +722,9 @@ public final class ExperimentalAccountingService extends Service {
         }
         if (instance == this) {
             ScreenDebugCapture.Run run = ScreenDebugCapture.latest();
-            if (run != null) run.reportUnavailable("Tally foreground service ended before the final reader report");
+            if (run != null && run.source == ScreenDebugCapture.Source.EXPERIMENTAL) {
+                run.reportUnavailable("Tally foreground service ended before the final reader report");
+            }
             instance = null;
         }
         KeywordManager.rulePreferences(this).unregisterOnSharedPreferenceChangeListener(ruleChanges);
