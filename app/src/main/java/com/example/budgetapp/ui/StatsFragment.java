@@ -1447,7 +1447,7 @@ public class StatsFragment extends Fragment {
         dashboard.findViewById(R.id.ledger_expense_compare).setVisibility(values.isEmpty() ? View.GONE : View.VISIBLE);
         if (values.isEmpty()) return;
         Context c = requireContext();
-        com.github.mikephil.charting.charts.BarChart chart = dashboard.findViewById(R.id.ledger_expense_compare_chart);
+        LedgerExpenseComparisonChart chart = dashboard.findViewById(R.id.ledger_expense_compare_chart);
         int muted = c.getColor(R.color.ledger_muted);
         int active = c.getColor(R.color.ledger_chart_blue);
         int faded = androidx.core.graphics.ColorUtils.setAlphaComponent(active, 112);
@@ -1497,8 +1497,6 @@ public class StatsFragment extends Fragment {
         x.setGranularity(1f);
         x.setDrawGridLines(false);
         x.setTextColor(muted);
-        x.setTypeface(currentMode == 2 ? android.graphics.Typeface.create("sans-serif-condensed", 0) : null);
-        x.setTextSize(currentMode == 2 ? 9.5f : 10f);
         x.setLabelCount(COMPARISON_PERIODS);
         x.setValueFormatter(new ValueFormatter() {
             @Override public String getFormattedValue(float value) {
@@ -1506,7 +1504,7 @@ public class StatsFragment extends Fragment {
                 return i >= 0 && i < labels.length ? labels[i] : "";
             }
         });
-        chart.setData(d);
+        chart.setComparisonData(d, labels, currentMode == 2);
         chart.setContentDescription(description.toString());
         chart.invalidate();
     }
