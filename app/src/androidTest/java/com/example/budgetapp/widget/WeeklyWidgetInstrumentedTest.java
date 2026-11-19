@@ -2,8 +2,10 @@ package com.example.budgetapp.widget;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -49,9 +51,11 @@ public class WeeklyWidgetInstrumentedTest {
             assertEquals("今日", text(shown, R.id.weekly_day_6));
             assertEquals("¥ 0.00", text(shown, R.id.weekly_today_expense));
             assertEquals("¥ 36.00", text(shown, R.id.weekly_today_income));
-            View hidden = WeeklySummaryWidget.views(context, 0, ledger, true, null).apply(context, parent);
+            View hidden = WeeklySummaryWidget.views(context, 0, ledger, true, chart).apply(context, parent);
             assertEquals("••••", text(hidden, R.id.weekly_today_income));
-            assertFalse(hidden.findViewById(R.id.weekly_chart_bars).getContentDescription().toString().contains("36.00"));
+            ImageView hiddenChart = hidden.findViewById(R.id.weekly_chart_bars);
+            assertTrue(((BitmapDrawable) hiddenChart.getDrawable()).getBitmap().sameAs(chart));
+            assertFalse(hiddenChart.getContentDescription().toString().contains("36.00"));
         });
     }
 

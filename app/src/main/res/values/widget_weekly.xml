@@ -8,7 +8,7 @@
     <string name="weekly_widget_quick_record">快捷记账</string>
     <string name="weekly_widget_hide_amounts">隐藏收支金额</string>
     <string name="weekly_widget_show_amounts">显示收支金额</string>
-    <string name="weekly_widget_values_hidden">收支金额已隐藏</string>
+    <string name="weekly_widget_chart">近 7 天收支柱图</string>
     <string name="weekly_widget_day_description">%1$s，支出 %2$s，收入 %3$s</string>
 
     <color name="weekly_widget_card">#ED303D50</color>

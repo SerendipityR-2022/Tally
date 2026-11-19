@@ -48,10 +48,7 @@ public final class WeeklySummaryWidget extends AppWidgetProvider {
             AppWidgetManager manager = AppWidgetManager.getInstance(context);
             AppWidgetProviderInfo info = manager.getAppWidgetInfo(id);
             if (info == null || !new ComponentName(context, WeeklySummaryWidget.class).equals(info.provider)) return;
-            SharedPreferences prefs = preferences(context);
-            String key = Integer.toString(id);
-            prefs.edit().putBoolean(key, !prefs.getBoolean(key, false)).apply();
-            onUpdate(context, manager, new int[]{id});
+            update(context, manager, new int[]{id}, true);
         } else if (Intent.ACTION_DATE_CHANGED.equals(action) || Intent.ACTION_TIME_CHANGED.equals(action)
                 || Intent.ACTION_TIMEZONE_CHANGED.equals(action)) {
             AppWidgetManager manager = AppWidgetManager.getInstance(context);
@@ -62,22 +59,32 @@ public final class WeeklySummaryWidget extends AppWidgetProvider {
     }
 
     @Override public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
+        update(context, manager, ids, false);
+    }
+
+    private void update(Context context, AppWidgetManager manager, int[] ids, boolean toggleAmounts) {
         if (ids.length == 0) return;
         PendingResult pending = goAsync();
         Context app = context.getApplicationContext();
         UPDATES.execute(() -> {
             try {
+                SharedPreferences prefs = preferences(app);
+                if (toggleAmounts) {
+                    String key = Integer.toString(ids[0]);
+                    // Persist the choice before showing it in the launcher.
+                    if (!prefs.edit().putBoolean(key, !prefs.getBoolean(key, false)).commit()) {
+                        Log.w("WeeklySummaryWidget", "Could not save amount visibility");
+                    }
+                }
                 ZoneId zone = ZoneId.systemDefault();
                 WeeklyLedger ledger = new WeeklyLedger(LocalDate.now(zone), zone);
                 for (TransactionMinimal transaction : AppDatabase.getDatabase(app).transactionDao()
                         .getMinimalTransactionsSync(ledger.start(), ledger.endExclusive() - 1)) {
                     ledger.add(transaction);
                 }
-                Bitmap bars = null;
-                SharedPreferences prefs = preferences(app);
+                Bitmap bars = drawBars(app, ledger);
                 for (int id : ids) {
                     boolean hidden = prefs.getBoolean(Integer.toString(id), false);
-                    if (!hidden && bars == null) bars = drawBars(app, ledger);
                     manager.updateAppWidget(id, views(app, id, ledger, hidden, bars));
                 }
             } catch (RuntimeException error) {
@@ -125,13 +132,9 @@ public final class WeeklySummaryWidget extends AppWidgetProvider {
                         day, money(ledger.expenses[i]), money(ledger.incomes[i])));
             }
         }
-        if (hidden) {
-            result.setImageViewResource(R.id.weekly_chart_bars, R.drawable.ic_weekly_chart_empty);
-        } else {
-            result.setImageViewBitmap(R.id.weekly_chart_bars, bars);
-        }
+        result.setImageViewBitmap(R.id.weekly_chart_bars, bars);
         result.setContentDescription(R.id.weekly_chart_bars, hidden
-                ? context.getString(R.string.weekly_widget_values_hidden) : chartDescription.toString());
+                ? context.getString(R.string.weekly_widget_chart) : chartDescription.toString());
         return result;
     }
 
