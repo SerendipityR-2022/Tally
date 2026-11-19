@@ -320,6 +320,21 @@
 
 
         <receiver
+            android:name=".widget.WeeklySummaryWidget"
+            android:exported="false"
+            android:label="@string/widget_name_weekly">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weekly_summary_widget_info" />
+        </receiver>
+
+        <receiver
             android:name=".service.DailyInterestService"
             android:exported="false">
             <intent-filter>

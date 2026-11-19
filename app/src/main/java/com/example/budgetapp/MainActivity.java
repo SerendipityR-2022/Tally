@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+import androidx.annotation.NonNull;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
@@ -38,6 +39,7 @@ import com.example.budgetapp.database.Transaction;
 import com.example.budgetapp.widget.TodaySummaryWidget;
 import com.example.budgetapp.util.ScreenCaptureSettings;
 import com.example.budgetapp.util.ShizukuManager;
+import com.example.budgetapp.ui.RecordFragment;
 import com.example.budgetapp.ui.SettingsActivity;
 import com.example.budgetapp.util.AssistantConfig;
 import com.example.budgetapp.util.MonthlyBudgetHistory;
@@ -51,7 +53,11 @@ import androidx.activity.OnBackPressedCallback;
 
 public class MainActivity extends AppCompatActivity {
 
+    public static final String ACTION_QUICK_RECORD = "com.example.budgetapp.action.QUICK_RECORD";
+    private static final String STATE_QUICK_RECORD = "pending_quick_record";
+
     private FinanceViewModel financeViewModel;
+    private boolean pendingQuickRecord;
     private List<Transaction> allTransactions = new ArrayList<>();
     private List<AssetAccount> allAssets = new ArrayList<>();
 
@@ -119,6 +125,9 @@ public class MainActivity extends AppCompatActivity {
         AppCompatDelegate.setDefaultNightMode(delegateMode);
 
         super.onCreate(savedInstanceState);
+        pendingQuickRecord = savedInstanceState == null
+                ? ACTION_QUICK_RECORD.equals(getIntent().getAction())
+                : savedInstanceState.getBoolean(STATE_QUICK_RECORD);
 
         // 【关键新增】允许内容延伸到状态栏和导航栏区域
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
@@ -174,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
                 return NavigationUI.onNavDestinationSelected(item, navController);
             });
 
-            if (savedInstanceState == null) {
+            if (savedInstanceState == null && !pendingQuickRecord) {
                 int target = startupDestination(getSafeInt(prefs, "default_page", 0));
                 if (bottomNav.getMenu().findItem(target).isVisible()) bottomNav.setSelectedItemId(target);
             }
@@ -414,6 +423,32 @@ public class MainActivity extends AppCompatActivity {
                     }
                 })
                 .show();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (ACTION_QUICK_RECORD.equals(intent.getAction())) pendingQuickRecord = true;
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle state) {
+        super.onSaveInstanceState(state);
+        state.putBoolean(STATE_QUICK_RECORD, pendingQuickRecord);
+    }
+
+    @Override
+    protected void onPostResume() {
+        super.onPostResume();
+        if (!pendingQuickRecord) return;
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        if (!MyApplication.isUnlocked && !TextUtils.isEmpty(prefs.getString("app_password", ""))) return;
+        NavHostFragment host = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment);
+        if (host == null) return;
+        switchToRecordPage();
+        pendingQuickRecord = false;
+        host.getChildFragmentManager().setFragmentResult(RecordFragment.QUICK_RECORD_REQUEST, Bundle.EMPTY);
     }
 
     @Override

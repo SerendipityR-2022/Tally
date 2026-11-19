@@ -43,6 +43,7 @@ import com.google.android.material.chip.ChipGroup;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.cardview.widget.CardView;
 import androidx.core.content.ContextCompat;
@@ -81,6 +82,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class RecordFragment extends Fragment {
+    public static final String QUICK_RECORD_REQUEST = "quick_record_request";
     private AssistantConfig assistantConfig;
     private FinanceViewModel viewModel;
     private CalendarAdapter adapter;
@@ -340,21 +342,7 @@ public class RecordFragment extends Fragment {
         if (btnQuickRecord != null) {
             btnQuickRecord.setOnClickListener(v -> {
                 v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK);
-                SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-                int quickMode = prefs.getInt("quick_record_mode", 1);
-                if (quickMode == 1) {
-                    showAddOrEditDialog(null, LocalDate.now());
-                } else if (quickMode == 2) {
-                    // 直接进入AI记账助手
-                    AiConfig config = AiConfig.load(requireContext());
-                    if (config.isEnabledAndReady()) {
-                        startActivity(new Intent(requireContext(), AiChatActivity.class));
-                    } else {
-                        Toast.makeText(requireContext(), "请先在设置中启用 AI 记账，并至少填写 Base URL、API Key、文本模型。", Toast.LENGTH_LONG).show();
-                    }
-                } else {
-                    showDateDetailDialog(LocalDate.now());
-                }
+                openQuickRecord();
             });
         }
 
@@ -703,6 +691,29 @@ public class RecordFragment extends Fragment {
      */
     private int dpToPx(int dp) {
         return (int) (dp * getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        getParentFragmentManager().setFragmentResultListener(QUICK_RECORD_REQUEST, getViewLifecycleOwner(),
+                (key, result) -> openQuickRecord());
+    }
+
+    private void openQuickRecord() {
+        SharedPreferences prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+        int quickMode = prefs.getInt("quick_record_mode", 1);
+        if (quickMode == 1) {
+            showAddOrEditDialog(null, LocalDate.now());
+        } else if (quickMode == 2) {
+            if (AiConfig.load(requireContext()).isEnabledAndReady()) {
+                startActivity(new Intent(requireContext(), AiChatActivity.class));
+            } else {
+                Toast.makeText(requireContext(), "请先在设置中启用 AI 记账，并至少填写 Base URL、API Key、文本模型。", Toast.LENGTH_LONG).show();
+            }
+        } else {
+            showDateDetailDialog(LocalDate.now());
+        }
     }
 
     @Override

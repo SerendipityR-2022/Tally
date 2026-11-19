@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="280dp" android:height="40dp"
+    android:viewportWidth="560" android:viewportHeight="80">
+    <path android:fillColor="@color/weekly_widget_zero"
+        android:pathData="M30,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M46,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M110,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M126,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M190,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M206,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M270,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M286,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M350,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M366,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M430,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M446,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M510,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z M526,72 h4 a4,4 0,0 1,0 8 h-4 a4,4 0,0 1,0 -8 Z" />
+</vector>

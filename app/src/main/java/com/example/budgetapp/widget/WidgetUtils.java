@@ -14,7 +14,8 @@ public class WidgetUtils {
                     MonthSummaryWidget.class,
                     CombinedSummaryWidget.class,
                     OvertimeSummaryWidget.class,
-                    TodayBudgetWidget.class
+                    TodayBudgetWidget.class,
+                    WeeklySummaryWidget.class
             };
             
             for (Class<?> cls : widgetClasses) {

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_weekly_widget"
+    android:orientation="vertical"
+    android:padding="7dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1.12"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="3dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="6"
+            android:orientation="vertical">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <TextView
+                    style="@style/TallyWeeklyWidgetLabel"
+                    android:drawableStart="@drawable/ic_weekly_expense_dot"
+                    android:text="@string/weekly_widget_expense_label" />
+                <ImageView
+                    android:id="@+id/weekly_show_amounts"
+                    android:layout_width="32dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="2dp"
+                    android:contentDescription="@string/weekly_widget_hide_amounts"
+                    android:scaleType="center"
+                    android:src="@drawable/ic_weekly_eye" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/weekly_today_expense"
+                style="@style/TallyWeeklyWidgetAmount"
+                android:text="@string/weekly_widget_zero_amount" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="4"
+            android:orientation="vertical">
+            <TextView
+                style="@style/TallyWeeklyWidgetLabel"
+                android:layout_height="24dp"
+                android:drawableStart="@drawable/ic_weekly_income_dot"
+                android:text="@string/weekly_widget_income_label" />
+            <TextView
+                android:id="@+id/weekly_today_income"
+                style="@style/TallyWeeklyWidgetAmount"
+                android:text="@string/weekly_widget_zero_amount" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/weekly_quick_record"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="@string/weekly_widget_quick_record"
+            android:scaleType="center"
+            android:src="@drawable/ic_weekly_quick_record" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_weekly_chart"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
+
+        <ImageView
+            android:id="@+id/weekly_chart_bars"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:scaleType="fitXY"
+            android:src="@drawable/ic_weekly_chart_empty" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal">
+            <TextView
+                android:id="@+id/weekly_day_0"
+                style="@style/TallyWeeklyWidgetDay"
+                android:text="周五" />
+            <TextView
+                android:id="@+id/weekly_day_1"
+                style="@style/TallyWeeklyWidgetDay"
+                android:text="周六" />
+            <TextView
+                android:id="@+id/weekly_day_2"
+                style="@style/TallyWeeklyWidgetDay"
+                android:text="周日" />
+            <TextView
+                android:id="@+id/weekly_day_3"
+                style="@style/TallyWeeklyWidgetDay"
+                android:text="周一" />
+            <TextView
+                android:id="@+id/weekly_day_4"
+                style="@style/TallyWeeklyWidgetDay"
+                android:text="周二" />
+            <TextView
+                android:id="@+id/weekly_day_5"
+                style="@style/TallyWeeklyWidgetDay"
+                android:text="周三" />
+            <TextView
+                android:id="@+id/weekly_day_6"
+                style="@style/TallyWeeklyWidgetDay"
+                android:text="@string/weekly_widget_today" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

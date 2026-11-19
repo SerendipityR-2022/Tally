@@ -81,6 +81,7 @@ import java.util.regex.Pattern;
 
 public class StatsFragment extends Fragment {
     private static final int COMPARISON_PERIODS = 5;
+    private static final DateTimeFormatter WEEK_COMPARISON_DATE = DateTimeFormatter.ofPattern("M.d", Locale.ROOT);
 
     private FinanceViewModel viewModel;
     private LedgerTrendChart lineChart;
@@ -1464,7 +1465,7 @@ public class StatsFragment extends Fragment {
                 labels[i] = period.getMonthValue() + "月";
                 periodDescription = period.getYear() + "年" + labels[i];
             } else {
-                labels[i] = period.getMonthValue() + "/" + period.getDayOfMonth();
+                labels[i] = period.format(WEEK_COMPARISON_DATE) + "-" + period.plusDays(6).format(WEEK_COMPARISON_DATE);
                 periodDescription = period + " 至 " + period.plusDays(6);
             }
             double amount = values.getOrDefault(period, 0.0);
@@ -1483,7 +1484,6 @@ public class StatsFragment extends Fragment {
         });
         com.github.mikephil.charting.data.BarData d = new com.github.mikephil.charting.data.BarData(data);
         d.setBarWidth(0.46f);
-        chart.setData(d);
         chart.setFitBars(true);
         chart.setTouchEnabled(false);
         chart.getAxisRight().setEnabled(false);
@@ -1497,6 +1497,8 @@ public class StatsFragment extends Fragment {
         x.setGranularity(1f);
         x.setDrawGridLines(false);
         x.setTextColor(muted);
+        x.setTypeface(currentMode == 2 ? android.graphics.Typeface.create("sans-serif-condensed", 0) : null);
+        x.setTextSize(currentMode == 2 ? 9.5f : 10f);
         x.setLabelCount(COMPARISON_PERIODS);
         x.setValueFormatter(new ValueFormatter() {
             @Override public String getFormattedValue(float value) {
@@ -1504,6 +1506,7 @@ public class StatsFragment extends Fragment {
                 return i >= 0 && i < labels.length ? labels[i] : "";
             }
         });
+        chart.setData(d);
         chart.setContentDescription(description.toString());
         chart.invalidate();
     }

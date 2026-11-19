@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name_weekly">周记账统计</string>
+    <string name="weekly_widget_expense_label">今日支出</string>
+    <string name="weekly_widget_income_label">今日收入</string>
+    <string name="weekly_widget_today">今日</string>
+    <string name="weekly_widget_zero_amount">¥ 0.00</string>
+    <string name="weekly_widget_quick_record">快捷记账</string>
+    <string name="weekly_widget_hide_amounts">隐藏收支金额</string>
+    <string name="weekly_widget_show_amounts">显示收支金额</string>
+    <string name="weekly_widget_values_hidden">收支金额已隐藏</string>
+    <string name="weekly_widget_day_description">%1$s，支出 %2$s，收入 %3$s</string>
+
+    <color name="weekly_widget_card">#ED303D50</color>
+    <color name="weekly_widget_panel">#2AEEF3FF</color>
+    <color name="weekly_widget_text">#F8FBFF</color>
+    <color name="weekly_widget_muted">#C2CDDB</color>
+    <color name="weekly_widget_expense">#2089FF</color>
+    <color name="weekly_widget_income">#FFAA40</color>
+    <color name="weekly_widget_plus">#FFB323</color>
+    <color name="weekly_widget_zero">#A1ACBA</color>
+
+    <style name="TallyWeeklyWidgetLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:drawablePadding">5dp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">@color/weekly_widget_muted</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="TallyWeeklyWidgetAmount">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">26dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">@color/weekly_widget_text</item>
+        <item name="android:textStyle">italic</item>
+        <item name="android:textSize">21sp</item>
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">10sp</item>
+        <item name="android:autoSizeMaxTextSize">21sp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <style name="TallyWeeklyWidgetDay">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">15dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:gravity">center</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">@color/weekly_widget_muted</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">8sp</item>
+        <item name="android:autoSizeMaxTextSize">11sp</item>
+        <item name="android:autoSizeStepGranularity">1sp</item>
+    </style>
+</resources>
